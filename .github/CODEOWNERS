@@ -1,0 +1,7 @@
+# ==========================================
+# REGLAS DE REVISIÓN CLOUDCOFFEE
+# ==========================================
+
+/backend/ @CloudCoffee/integracion-ii-backend-app-web
+/web/     @CloudCoffee/integracion-ii-backend-app-web
+/mobile/  @CloudCoffee/integracion-iv-app-movil
