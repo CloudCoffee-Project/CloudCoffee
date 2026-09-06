@@ -8,7 +8,8 @@ export default function RootLayout() {
   const [sesion] = useState<SesionDecodificada | null>(null);
   const segments = useSegments();
   const router = useRouter();
-
+  const testVariableNoUsada = 123;
+  const prueba = "hola";
   useEffect(() => {
     if (bootstrapping) return;
 
