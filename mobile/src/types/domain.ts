@@ -16,11 +16,7 @@ export type EstadoOrden =
   | 'cancelado';
 
 export type EstadoCompra =
-  | 'reservando'
-  | 'revision_requerida'
-  | 'pendiente_pago'
-  | 'pagado'
-  | 'cancelado';
+  'reservando' | 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
 
 export type AccionNoRetirado = 'reingresar' | 'descartar';
 
