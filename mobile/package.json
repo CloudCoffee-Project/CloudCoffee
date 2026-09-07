@@ -48,7 +48,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "format": "prettier --write .",
-    "prepare": "husky"
+    "prepare": "cd .. && git config core.hooksPath mobile/.husky || true"
   },
   "private": true
 }
