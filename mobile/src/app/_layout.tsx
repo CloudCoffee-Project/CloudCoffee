@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import type { SesionDecodificada } from '../types/domain';
+import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
 
 export default function RootLayout() {
   const [bootstrapping] = useState(false);
@@ -17,7 +18,6 @@ export default function RootLayout() {
     if (!sesion && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (sesion) {
-      // Si hay sesión, evitamos que entre al login de nuevo
       if (sesion.rol === 'cajero' && segments[0] !== '(cajero)') {
         router.replace('/(cajero)');
       } else if (sesion.rol !== 'cajero' && segments[0] !== '(cliente)') {
@@ -25,6 +25,19 @@ export default function RootLayout() {
       }
     }
   }, [sesion, bootstrapping, segments, router]);
+
+  // TODO: reemplazar este token de prueba por el accessToken real una vez
+  // que el flujo de login/sesión esté conectado (INT4-2, prueba temporal)
+  useEffect(() => {
+    const tokenDePrueba = 'token_de_prueba';
+    connectWebSocket(tokenDePrueba, () => {
+      console.log('¡Listo! Conexión WebSocket establecida');
+    });
+
+    return () => {
+      disconnectWebSocket();
+    };
+  }, []);
 
   if (bootstrapping) {
     return (
