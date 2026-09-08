@@ -2,10 +2,10 @@
 import { Client, IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
-// URL configurable vía variable de entorno (ver .env). Fallback solo para desarrollo local.
 const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'http://localhost:8081/ws';
 
 let stompClient: Client | null = null;
+let pendingSubscriptions: Array<{ topic: string; callback: (message: IMessage) => void }> = [];
 
 export function connectWebSocket(accessToken: string, onConnected?: () => void) {
   stompClient = new Client({
@@ -13,7 +13,7 @@ export function connectWebSocket(accessToken: string, onConnected?: () => void) 
     connectHeaders: {
       Authorization: `Bearer ${accessToken}`,
     },
-    reconnectDelay: 5000, // reintenta cada 5 segundos si se cae
+    reconnectDelay: 5000,
     heartbeatIncoming: 4000,
     heartbeatOutgoing: 4000,
     debug: (msg) => console.log('[STOMP]', msg),
@@ -21,6 +21,10 @@ export function connectWebSocket(accessToken: string, onConnected?: () => void) 
 
   stompClient.onConnect = () => {
     console.log('WebSocket conectado');
+    // Aplica las suscripciones que quedaron pendientes antes de conectar
+    pendingSubscriptions.forEach(({ topic, callback }) => {
+      stompClient?.subscribe(topic, callback);
+    });
     onConnected?.();
   };
 
@@ -38,12 +42,21 @@ export function connectWebSocket(accessToken: string, onConnected?: () => void) 
 export function disconnectWebSocket() {
   stompClient?.deactivate();
   stompClient = null;
+  pendingSubscriptions = [];
 }
 
-export function subscribeToTopic(topic: string, callback: (message: IMessage) => void) {
-  if (!stompClient?.connected) {
-    console.warn('No conectado aún, no se puede suscribir a', topic);
-    return;
+// Se suscribe a un topic. Si aún no hay conexión, la guarda y la aplica sola al conectar.
+// Devuelve una función de limpieza que puedes llamar en el cleanup de tu useEffect.
+export function subscribeToTopic(topic: string, callback: (message: IMessage) => void): () => void {
+  if (stompClient?.connected) {
+    const subscription = stompClient.subscribe(topic, callback);
+    return () => subscription.unsubscribe();
   }
-  return stompClient.subscribe(topic, callback);
+
+  console.warn(`No conectado aún, "${topic}" se suscribirá automáticamente al conectar`);
+  const entry = { topic, callback };
+  pendingSubscriptions.push(entry);
+  return () => {
+    pendingSubscriptions = pendingSubscriptions.filter((p) => p !== entry);
+  };
 }
