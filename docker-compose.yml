@@ -1,0 +1,222 @@
+services:
+    zipkin:
+        image: openzipkin/zipkin:3.5
+        ports:
+        - "9411:9411"
+        networks:
+        - backend
+    auth-service:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+            args:
+                SERVICE_NAME: auth-service
+        environment:
+            SPRING_PROFILES_ACTIVE: docker
+            SERVER_PORT: 8081
+            DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME}
+            DB_USER: ${AUTH_DB_USER}
+            DB_PASSWORD: ${AUTH_DB_PASSWORD}
+            TZ: America/Santiago
+            JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        ports:
+            - "${AUTH_SERVICE_PORT}:8081"
+        depends_on:
+            auth-db:
+                condition: service_healthy
+        networks:
+            - backend
+
+    catalog-service:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+            args:
+                SERVICE_NAME: catalog-service
+        environment:
+            SPRING_PROFILES_ACTIVE: docker
+            SERVER_PORT: 8082
+            DB_URL: jdbc:postgresql://catalog-db:5432/${CATALOG_DB_NAME}
+            DB_USER: ${CATALOG_DB_USER}
+            DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+            TZ: America/Santiago
+            JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        ports:
+            - "${CATALOG_SERVICE_PORT}:8082"
+        depends_on:
+            catalog-db:
+                condition: service_healthy
+        networks:
+            - backend
+
+    order-service:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+            args:
+                SERVICE_NAME: order-service
+        environment:
+            SPRING_PROFILES_ACTIVE: docker
+            SERVER_PORT: 8083
+            DB_URL: jdbc:postgresql://order-db:5432/${ORDER_DB_NAME}
+            DB_USER: ${ORDER_DB_USER}
+            DB_PASSWORD: ${ORDER_DB_PASSWORD}
+            TZ: America/Santiago
+            JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        ports:
+            - "${ORDER_SERVICE_PORT}:8083"
+        depends_on:
+            order-db:
+                condition: service_healthy
+        networks:
+            - backend
+
+    notification-service:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+            args:
+                SERVICE_NAME: notification-service
+        environment:
+            SPRING_PROFILES_ACTIVE: docker
+            SERVER_PORT: 8084
+            DB_URL: jdbc:postgresql://notification-db:5432/${NOTIFICATION_DB_NAME}
+            DB_USER: ${NOTIFICATION_DB_USER}
+            DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+            TZ: America/Santiago
+            JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        ports:
+            - "${NOTIFICATION_SERVICE_PORT}:8084"
+        depends_on:
+            notification-db:
+                condition: service_healthy
+        networks:
+            - backend
+    api-gateway:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+            args:
+                SERVICE_NAME: api-gateway
+        environment:
+            SERVER_PORT: 8080
+            AUTH_SERVICE_URL: http://auth-service:8081
+            CATALOG_SERVICE_URL: http://catalog-service:8082
+            ORDER_SERVICE_URL: http://order-service:8083
+            NOTIFICATION_SERVICE_URL: http://notification-service:8084
+            TZ: America/Santiago
+            JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        ports:
+            - "${API_GATEWAY_PORT}:8080"
+        depends_on:
+            - auth-service
+            - catalog-service
+            - order-service
+            - notification-service
+        networks:
+            - backend
+
+    rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        environment:
+            RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+        ports:
+            - "5672:5672"
+            - "15672:15672"
+        volumes:
+            - rabbitmq_data:/var/lib/rabbitmq
+        networks:
+            - backend
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 20s
+    auth-db:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_DB: ${AUTH_DB_NAME}
+            POSTGRES_USER: ${AUTH_DB_USER}
+            POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
+        ports:
+            - "${AUTH_DB_PORT}:5432"
+        volumes:
+            - auth_db_data:/var/lib/postgresql/data
+        networks:
+            - backend
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+    catalog-db:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_DB: ${CATALOG_DB_NAME}
+            POSTGRES_USER: ${CATALOG_DB_USER}
+            POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD}
+        ports:
+            - "${CATALOG_DB_PORT}:5432"
+        volumes:
+            - catalog_db_data:/var/lib/postgresql/data
+        networks:
+            - backend
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+    order-db:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_DB: ${ORDER_DB_NAME}
+            POSTGRES_USER: ${ORDER_DB_USER}
+            POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD}
+        ports:
+          - "${ORDER_DB_PORT}:5432"
+        volumes:
+          - order_db_data:/var/lib/postgresql/data
+        networks:
+            - backend
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+    notification-db:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+            POSTGRES_USER: ${NOTIFICATION_DB_USER}
+            POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+        ports:
+            - "${NOTIFICATION_DB_PORT}:5432"
+        volumes:
+            - notification_db_data:/var/lib/postgresql/data
+        networks:
+            - backend
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
+  auth_db_data:
+  catalog_db_data:
+  order_db_data:
+  notification_db_data:
