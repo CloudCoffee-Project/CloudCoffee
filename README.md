@@ -102,3 +102,7 @@ Los contenedores se comunican mediante nombres internos de Docker:
 - `api-gateway` → nombres internos de los microservicios
 
 La documentación técnica se encuentra en `docs/infraestructura-docker.md`.
+
+## Mensajería asíncrona
+
+La topología de RabbitMQ, la política de reintentos, las Dead Letter Queues y la convención de eventos se documentan en [`docs/mensajeria-rabbitmq.md`](docs/mensajeria-rabbitmq.md).
