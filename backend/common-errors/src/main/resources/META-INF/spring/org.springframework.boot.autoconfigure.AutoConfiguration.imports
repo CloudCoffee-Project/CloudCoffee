@@ -1,0 +1,2 @@
+cl.cloudcoffee.errors.ApiErrorsAutoConfiguration
+cl.cloudcoffee.errors.security.ApiSecurityErrorsAutoConfiguration
