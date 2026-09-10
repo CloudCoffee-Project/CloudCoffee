@@ -6,7 +6,17 @@ import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
 
 export default function RootLayout() {
   const [bootstrapping] = useState(false);
-  const [sesion] = useState<SesionDecodificada | null>(null);
+
+  //inicio de sesión de prueba para desarrollo. En producción, se reemplazará por el flujo real de login/sesión (INT4-2)
+  // para dejar como lo anterior usar el:
+  //const [sesion] = useState<SesionDecodificada | null>(null);
+
+  const [sesion] = useState<SesionDecodificada | null>({
+    id: '1',
+    nombre: 'Usuario Test',
+    rol: 'cliente',
+  } as any);
+
   const segments = useSegments();
   const router = useRouter();
 
@@ -31,7 +41,7 @@ export default function RootLayout() {
   useEffect(() => {
     const tokenDePrueba = 'token_de_prueba';
     connectWebSocket(tokenDePrueba, () => {
-      console.log('¡Listo! Conexión WebSocket establecida');
+      console.warn('¡Listo! Conexión WebSocket establecida');
     });
 
     return () => {
