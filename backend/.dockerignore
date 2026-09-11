@@ -3,3 +3,5 @@
 **/.vscode
 **/*.iml
 README.md
+**/.classpath
+**/.project
