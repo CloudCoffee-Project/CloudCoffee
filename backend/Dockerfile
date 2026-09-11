@@ -3,17 +3,12 @@ FROM eclipse-temurin:21-jdk-alpine AS build
 ARG SERVICE_NAME
 WORKDIR /workspace
 
-COPY ${SERVICE_NAME}/.mvn ./.mvn
-COPY ${SERVICE_NAME}/mvnw ./mvnw
-COPY ${SERVICE_NAME}/pom.xml ./pom.xml
+COPY . .
 
-RUN chmod +x ./mvnw
-RUN ./mvnw --batch-mode --quiet -DskipTests dependency:go-offline
-
-COPY ${SERVICE_NAME}/src ./src
-
-RUN ./mvnw --batch-mode --quiet -DskipTests package
-RUN cp target/*.jar application.jar
+# -am construye common-errors antes del servicio elegido por -pl.
+RUN chmod +x auth-service/mvnw \
+    && ./auth-service/mvnw --batch-mode --quiet -pl "${SERVICE_NAME}" -am -DskipTests package \
+    && cp "${SERVICE_NAME}"/target/*.jar application.jar
 
 FROM eclipse-temurin:21-jre-alpine
 
