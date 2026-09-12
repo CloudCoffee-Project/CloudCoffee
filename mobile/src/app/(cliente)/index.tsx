@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 
 const API_URL = Platform.select({
@@ -18,6 +20,9 @@ const API_URL = Platform.select({
   ios: 'http://localhost:8080',
   default: 'http://localhost:8080',
 });
+
+// Clave compartida con campus.tsx
+export const CAMPUS_STORAGE_KEY = '@app_campus_seleccionado';
 
 export interface CategoriaBackend {
   id: string;
@@ -29,58 +34,99 @@ export interface Producto {
   nombre: string;
   descripcion: string;
   categoriaId: string;
-  precioReferencial: number;
   icono: string;
+  campusDisponibles: string[];
+  localNombre: string;
+  localUbicacion: string;
+  precio: number;
 }
 
+// MOCK de productos adaptado a los IDs reales de tu lista de campus
 const PRODUCTOS_MOCK: Producto[] = [
   {
     id: 'p-1',
     nombre: 'Café Americano 12oz',
     descripcion: 'Espresso doble con agua caliente, tostado medio local.',
     categoriaId: 'cat-bebidas',
-    precioReferencial: 1750,
     icono: '☕',
+    campusDisponibles: ['san-juan-pablo-ii', 'san-francisco'],
+    localNombre: 'Cafetería Central',
+    localUbicacion: 'Pabellón Central - Piso 1',
+    precio: 1800,
   },
   {
     id: 'p-2',
     nombre: 'Croissant Jamón y Queso',
     descripcion: 'Hojaldre mantequilla horneado a diario con queso gouda.',
     categoriaId: 'cat-pasteleria',
-    precioReferencial: 2500,
     icono: '🥐',
+    campusDisponibles: ['san-francisco', 'norte'],
+    localNombre: 'Cafetería Central',
+    localUbicacion: 'Pabellón Central - Piso 1',
+    precio: 2500,
   },
   {
     id: 'p-3',
     nombre: 'Jugo Natural de Naranja',
     descripcion: 'Jugo 100% natural recién exprimido 300ml.',
     categoriaId: 'cat-bebidas',
-    precioReferencial: 2000,
     icono: '🥤',
+    campusDisponibles: ['norte', 'menchaca-lira'],
+    localNombre: 'Casino Principal',
+    localUbicacion: 'Piso 1',
+    precio: 2000,
   },
   {
     id: 'p-4',
     nombre: 'Mix de Frutos Secos',
     descripcion: 'Almendras, nueces, maní sin sal y pasas 100g.',
     categoriaId: 'cat-snacks',
-    precioReferencial: 1500,
     icono: '🥜',
+    campusDisponibles: ['san-juan-pablo-ii', 'san-francisco', 'norte', 'menchaca-lira'],
+    localNombre: 'Kiosko Central',
+    localUbicacion: 'Patio Central',
+    precio: 1500,
   },
 ];
 
 export default function CatalogoProductosScreen() {
+  const router = useRouter();
+  const [campusId, setCampusId] = useState<string>('san-juan-pablo-ii');
+  const [campusNombre, setCampusNombre] = useState<string>('Campus San Juan Pablo II');
   const [busqueda, setBusqueda] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('todos');
   const [categorias, setCategorias] = useState<CategoriaBackend[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
-    cargarCategorias();
-  }, []);
+  // Se vuelve a ejecutar automáticamente cada vez que el usuario regresa a la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      cargarDatos();
+    }, [])
+  );
+
+  const cargarDatos = async () => {
+    try {
+      setCargando(true);
+      // Leemos el JSON guardado desde campus.tsx
+      const campusGuardadoStr = await AsyncStorage.getItem(CAMPUS_STORAGE_KEY);
+      if (campusGuardadoStr) {
+        const campusObj = JSON.parse(campusGuardadoStr);
+        if (campusObj?.id && campusObj?.nombre) {
+          setCampusId(campusObj.id);
+          setCampusNombre(campusObj.nombre);
+        }
+      }
+      await cargarCategorias();
+    } catch (e) {
+      setCategoriasDefault();
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const cargarCategorias = async () => {
     try {
-      setCargando(true);
       const response = await axios.get<CategoriaBackend[]>(
         `${API_URL}/v1/catalog/categorias`,
         { timeout: 3000 }
@@ -93,8 +139,6 @@ export default function CatalogoProductosScreen() {
       }
     } catch (e) {
       setCategoriasDefault();
-    } finally {
-      setCargando(false);
     }
   };
 
@@ -107,6 +151,8 @@ export default function CatalogoProductosScreen() {
   };
 
   const productosFiltrados = PRODUCTOS_MOCK.filter((prod) => {
+    const cumpleCampus = !campusId || prod.campusDisponibles.includes(campusId);
+
     const cumpleBusqueda =
       prod.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       prod.descripcion.toLowerCase().includes(busqueda.toLowerCase());
@@ -114,15 +160,30 @@ export default function CatalogoProductosScreen() {
     const cumpleCategoria =
       categoriaSeleccionada === 'todos' || prod.categoriaId === categoriaSeleccionada;
 
-    return cumpleBusqueda && cumpleCategoria;
+    return cumpleCampus && cumpleBusqueda && cumpleCategoria;
   });
 
   return (
     <View style={styles.container}>
-      {/* 1. Título con margen superior dinámico para liberar la hora/notificaciones */}
+      {/* 1. Header con Selector de Campus */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Catálogo de Productos</Text>
-        <Text style={styles.headerSubtitle}>Explora los productos disponibles</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.pinContainer}>
+            <Text style={{ fontSize: 16 }}>📍</Text>
+          </View>
+          <View style={styles.campusInfoContainer}>
+            <Text style={styles.campusLabel}>CAMPUS ACTUAL</Text>
+            <Text style={styles.campusName} numberOfLines={1}>
+              {campusNombre}
+            </Text>
+            <TouchableOpacity 
+              onPress={() => router.push('/(cliente)/campus')}
+              style={styles.changeBtnContainer}
+            >
+              <Text style={styles.changeLink}>Cambiar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* 2. Buscador */}
@@ -187,19 +248,30 @@ export default function CatalogoProductosScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            <Text style={styles.vacioText}>No hay productos en esta categoría.</Text>
+            <Text style={styles.vacioText}>
+              No hay productos disponibles para este campus en esta categoría.
+            </Text>
           }
           renderItem={({ item }) => (
             <View style={styles.productCard}>
-              <View style={styles.productIconContainer}>
-                <Text style={{ fontSize: 24 }}>{item.icono}</Text>
+              <View style={styles.productHeader}>
+                <View style={styles.productIconContainer}>
+                  <Text style={{ fontSize: 20 }}>{item.icono}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.productTitle}>{item.nombre}</Text>
+                  <Text style={styles.productDescription}>{item.descripcion}</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.productTitle}>{item.nombre}</Text>
-                <Text style={styles.productDescription}>{item.descripcion}</Text>
-                <Text style={styles.productPrice}>
-                  Desde ${item.precioReferencial.toLocaleString('es-CL')}
-                </Text>
+
+              <View style={styles.puntoVentaRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.localTitle}>{item.localNombre}</Text>
+                  <Text style={styles.localUbicacion}>{item.localUbicacion}</Text>
+                  <Text style={styles.localPrecio}>
+                    ${item.precio.toLocaleString('es-CL')}
+                  </Text>
+                </View>
               </View>
             </View>
           )}
@@ -212,43 +284,77 @@ export default function CatalogoProductosScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F4EE',
-    paddingHorizontal: 16,
+    backgroundColor: '#F9F6F0',
+    paddingHorizontal: 14,
   },
   header: {
-    // Calcula el margen superior considerando la barra de estado en iOS y Android
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 16 : 48,
-    marginBottom: 14,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 12 : 44,
+    marginBottom: 12,
   },
-  headerTitle: {
-    fontSize: 22,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EFECE6',
+    alignSelf: 'flex-start',
+  },
+  pinContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  campusInfoContainer: {
+    justifyContent: 'center',
+  },
+  campusLabel: {
+    fontSize: 9,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#9CA3AF',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  headerSubtitle: {
+  campusName: {
     fontSize: 13,
-    color: '#6B7280',
+    fontWeight: 'bold',
+    color: '#0052CC',
+    marginBottom: 6,
+  },
+  changeBtnContainer: {
+    alignSelf: 'flex-start',
+  },
+  changeLink: {
+    fontSize: 11,
+    color: '#0052CC',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
   searchContainer: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   searchInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 13,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     color: '#1F2937',
   },
   categoriesContainer: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   pill: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
     marginRight: 8,
     borderWidth: 1,
@@ -259,8 +365,8 @@ const styles = StyleSheet.create({
     borderColor: '#0052CC',
   },
   pillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#4B5563',
   },
   pillTextActive: {
@@ -272,42 +378,65 @@ const styles = StyleSheet.create({
   productCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    padding: 12,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  productHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   productIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     backgroundColor: '#FEF3C7',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   productTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#0052CC',
   },
   productDescription: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#6B7280',
-    marginTop: 2,
+    marginTop: 1,
   },
-  productPrice: {
-    fontSize: 13,
+  puntoVentaRow: {
+    backgroundColor: '#FAF8F5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#F3F0E9',
+  },
+  localTitle: {
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 6,
+  },
+  localUbicacion: {
+    fontSize: 10,
+    color: '#9CA3AF',
+  },
+  localPrecio: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0052CC',
+    marginTop: 2,
   },
   vacioText: {
     textAlign: 'center',
     color: '#9CA3AF',
     marginTop: 20,
-    fontSize: 13,
+    fontSize: 12,
   },
 });
