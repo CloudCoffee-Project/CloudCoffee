@@ -19,10 +19,23 @@ services:
             DB_PASSWORD: ${AUTH_DB_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_PORT: 5672
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_ENABLED: "true"
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_ATTEMPTS: 3
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_INITIAL_INTERVAL: 1000ms
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
+            SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
+            CLOUDCOFFEE_MESSAGING_TEST_ENDPOINT_ENABLED: "true"
         ports:
             - "${AUTH_SERVICE_PORT}:8081"
         depends_on:
             auth-db:
+                condition: service_healthy
+            rabbitmq:
                 condition: service_healthy
         networks:
             - backend
@@ -85,10 +98,22 @@ services:
             DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_PORT: 5672
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_ENABLED: "true"
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_ATTEMPTS: 3
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_INITIAL_INTERVAL: 1000ms
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
+            SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
+            SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
         ports:
             - "${NOTIFICATION_SERVICE_PORT}:8084"
         depends_on:
             notification-db:
+                condition: service_healthy
+            rabbitmq:
                 condition: service_healthy
         networks:
             - backend
