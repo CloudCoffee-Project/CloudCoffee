@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TokenAuthTest {
 
     private Usuario usuarioDePrueba() {
-        return new Usuario("test@cloudcoffee.cl", "hash", Rol.CLIENTE);
+        return new Usuario("test@cloudcoffee.cl", "hash", Rol.CLIENTE, "Test", "Usuario", "+56900000000");
     }
 
     @Test
