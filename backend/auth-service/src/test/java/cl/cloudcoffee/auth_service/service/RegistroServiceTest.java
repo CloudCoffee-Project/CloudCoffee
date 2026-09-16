@@ -41,6 +41,9 @@ class RegistroServiceTest {
     @Mock
     private AuthEventPublisher eventPublisher;
 
+    @Mock
+    private VerificacionService verificacionService;
+
     @InjectMocks
     private RegistroService registroService;
 
@@ -74,6 +77,7 @@ class RegistroServiceTest {
         assertThat(response.verificado()).isFalse();
 
         verify(eventPublisher).publishUserRegistered(anyString(), eq(request.email()), eq("trace-1"));
+        verify(verificacionService).solicitarVerificacion(any(Usuario.class), eq("trace-1"));
     }
 
     @Test
@@ -103,6 +107,6 @@ class RegistroServiceTest {
                     assertThat(businessException.getStatus().value()).isEqualTo(409);
                 });
 
-        verifyNoInteractions(passwordEncoder, eventPublisher);
+        verifyNoInteractions(passwordEncoder, eventPublisher, verificacionService);
     }
 }
