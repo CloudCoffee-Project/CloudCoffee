@@ -1,0 +1,105 @@
+package cl.cloudcoffee.auth_service.service;
+
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.HexFormat;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
+import cl.cloudcoffee.auth_service.messaging.AuthEventPublisher;
+import cl.cloudcoffee.auth_service.model.TipoToken;
+import cl.cloudcoffee.auth_service.model.TokenAuth;
+import cl.cloudcoffee.auth_service.model.Usuario;
+import cl.cloudcoffee.auth_service.repository.TokenAuthRepository;
+import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
+import cl.cloudcoffee.errors.BusinessException;
+
+@Service
+public class VerificacionService {
+
+    private static final Duration VIGENCIA_TOKEN = Duration.ofHours(24);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private final UsuarioRepository usuarioRepository;
+    private final TokenAuthRepository tokenAuthRepository;
+    private final AuthEventPublisher eventPublisher;
+
+    public VerificacionService(UsuarioRepository usuarioRepository, TokenAuthRepository tokenAuthRepository,
+            AuthEventPublisher eventPublisher) {
+        this.usuarioRepository = usuarioRepository;
+        this.tokenAuthRepository = tokenAuthRepository;
+        this.eventPublisher = eventPublisher;
+    }
+
+    @Transactional
+    public void solicitarVerificacion(Usuario usuario, String traceId) {
+        tokenAuthRepository.findByUsuarioIdAndTipoAndRevokedAtIsNull(usuario.getId(), TipoToken.VERIFICACION_CORREO)
+                .forEach(TokenAuth::revocar);
+
+        String tokenPlano = generarTokenPlano();
+        Instant expiresAt = Instant.now().plus(VIGENCIA_TOKEN);
+        TokenAuth token = new TokenAuth(usuario, hash(tokenPlano), expiresAt, TipoToken.VERIFICACION_CORREO);
+        tokenAuthRepository.save(token);
+
+        eventPublisher.publishSolicitudVerificacionCorreo(
+                usuario.getId().toString(), usuario.getEmail(), tokenPlano, expiresAt, traceId);
+    }
+
+    @Transactional
+    public VerificacionCorreoResponse verificarCorreo(String tokenPlano) {
+        TokenAuth token = tokenAuthRepository.findByTokenHashAndTipo(hash(tokenPlano), TipoToken.VERIFICACION_CORREO)
+                .filter(TokenAuth::estaVigente)
+                .orElseThrow(VerificacionService::tokenInvalido);
+
+        Usuario usuario = token.getUsuario();
+        usuario.verificar();
+        token.revocar();
+
+        return VerificacionCorreoResponse.from(usuario);
+    }
+
+    @Transactional
+    public void reenviarVerificacion(String email, String traceId) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND,
+                        URI.create("/problems/usuario-no-encontrado"), "Usuario no encontrado",
+                        "No existe una cuenta asociada a este correo electrónico."));
+
+        if (usuario.isVerificado()) {
+            throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/correo-ya-verificado"),
+                    "Correo ya verificado", "La cuenta ya fue verificada.");
+        }
+
+        solicitarVerificacion(usuario, traceId);
+    }
+
+    private static BusinessException tokenInvalido() {
+        return new BusinessException(HttpStatus.BAD_REQUEST, URI.create("/problems/token-invalido"),
+                "Token inválido", "El token de verificación es inválido o expiró.");
+    }
+
+    private static String generarTokenPlano() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String hash(String tokenPlano) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(tokenPlano.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashBytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 no disponible en esta JVM", e);
+        }
+    }
+}
