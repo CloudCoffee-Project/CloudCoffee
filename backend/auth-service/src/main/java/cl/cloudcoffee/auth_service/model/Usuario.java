@@ -23,6 +23,15 @@ public class Usuario {
     private Rol rol;
 
     @Column(nullable = false)
+    private String nombre;
+
+    @Column(nullable = false)
+    private String apellido;
+
+    @Column(nullable = false)
+    private String telefono;
+
+    @Column(nullable = false)
     private boolean verificado = false;
 
     @Column(nullable = false)
@@ -39,10 +48,13 @@ public class Usuario {
 
     protected Usuario() {}
 
-    public Usuario(String email, String passwordHash, Rol rol) {
+    public Usuario(String email, String passwordHash, Rol rol, String nombre, String apellido, String telefono) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.rol = rol;
+        this.nombre = nombre;
+        this.apellido = apellido;
+        this.telefono = telefono;
         this.createdAt = Instant.now();
     }
 
@@ -50,6 +62,9 @@ public class Usuario {
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public Rol getRol() { return rol; }
+    public String getNombre() { return nombre; }
+    public String getApellido() { return apellido; }
+    public String getTelefono() { return telefono; }
     public boolean isVerificado() { return verificado; }
     public boolean isActivo() { return activo; }
     public boolean isEliminado() { return eliminado; }
