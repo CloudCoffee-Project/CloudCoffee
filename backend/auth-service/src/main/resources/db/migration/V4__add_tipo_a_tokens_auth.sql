@@ -1,0 +1,2 @@
+ALTER TABLE tokens_auth ADD COLUMN tipo VARCHAR(30) NOT NULL;
+ALTER TABLE tokens_auth ADD CONSTRAINT chk_tokens_auth_tipo CHECK (tipo IN ('REFRESH', 'VERIFICACION_CORREO'));
