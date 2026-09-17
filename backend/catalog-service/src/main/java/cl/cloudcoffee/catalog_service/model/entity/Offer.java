@@ -4,9 +4,12 @@ import cl.cloudcoffee.catalog_service.model.enums.OfferStatus;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.UUID;
+import lombok.Getter; import lombok.Setter;
 
 @Entity
 @Table(name = "offer")
+@Getter
+@Setter
 public class Offer {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
