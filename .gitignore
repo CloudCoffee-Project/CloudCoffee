@@ -5,3 +5,4 @@
 !.env.example
 .agents
 .agent
+.project
