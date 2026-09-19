@@ -12,27 +12,46 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 
+import cl.cloudcoffee.auth_service.dto.ReenviarVerificacionRequest;
 import cl.cloudcoffee.auth_service.dto.RegistroClienteRequest;
 import cl.cloudcoffee.auth_service.dto.RegistroClienteResponse;
+import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
+import cl.cloudcoffee.auth_service.dto.VerificarCorreoRequest;
 import cl.cloudcoffee.auth_service.service.RegistroService;
+import cl.cloudcoffee.auth_service.service.VerificacionService;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
     private final RegistroService registroService;
+    private final VerificacionService verificacionService;
 
-    public AuthController(RegistroService registroService) {
+    public AuthController(RegistroService registroService, VerificacionService verificacionService) {
         this.registroService = registroService;
+        this.verificacionService = verificacionService;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public RegistroClienteResponse register(@Valid @RequestBody RegistroClienteRequest request,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId) {
-        String effectiveTraceId = traceId == null || traceId.isBlank()
-                ? UUID.randomUUID().toString()
-                : traceId;
-        return registroService.registrarCliente(request, effectiveTraceId);
+        return registroService.registrarCliente(request, traceIdEfectivo(traceId));
+    }
+
+    @PostMapping("/verificacion")
+    public VerificacionCorreoResponse verificar(@Valid @RequestBody VerificarCorreoRequest request) {
+        return verificacionService.verificarCorreo(request.token());
+    }
+
+    @PostMapping("/verificacion/reenviar")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void reenviarVerificacion(@Valid @RequestBody ReenviarVerificacionRequest request,
+            @RequestHeader(value = "X-Trace-Id", required = false) String traceId) {
+        verificacionService.reenviarVerificacion(request.email(), traceIdEfectivo(traceId));
+    }
+
+    private static String traceIdEfectivo(String traceId) {
+        return traceId == null || traceId.isBlank() ? UUID.randomUUID().toString() : traceId;
     }
 }

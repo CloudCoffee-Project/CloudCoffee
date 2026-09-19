@@ -19,6 +19,10 @@ public class TokenAuth {
     @Column(name = "token_hash", nullable = false, unique = true)
     private String tokenHash;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TipoToken tipo;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
@@ -30,16 +34,18 @@ public class TokenAuth {
 
     protected TokenAuth() {}
 
-    public TokenAuth(Usuario usuario, String tokenHash, Instant expiresAt) {
+    public TokenAuth(Usuario usuario, String tokenHash, Instant expiresAt, TipoToken tipo) {
         this.usuario = usuario;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
+        this.tipo = tipo;
         this.createdAt = Instant.now();
     }
 
     public UUID getId() { return id; }
     public Usuario getUsuario() { return usuario; }
     public String getTokenHash() { return tokenHash; }
+    public TipoToken getTipo() { return tipo; }
     public Instant getExpiresAt() { return expiresAt; }
     public Instant getRevokedAt() { return revokedAt; }
     public Instant getCreatedAt() { return createdAt; }

@@ -21,12 +21,14 @@ public class RegistroService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthEventPublisher eventPublisher;
+    private final VerificacionService verificacionService;
 
     public RegistroService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
-            AuthEventPublisher eventPublisher) {
+            AuthEventPublisher eventPublisher, VerificacionService verificacionService) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
+        this.verificacionService = verificacionService;
     }
 
     @Transactional
@@ -42,6 +44,7 @@ public class RegistroService {
         usuario = usuarioRepository.save(usuario);
 
         eventPublisher.publishUserRegistered(usuario.getId().toString(), usuario.getEmail(), traceId);
+        verificacionService.solicitarVerificacion(usuario, traceId);
 
         return RegistroClienteResponse.from(usuario);
     }
