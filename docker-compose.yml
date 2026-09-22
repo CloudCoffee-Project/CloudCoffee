@@ -125,6 +125,7 @@ services:
                 SERVICE_NAME: api-gateway
         environment:
             SERVER_PORT: 8080
+            CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
             AUTH_SERVICE_URL: http://auth-service:8081
             CATALOG_SERVICE_URL: http://catalog-service:8082
             ORDER_SERVICE_URL: http://order-service:8083

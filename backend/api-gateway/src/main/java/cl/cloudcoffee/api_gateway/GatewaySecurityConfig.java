@@ -14,15 +14,18 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration(proxyBeanMethods = false)
 public class GatewaySecurityConfig {
 
     @Bean
     SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource,
             ObjectProvider<AuthenticationEntryPoint> entryPoints,
             ObjectProvider<AccessDeniedHandler> accessDeniedHandlers) throws Exception {
         return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 // API sin autenticacion por cookies ni sesiones de navegador.
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
