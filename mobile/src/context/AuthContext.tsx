@@ -11,8 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { clearTokens, setTokens } from '../services/httpClient';
 import { decodificarSesion } from '../services/auth';
-import type { LoginResponse } from '../services/auth';
-import type { SesionDecodificada } from '../types/domain';
+import type { LoginResponse, SesionDecodificada } from '../types/domain';
 
 const SESSION_STORAGE_KEY = '@app_sesion_tokens';
 

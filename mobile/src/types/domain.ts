@@ -27,6 +27,49 @@ export interface SesionDecodificada {
   exp: number;
 }
 
+// DTOs de autenticación (contrato con el API Gateway /v1/auth/**).
+export interface CredencialesLogin {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface RegistroClienteRequest {
+  email: string;
+  password: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+}
+
+export interface RegistroClienteResponse {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  rol: string;
+  verificado: boolean;
+}
+
+export interface VerificarCorreoResponse {
+  email: string;
+  verificado: boolean;
+}
+
+export interface SolicitarRecuperacionRequest {
+  email: string;
+}
+
+export interface RestablecerPasswordRequest {
+  token: string;
+  nuevaPassword: string;
+}
+
 export interface Campus {
   id: string;
   nombre: string;

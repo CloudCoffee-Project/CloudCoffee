@@ -1,24 +1,29 @@
 // src/services/auth.ts
 //
 // Servicio de autenticación. Interactúa con el API Gateway:
-//   - POST /v1/auth/login  → emite accessToken + refreshToken (INT2-21).
+//   - POST /v1/auth/login             → emite accessToken + refreshToken (INT2-21).
+//   - POST /v1/auth/register          → crea cuenta de cliente y dispara verificación.
+//   - POST /v1/auth/verificacion      → confirma el correo con el token recibido.
+//   - POST /v1/auth/verificacion/reenviar → emite un token de verificación nuevo.
+//   - POST /v1/auth/password/recovery → solicita recuperar la contraseña (INT2-21-bis).
+//   - POST /v1/auth/password/reset    → restablece la contraseña con el token del correo.
 //
-// NOTA: el endpoint login del backend está siendo implementado en INT2-21
-// (hoy solo existe la ruta pública del gateway, aún sin controller). La forma
-// de la respuesta que asumimos: { accessToken, refreshToken }.
+// NOTA: los endpoints de login y recuperación del backend están siendo
+// implementados en INT2-21. Hoy solo existen sus rutas públicas en el
+// gateway, así que las formas de request/response que asumimos acá siguen el
+// patrón del resto del contrato.
 
 import { decodeJwtPayload, httpClient } from './httpClient';
-import type { Rol, SesionDecodificada } from '../types/domain';
-
-export interface CredencialesLogin {
-  email: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
-}
+import type {
+  CredencialesLogin,
+  LoginResponse,
+  RegistroClienteRequest,
+  RegistroClienteResponse,
+  RestablecerPasswordRequest,
+  Rol,
+  SesionDecodificada,
+  VerificarCorreoResponse,
+} from '../types/domain';
 
 /** Llama a POST /v1/auth/login con las credenciales del usuario. */
 export async function login(credenciales: CredencialesLogin): Promise<LoginResponse> {
@@ -28,25 +33,6 @@ export async function login(credenciales: CredencialesLogin): Promise<LoginRespo
   });
 
   return response.data;
-}
-
-// DTO exacto que espera POST /v1/auth/register (RegistroClienteRequest).
-export interface RegistroClienteRequest {
-  email: string;
-  password: string;
-  nombre: string;
-  apellido: string;
-  telefono: string;
-}
-
-export interface RegistroClienteResponse {
-  id: string;
-  email: string;
-  nombre: string;
-  apellido: string;
-  telefono: string;
-  rol: string;
-  verificado: boolean;
 }
 
 /** Llama a POST /v1/auth/register y crea la cuenta del cliente. */
@@ -60,11 +46,6 @@ export async function registrar(datos: RegistroClienteRequest): Promise<Registro
   });
 
   return response.data;
-}
-
-export interface VerificarCorreoResponse {
-  email: string;
-  verificado: boolean;
 }
 
 /** Llama a POST /v1/auth/verificacion con el token que llegó por correo. */
@@ -81,6 +62,22 @@ export async function reenviarVerificacion(email: string): Promise<void> {
   await httpClient.post('/v1/auth/verificacion/reenviar', {
     email: email.trim().toLowerCase(),
   });
+}
+
+/** Llama a POST /v1/auth/password/recovery y solicita el enlace de restablecimiento. */
+export async function solicitarRecuperacion(email: string): Promise<void> {
+  await httpClient.post('/v1/auth/password/recovery', {
+    email: email.trim().toLowerCase(),
+  });
+}
+
+/** Llama a POST /v1/auth/password/reset con el token del correo y la clave nueva. */
+export async function restablecerPassword(token: string, nuevaPassword: string): Promise<void> {
+  const body: RestablecerPasswordRequest = {
+    token: token.trim(),
+    nuevaPassword,
+  };
+  await httpClient.post('/v1/auth/password/reset', body);
 }
 
 // Mapea el rol del backend (CLIENTE, CAJERO, ADMIN_CAFETERIA, SUPER_ADMIN)

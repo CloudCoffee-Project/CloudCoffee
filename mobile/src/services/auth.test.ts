@@ -5,6 +5,8 @@ import {
   mapearRol,
   reenviarVerificacion,
   registrar,
+  restablecerPassword,
+  solicitarRecuperacion,
   verificarCorreo,
 } from './auth';
 import { httpClient } from './httpClient';
@@ -170,6 +172,41 @@ describe('reenviarVerificacion', () => {
 
     expect(postSpy).toHaveBeenCalledWith('/v1/auth/verificacion/reenviar', {
       email: 'usuario@uct.cl',
+    });
+  });
+});
+
+describe('solicitarRecuperacion', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/password/recovery con el email normalizado', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
+
+    await solicitarRecuperacion('  USUARIO@UCT.CL  ');
+
+    expect(postSpy).toHaveBeenCalledWith('/v1/auth/password/recovery', {
+      email: 'usuario@uct.cl',
+    });
+  });
+});
+
+describe('restablecerPassword', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/password/reset con token recortado y la clave nueva', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
+
+    await restablecerPassword('  token-del-correo  ', 'nueva-clave-123');
+
+    expect(postSpy).toHaveBeenCalledWith('/v1/auth/password/reset', {
+      token: 'token-del-correo',
+      nuevaPassword: 'nueva-clave-123',
     });
   });
 });
