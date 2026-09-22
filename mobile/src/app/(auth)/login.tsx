@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { toApiError } from '../../services/httpClient';
 import { login } from '../../services/auth';
@@ -25,6 +26,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { iniciarSesion } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -68,16 +70,10 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.screen}
+        contentContainerStyle={[styles.screen, { paddingTop: 32 + insets.top }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {router.canGoBack() && (
-          <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-            <Text style={styles.backText}>← Volver</Text>
-          </Pressable>
-        )}
-
         <View style={styles.loginContent}>
           <View style={styles.header}>
             <Text style={styles.title}>
@@ -92,7 +88,7 @@ export default function LoginScreen() {
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="ejemplo@ca.cloudcoffee.cl o @uct.cl"
+                placeholder="ejemplo@ca.cloudcoffee.cl / @uct.cl / @alu.uct.cl"
                 placeholderTextColor="#A89F95"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -161,11 +157,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5EFE6',
     paddingHorizontal: 28,
     paddingVertical: 32,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 28,
-    left: 24,
   },
   backText: {
     color: '#2D1B14',
