@@ -57,7 +57,7 @@ public class RabbitTopologyConfig {
     ) {
         return BindingBuilder.bind(notificationEventsQueue)
                 .to(eventsExchange)
-                .with("auth.#");
+                .with("#");
     }
 
     @Bean
