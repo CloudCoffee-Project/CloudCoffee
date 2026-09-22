@@ -111,7 +111,10 @@ export default function RegistroScreen() {
       });
 
       // El backend exige verificar el correo antes de poder iniciar sesión.
-      router.replace('/(auth)/verificar-correo');
+      router.replace({
+        pathname: '/(auth)/verificar-correo',
+        params: { email: form.email.trim().toLowerCase() },
+      });
     } catch (errorApiCatch) {
       setErrorApi(toApiError(errorApiCatch as never).message);
       setCargando(false);
@@ -128,11 +131,13 @@ export default function RegistroScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {router.canGoBack() && (
-          <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-            <Text style={styles.backText}>← Volver</Text>
-          </Pressable>
-        )}
+        <Pressable
+          onPress={() => router.replace('/(auth)/portada')}
+          style={styles.backButton}
+          hitSlop={8}
+        >
+          <Text style={styles.backText}>← Volver</Text>
+        </Pressable>
 
         <View style={styles.registerContent}>
           <View style={styles.header}>

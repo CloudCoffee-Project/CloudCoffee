@@ -1,6 +1,6 @@
 // src/app/(auth)/_layout.tsx
 //
-// Stack de autenticación: login, registro, verificación de correo,
+// Stack de autenticación: portada, login, registro, verificación de correo,
 // recuperación/reset de contraseña, activación de cuenta (cajero).
 // Todas estas pantallas son públicas (no requieren sesión).
 
@@ -9,6 +9,7 @@ import { Stack } from 'expo-router';
 export default function AuthLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="portada" />
       <Stack.Screen name="login" />
       <Stack.Screen name="registro" />
       <Stack.Screen name="verificar-correo" />

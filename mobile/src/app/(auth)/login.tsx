@@ -74,6 +74,14 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <Pressable
+          onPress={() => router.replace('/(auth)/portada')}
+          style={styles.backButton}
+          hitSlop={8}
+        >
+          <Text style={styles.backText}>← Volver</Text>
+        </Pressable>
+
         <View style={styles.loginContent}>
           <View style={styles.header}>
             <Text style={styles.title}>
@@ -153,10 +161,13 @@ const styles = StyleSheet.create({
   },
   screen: {
     flexGrow: 1,
-    justifyContent: 'center',
     backgroundColor: '#F5EFE6',
     paddingHorizontal: 28,
     paddingVertical: 32,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 14,
   },
   backText: {
     color: '#2D1B14',
@@ -164,10 +175,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   loginContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     gap: 22,
     marginVertical: 12,
   },
   header: {
+    alignItems: 'center',
     gap: 6,
   },
   title: {
@@ -176,6 +190,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.6,
     lineHeight: 38,
+    textAlign: 'center',
   },
   highlightText: {
     color: '#0284C7',
@@ -185,6 +200,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 300,
   },
   form: {
     gap: 14,
