@@ -30,6 +30,38 @@ export async function login(credenciales: CredencialesLogin): Promise<LoginRespo
   return response.data;
 }
 
+// DTO exacto que espera POST /v1/auth/register (RegistroClienteRequest).
+export interface RegistroClienteRequest {
+  email: string;
+  password: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+}
+
+export interface RegistroClienteResponse {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  rol: string;
+  verificado: boolean;
+}
+
+/** Llama a POST /v1/auth/register y crea la cuenta del cliente. */
+export async function registrar(datos: RegistroClienteRequest): Promise<RegistroClienteResponse> {
+  const response = await httpClient.post<RegistroClienteResponse>('/v1/auth/register', {
+    email: datos.email.trim().toLowerCase(),
+    password: datos.password,
+    nombre: datos.nombre.trim(),
+    apellido: datos.apellido.trim(),
+    telefono: datos.telefono.trim(),
+  });
+
+  return response.data;
+}
+
 // Mapea el rol del backend (CLIENTE, CAJERO, ADMIN_CAFETERIA, SUPER_ADMIN)
 // al union type Rol de la app. Ante un rol desconocido asume 'cliente'.
 export function mapearRol(rol: unknown): Rol {

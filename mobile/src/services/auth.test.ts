@@ -1,5 +1,5 @@
 // src/services/auth.test.ts
-import { decodificarSesion, login, mapearRol } from './auth';
+import { decodificarSesion, login, mapearRol, registrar } from './auth';
 import { httpClient } from './httpClient';
 import type { Rol } from '../types/domain';
 
@@ -80,6 +80,52 @@ describe('login', () => {
     expect(postSpy).toHaveBeenCalledWith('/v1/auth/login', {
       email: 'usuario@uct.cl',
       password: 'secreto',
+    });
+  });
+});
+
+describe('registrar', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/register con los datos normalizados', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({
+      data: {
+        id: 'uuid-1',
+        email: 'usuario@uct.cl',
+        nombre: 'Ana',
+        apellido: 'Pérez',
+        telefono: '+56 9 1234 5678',
+        rol: 'CLIENTE',
+        verificado: false,
+      },
+    });
+
+    const resultado = await registrar({
+      email: '  USUARIO@UCT.CL  ',
+      password: 'secreto123',
+      nombre: '  Ana  ',
+      apellido: '  Pérez  ',
+      telefono: ' +56 9 1234 5678 ',
+    });
+
+    expect(postSpy).toHaveBeenCalledWith('/v1/auth/register', {
+      email: 'usuario@uct.cl',
+      password: 'secreto123',
+      nombre: 'Ana',
+      apellido: 'Pérez',
+      telefono: '+56 9 1234 5678',
+    });
+    expect(resultado).toEqual({
+      id: 'uuid-1',
+      email: 'usuario@uct.cl',
+      nombre: 'Ana',
+      apellido: 'Pérez',
+      telefono: '+56 9 1234 5678',
+      rol: 'CLIENTE',
+      verificado: false,
     });
   });
 });

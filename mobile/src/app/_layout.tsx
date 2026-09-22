@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { getAccessToken } from '../services/httpClient';
@@ -8,6 +9,7 @@ import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
 
 function RootNavigator() {
   const { sesion, bootstrapping } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const segments = useSegments();
   const router = useRouter();
@@ -42,7 +44,14 @@ function RootNavigator() {
 
   if (bootstrapping) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingTop: insets.top,
+        }}
+      >
         <ActivityIndicator size="large" />
       </View>
     );
@@ -53,8 +62,10 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
