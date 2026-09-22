@@ -99,9 +99,9 @@ export function toApiError(error: AxiosError<ApiProblem>): ApiError {
   return new ApiError(detail, status, data);
 }
 
-// Decodifica la parte payload de un JWT (base64url) y devuelve su exp en
-// segundos (epoch). Devuelve null si el token no tiene exp o es inválido.
-export function decodeJwtExp(token: string): number | null {
+// Decodifica la parte payload de un JWT (base64url) a un objeto plano.
+// Devuelve null si el token está malformado o no tiene payload.
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const payload = token.split('.')[1];
     if (!payload) {
@@ -111,12 +111,21 @@ export function decodeJwtExp(token: string): number | null {
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
     const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
-    const decoded = JSON.parse(new TextDecoder().decode(bytes)) as { exp?: unknown };
-
-    return typeof decoded.exp === 'number' ? decoded.exp : null;
+    return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
   } catch {
     return null;
   }
+}
+
+// Decodifica la parte payload de un JWT (base64url) y devuelve su exp en
+// segundos (epoch). Devuelve null si el token no tiene exp o es inválido.
+export function decodeJwtExp(token: string): number | null {
+  const payload = decodeJwtPayload(token);
+  if (!payload) {
+    return null;
+  }
+
+  return typeof payload.exp === 'number' ? payload.exp : null;
 }
 
 // true si el token ya expiró (comparando contra nowSeconds, por defecto ahora).
