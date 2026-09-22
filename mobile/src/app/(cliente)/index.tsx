@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
-import axios from 'axios';
 
 const API_URL = Platform.select({
   android: 'http://10.0.2.2:8080',
@@ -21,7 +20,6 @@ const API_URL = Platform.select({
   default: 'http://localhost:8080',
 });
 
-// Clave compartida con campus.tsx
 export const CAMPUS_STORAGE_KEY = '@app_campus_seleccionado';
 
 export interface CategoriaBackend {
@@ -41,7 +39,6 @@ export interface Producto {
   precio: number;
 }
 
-// MOCK de productos adaptado a los IDs reales de tu lista de campus
 const PRODUCTOS_MOCK: Producto[] = [
   {
     id: 'p-1',
@@ -89,6 +86,28 @@ const PRODUCTOS_MOCK: Producto[] = [
   },
 ];
 
+// Algoritmo nativo para tolerar errores ortográficos (typos)
+const levenshteinDistance = (a: string, b: string): number => {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+};
+
 export default function CatalogoProductosScreen() {
   const router = useRouter();
   const [campusId, setCampusId] = useState<string>('san-juan-pablo-ii');
@@ -98,7 +117,6 @@ export default function CatalogoProductosScreen() {
   const [categorias, setCategorias] = useState<CategoriaBackend[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  // Se vuelve a ejecutar automáticamente cada vez que el usuario regresa a la pantalla
   useFocusEffect(
     useCallback(() => {
       cargarDatos();
@@ -108,7 +126,6 @@ export default function CatalogoProductosScreen() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      // Leemos el JSON guardado desde campus.tsx
       const campusGuardadoStr = await AsyncStorage.getItem(CAMPUS_STORAGE_KEY);
       if (campusGuardadoStr) {
         const campusObj = JSON.parse(campusGuardadoStr);
@@ -125,18 +142,26 @@ export default function CatalogoProductosScreen() {
     }
   };
 
+  // Reemplazo nativo de axios con fetch
   const cargarCategorias = async () => {
     try {
-      const response = await axios.get<CategoriaBackend[]>(
-        `${API_URL}/v1/catalog/categorias`,
-        { timeout: 3000 }
-      );
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      if (Array.isArray(response.data) && response.data.length > 0) {
-        setCategorias(response.data);
-      } else {
-        setCategoriasDefault();
+      const response = await fetch(`${API_URL}/v1/catalog/categorias`, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data: CategoriaBackend[] = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setCategorias(data);
+          return;
+        }
       }
+      setCategoriasDefault();
     } catch (e) {
       setCategoriasDefault();
     }
@@ -150,22 +175,48 @@ export default function CatalogoProductosScreen() {
     ]);
   };
 
-  const productosFiltrados = PRODUCTOS_MOCK.filter((prod) => {
-    const cumpleCampus = !campusId || prod.campusDisponibles.includes(campusId);
+  // Filtrado base por campus y categoría seleccionada
+  const productosBase = useMemo(() => {
+    return PRODUCTOS_MOCK.filter((prod) => {
+      const cumpleCampus = !campusId || prod.campusDisponibles.includes(campusId);
+      const cumpleCategoria =
+        categoriaSeleccionada === 'todos' || prod.categoriaId === categoriaSeleccionada;
+      return cumpleCampus && cumpleCategoria;
+    });
+  }, [campusId, categoriaSeleccionada]);
 
-    const cumpleBusqueda =
-      prod.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      prod.descripcion.toLowerCase().includes(busqueda.toLowerCase());
+  // Búsqueda difusa optimizada sin módulos externos
+  const productosFiltrados = useMemo(() => {
+    const query = busqueda.trim().toLowerCase();
+    if (!query) return productosBase;
 
-    const cumpleCategoria =
-      categoriaSeleccionada === 'todos' || prod.categoriaId === categoriaSeleccionada;
+    return productosBase.filter((prod) => {
+      const nombre = prod.nombre.toLowerCase();
+      const descripcion = prod.descripcion.toLowerCase();
 
-    return cumpleCampus && cumpleBusqueda && cumpleCategoria;
-  });
+      // Coincidencia exacta/parcial directa
+      if (nombre.includes(query) || descripcion.includes(query)) {
+        return true;
+      }
+
+      // Tolerancia a fallos tipográficos
+      const palabrasQuery = query.split(' ');
+      const palabrasTexto = `${nombre} ${descripcion}`.split(' ');
+
+      return palabrasQuery.some((pQuery) =>
+        palabrasTexto.some((pTexto) => {
+          if (Math.abs(pQuery.length - pTexto.length) > 2) return false;
+          const dist = levenshteinDistance(pQuery, pTexto);
+          const maxDist = pQuery.length > 4 ? 2 : 1;
+          return dist <= maxDist;
+        })
+      );
+    });
+  }, [busqueda, productosBase]);
 
   return (
     <View style={styles.container}>
-      {/* 1. Header con Selector de Campus */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.pinContainer}>
@@ -176,7 +227,7 @@ export default function CatalogoProductosScreen() {
             <Text style={styles.campusName} numberOfLines={1}>
               {campusNombre}
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => router.push('/(cliente)/campus')}
               style={styles.changeBtnContainer}
             >
@@ -186,7 +237,7 @@ export default function CatalogoProductosScreen() {
         </View>
       </View>
 
-      {/* 2. Buscador */}
+      {/* Buscador */}
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -194,10 +245,16 @@ export default function CatalogoProductosScreen() {
           placeholderTextColor="#9CA3AF"
           value={busqueda}
           onChangeText={setBusqueda}
+          autoCorrect={false}
         />
+        {busqueda.length > 0 && (
+          <TouchableOpacity onPress={() => setBusqueda('')} style={styles.clearButton}>
+            <Text style={styles.clearButtonText}>✕</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* 3. Filtro de Categorías */}
+      {/* Filtro de Categorías */}
       <View style={styles.categoriesContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <TouchableOpacity
@@ -239,7 +296,7 @@ export default function CatalogoProductosScreen() {
         </ScrollView>
       </View>
 
-      {/* 4. Listado de Productos */}
+      {/* Lista de Productos */}
       {cargando ? (
         <ActivityIndicator size="large" color="#0052CC" style={{ marginTop: 20 }} />
       ) : (
@@ -337,16 +394,30 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     marginBottom: 10,
+    position: 'relative',
+    justifyContent: 'center',
   },
   searchInput: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    paddingRight: 36,
     fontSize: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     color: '#1F2937',
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   categoriesContainer: {
     marginBottom: 12,
