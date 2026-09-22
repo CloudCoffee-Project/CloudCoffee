@@ -1,21 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
-import type { SesionDecodificada } from '../types/domain';
+
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { getAccessToken } from '../services/httpClient';
 import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
 
-export default function RootLayout() {
-  const [bootstrapping] = useState(false);
-
-  //inicio de sesión de prueba para desarrollo. En producción, se reemplazará por el flujo real de login/sesión (INT4-2)
-  // para dejar como lo anterior usar el:
-  //const [sesion] = useState<SesionDecodificada | null>(null);
-
-  const [sesion] = useState<SesionDecodificada | null>({
-    id: '1',
-    nombre: 'Usuario Test',
-    rol: 'cliente',
-  } as any);
+function RootNavigator() {
+  const { sesion, bootstrapping } = useAuth();
 
   const segments = useSegments();
   const router = useRouter();
@@ -36,18 +28,17 @@ export default function RootLayout() {
     }
   }, [sesion, bootstrapping, segments, router]);
 
-  // TODO: reemplazar este token de prueba por el accessToken real una vez
-  // que el flujo de login/sesión esté conectado (INT4-2, prueba temporal)
+  // WebSocket de notificaciones: usa el accessToken real una vez autenticado.
   useEffect(() => {
-    const tokenDePrueba = 'token_de_prueba';
-    connectWebSocket(tokenDePrueba, () => {
+    const token = getAccessToken();
+    connectWebSocket(token ?? 'token_de_prueba', () => {
       console.warn('¡Listo! Conexión WebSocket establecida');
     });
 
     return () => {
       disconnectWebSocket();
     };
-  }, []);
+  }, [sesion]);
 
   if (bootstrapping) {
     return (
@@ -58,4 +49,12 @@ export default function RootLayout() {
   }
 
   return <Slot />;
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
 }

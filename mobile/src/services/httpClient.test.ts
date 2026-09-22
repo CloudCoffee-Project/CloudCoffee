@@ -3,6 +3,7 @@ import {
   ApiError,
   clearTokens,
   decodeJwtExp,
+  decodeJwtPayload,
   getAccessToken,
   getRefreshToken,
   httpClient,
@@ -109,6 +110,19 @@ describe('par de tokens (INT4-17)', () => {
     clearTokens();
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
+  });
+});
+
+describe('decodeJwtPayload', () => {
+  it('decodifica el payload completo de un JWT', () => {
+    const token = construirJwt({ sub: 'u-1', rol: 'CAJERO', exp: 1760000000 });
+
+    expect(decodeJwtPayload(token)).toEqual({ sub: 'u-1', rol: 'CAJERO', exp: 1760000000 });
+  });
+
+  it('devuelve null ante un JWT inválido', () => {
+    expect(decodeJwtPayload('no-es-un-jwt')).toBeNull();
+    expect(decodeJwtPayload('')).toBeNull();
   });
 });
 
