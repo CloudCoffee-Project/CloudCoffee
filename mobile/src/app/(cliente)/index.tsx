@@ -14,11 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 
-const API_URL = Platform.select({
-  android: 'http://10.0.2.2:8080',
-  ios: 'http://localhost:8080',
-  default: 'http://localhost:8080',
-});
+import { httpClient } from '../../services/httpClient';
 
 export const CAMPUS_STORAGE_KEY = '@app_campus_seleccionado';
 
@@ -117,13 +113,32 @@ export default function CatalogoProductosScreen() {
   const [categorias, setCategorias] = useState<CategoriaBackend[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      cargarDatos();
-    }, [])
-  );
+  const setCategoriasDefault = useCallback(() => {
+    setCategorias([
+      { id: 'cat-snacks', nombre: 'Snacks' },
+      { id: 'cat-bebidas', nombre: 'Bebidas' },
+      { id: 'cat-pasteleria', nombre: 'Pastelería' },
+    ]);
+  }, []);
 
-  const cargarDatos = async () => {
+  const cargarCategorias = useCallback(async () => {
+    try {
+      const response = await httpClient.get<CategoriaBackend[]>('/v1/catalog/categorias', {
+        timeout: 3000,
+      });
+
+      const data = response.data;
+      if (Array.isArray(data) && data.length > 0) {
+        setCategorias(data);
+        return;
+      }
+      setCategoriasDefault();
+    } catch {
+      setCategoriasDefault();
+    }
+  }, [setCategoriasDefault]);
+
+  const cargarDatos = useCallback(async () => {
     try {
       setCargando(true);
       const campusGuardadoStr = await AsyncStorage.getItem(CAMPUS_STORAGE_KEY);
@@ -135,45 +150,18 @@ export default function CatalogoProductosScreen() {
         }
       }
       await cargarCategorias();
-    } catch (e) {
+    } catch {
       setCategoriasDefault();
     } finally {
       setCargando(false);
     }
-  };
+  }, [cargarCategorias, setCategoriasDefault]);
 
-  // Reemplazo nativo de axios con fetch
-  const cargarCategorias = async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      const response = await fetch(`${API_URL}/v1/catalog/categorias`, {
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data: CategoriaBackend[] = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setCategorias(data);
-          return;
-        }
-      }
-      setCategoriasDefault();
-    } catch (e) {
-      setCategoriasDefault();
-    }
-  };
-
-  const setCategoriasDefault = () => {
-    setCategorias([
-      { id: 'cat-snacks', nombre: 'Snacks' },
-      { id: 'cat-bebidas', nombre: 'Bebidas' },
-      { id: 'cat-pasteleria', nombre: 'Pastelería' },
-    ]);
-  };
+  useFocusEffect(
+    useCallback(() => {
+      cargarDatos();
+    }, [cargarDatos])
+  );
 
   // Filtrado base por campus y categoría seleccionada
   const productosBase = useMemo(() => {
@@ -258,17 +246,11 @@ export default function CatalogoProductosScreen() {
       <View style={styles.categoriesContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <TouchableOpacity
-            style={[
-              styles.pill,
-              categoriaSeleccionada === 'todos' && styles.pillActive,
-            ]}
+            style={[styles.pill, categoriaSeleccionada === 'todos' && styles.pillActive]}
             onPress={() => setCategoriaSeleccionada('todos')}
           >
             <Text
-              style={[
-                styles.pillText,
-                categoriaSeleccionada === 'todos' && styles.pillTextActive,
-              ]}
+              style={[styles.pillText, categoriaSeleccionada === 'todos' && styles.pillTextActive]}
             >
               TODOS
             </Text>
@@ -277,17 +259,11 @@ export default function CatalogoProductosScreen() {
           {categorias.map((cat) => (
             <TouchableOpacity
               key={cat.id}
-              style={[
-                styles.pill,
-                categoriaSeleccionada === cat.id && styles.pillActive,
-              ]}
+              style={[styles.pill, categoriaSeleccionada === cat.id && styles.pillActive]}
               onPress={() => setCategoriaSeleccionada(cat.id)}
             >
               <Text
-                style={[
-                  styles.pillText,
-                  categoriaSeleccionada === cat.id && styles.pillTextActive,
-                ]}
+                style={[styles.pillText, categoriaSeleccionada === cat.id && styles.pillTextActive]}
               >
                 {cat.nombre}
               </Text>
@@ -325,9 +301,7 @@ export default function CatalogoProductosScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.localTitle}>{item.localNombre}</Text>
                   <Text style={styles.localUbicacion}>{item.localUbicacion}</Text>
-                  <Text style={styles.localPrecio}>
-                    ${item.precio.toLocaleString('es-CL')}
-                  </Text>
+                  <Text style={styles.localPrecio}>${item.precio.toLocaleString('es-CL')}</Text>
                 </View>
               </View>
             </View>
