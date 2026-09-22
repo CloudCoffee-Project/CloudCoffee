@@ -20,7 +20,7 @@ function RootNavigator() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!sesion && !inAuthGroup) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/portada');
     } else if (sesion) {
       if (sesion.rol === 'cajero' && segments[0] !== '(cajero)') {
         router.replace('/(cajero)');

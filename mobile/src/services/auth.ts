@@ -62,6 +62,27 @@ export async function registrar(datos: RegistroClienteRequest): Promise<Registro
   return response.data;
 }
 
+export interface VerificarCorreoResponse {
+  email: string;
+  verificado: boolean;
+}
+
+/** Llama a POST /v1/auth/verificacion con el token que llegó por correo. */
+export async function verificarCorreo(token: string): Promise<VerificarCorreoResponse> {
+  const response = await httpClient.post<VerificarCorreoResponse>('/v1/auth/verificacion', {
+    token: token.trim(),
+  });
+
+  return response.data;
+}
+
+/** Llama a POST /v1/auth/verificacion/reenviar para que el backend emita un token nuevo. */
+export async function reenviarVerificacion(email: string): Promise<void> {
+  await httpClient.post('/v1/auth/verificacion/reenviar', {
+    email: email.trim().toLowerCase(),
+  });
+}
+
 // Mapea el rol del backend (CLIENTE, CAJERO, ADMIN_CAFETERIA, SUPER_ADMIN)
 // al union type Rol de la app. Ante un rol desconocido asume 'cliente'.
 export function mapearRol(rol: unknown): Rol {

@@ -1,5 +1,12 @@
 // src/services/auth.test.ts
-import { decodificarSesion, login, mapearRol, registrar } from './auth';
+import {
+  decodificarSesion,
+  login,
+  mapearRol,
+  reenviarVerificacion,
+  registrar,
+  verificarCorreo,
+} from './auth';
 import { httpClient } from './httpClient';
 import type { Rol } from '../types/domain';
 
@@ -126,6 +133,43 @@ describe('registrar', () => {
       telefono: '+56 9 1234 5678',
       rol: 'CLIENTE',
       verificado: false,
+    });
+  });
+});
+
+describe('verificarCorreo', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/verificacion con el token recortado', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({
+      data: { email: 'usuario@uct.cl', verificado: true },
+    });
+
+    const resultado = await verificarCorreo('  token-largo-inesperado  ');
+
+    expect(postSpy).toHaveBeenCalledWith('/v1/auth/verificacion', {
+      token: 'token-largo-inesperado',
+    });
+    expect(resultado).toEqual({ email: 'usuario@uct.cl', verificado: true });
+  });
+});
+
+describe('reenviarVerificacion', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/verificacion/reenviar con el email normalizado', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
+
+    await reenviarVerificacion('  USUARIO@UCT.CL  ');
+
+    expect(postSpy).toHaveBeenCalledWith('/v1/auth/verificacion/reenviar', {
+      email: 'usuario@uct.cl',
     });
   });
 });
