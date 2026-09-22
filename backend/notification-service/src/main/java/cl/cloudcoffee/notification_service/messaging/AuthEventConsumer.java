@@ -8,13 +8,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuthEventConsumer {
 
-    private static final Logger LOGGER =
-            LoggerFactory.getLogger(AuthEventConsumer.class);
+private static final Logger LOGGER =
+        LoggerFactory.getLogger(AuthEventConsumer.class);
 
-    @RabbitListener(
-            queues = RabbitTopologyConfig.NOTIFICATION_EVENTS_QUEUE
-    )
-    public void consume(CloudCoffeeEvent event) {
+@RabbitListener(
+        queues = RabbitTopologyConfig.NOTIFICATION_EVENTS_QUEUE
+)
+public void consume(CloudCoffeeEvent event) {
         validate(event);
 
         LOGGER.info(
@@ -24,16 +24,16 @@ public class AuthEventConsumer {
                 event.traceId(),
                 event.payload()
         );
-    }
+}
 
-    private void validate(CloudCoffeeEvent event) {
+private void validate(CloudCoffeeEvent event) {
         if (event.eventId() == null
                 || event.timestamp() == null
                 || event.traceId() == null
                 || event.traceId().isBlank()) {
-            throw new IllegalArgumentException(
-                    "El evento no contiene los metadatos obligatorios"
-            );
+        throw new IllegalArgumentException(
+                "El evento no contiene los metadatos obligatorios"
+                        );
+                }
         }
-    }
 }

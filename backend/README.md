@@ -70,6 +70,28 @@ cd auth-service
 ./mvnw spring-boot:run
 ```
 
+## CORS en API Gateway
+
+El Gateway gestiona CORS para `/v1/**`; los microservicios no necesitan configurar CORS.
+Define `CORS_ALLOWED_ORIGINS` con los orígenes exactos del frontend, separados por comas:
+
+```dotenv
+# Desarrollo: ajustar el puerto al del frontend.
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+# Producción: reemplazar por el dominio real del frontend.
+# CORS_ALLOWED_ORIGINS=https://app.example.com
+```
+
+Docker Compose toma esta variable del archivo `.env`. Al ejecutar el Gateway directamente,
+debe estar definida en su entorno. Si está vacía, no se autorizan solicitudes entre orígenes;
+los comodines (`*`) impiden el arranque. Cada origen incluye protocolo, host y puerto si aplica,
+sin rutas ni barra final.
+
+El Gateway responde los preflight `OPTIONS` sin exigir autenticación ni enviarlos al
+microservicio. Permite los métodos `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` y `OPTIONS`,
+y los encabezados `Authorization`, `Content-Type` y `Accept`. No habilita cookies entre
+orígenes y las rutas protegidas conservan su requisito de autenticación.
+
 ## Paquetes
 
 Los servicios utilizan la raíz:
