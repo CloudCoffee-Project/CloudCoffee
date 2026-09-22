@@ -17,3 +17,5 @@ function defaultHost(): string {
 const GATEWAY_URL = `http://${defaultHost()}:${GATEWAY_PORT}`;
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? GATEWAY_URL;
+
+export const DEFAULT_TIMEOUT_MS = 10_000;
