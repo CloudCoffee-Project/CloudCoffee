@@ -150,7 +150,9 @@ export default function SeguimientosScreen() {
         {estadoActual === 3 && (
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
-            onPress={() => alert('Próximamente: Código QR de retiro (Tarea 47)')}
+            onPress={() =>
+              router.push({ pathname: '/(cliente)/qr-retiro', params: { id: ordenMock.id } })
+            }
           >
             <Text style={styles.primaryButtonText}>Ver código de retiro</Text>
           </Pressable>
