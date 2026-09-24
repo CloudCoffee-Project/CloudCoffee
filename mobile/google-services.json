@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "498917649820",
+    "project_id": "cloudcoffee-7d5e5",
+    "storage_bucket": "cloudcoffee-7d5e5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:498917649820:android:8ce9d6dc0e47d831cdec59",
+        "android_client_info": {
+          "package_name": "cl.cloudcoffee.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDakq3vRQpFkR91Dn3An42COT5feW2KkLU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
