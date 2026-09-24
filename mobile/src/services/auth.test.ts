@@ -1,8 +1,11 @@
 // src/services/auth.test.ts
 import {
+  actualizarPerfil,
   decodificarSesion,
   login,
   mapearRol,
+  obtenerPerfil,
+  PERFIL_ENDPOINT,
   reenviarVerificacion,
   registrar,
   restablecerPassword,
@@ -10,7 +13,17 @@ import {
   verificarCorreo,
 } from './auth';
 import { httpClient } from './httpClient';
-import type { Rol } from '../types/domain';
+import type { PerfilUsuario, Rol } from '../types/domain';
+
+const perfilMock: PerfilUsuario = {
+  id: 'uuid-1',
+  email: 'ana.perez@uct.cl',
+  nombre: 'Ana',
+  apellido: 'Pérez',
+  telefono: '+56 9 1234 5678',
+  rol: 'CLIENTE',
+  verificado: true,
+};
 
 function construirJwt(payload: Record<string, unknown>): string {
   const json = new TextEncoder().encode(JSON.stringify(payload));
@@ -208,5 +221,45 @@ describe('restablecerPassword', () => {
       token: 'token-del-correo',
       nuevaPassword: 'nueva-clave-123',
     });
+  });
+});
+
+describe('obtenerPerfil', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a GET /v1/auth/me y devuelve el perfil del usuario', async () => {
+    const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({ data: perfilMock });
+
+    const resultado = await obtenerPerfil();
+
+    expect(getSpy).toHaveBeenCalledWith(PERFIL_ENDPOINT);
+    expect(resultado).toEqual(perfilMock);
+  });
+});
+
+describe('actualizarPerfil', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a PUT /v1/auth/me normalizando nombre, apellido y teléfono', async () => {
+    const putSpy = jest.spyOn(httpClient, 'put').mockResolvedValue({ data: perfilMock });
+
+    const resultado = await actualizarPerfil({
+      nombre: '  Ana  ',
+      apellido: '  Pérez  ',
+      telefono: ' +56 9 1234 5678 ',
+    });
+
+    expect(putSpy).toHaveBeenCalledWith(PERFIL_ENDPOINT, {
+      nombre: 'Ana',
+      apellido: 'Pérez',
+      telefono: '+56 9 1234 5678',
+    });
+    expect(resultado).toEqual(perfilMock);
   });
 });
