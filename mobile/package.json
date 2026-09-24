@@ -12,6 +12,7 @@
     "axios": "^1.20.0",
     "expo": "~57.0.20",
     "expo-constants": "~57.0.17",
+    "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.1",
     "expo-font": "~57.0.3",
     "expo-glass-effect": "~57.0.1",
