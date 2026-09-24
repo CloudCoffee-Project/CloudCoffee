@@ -135,6 +135,14 @@ export interface RestablecerPasswordRequest {
   nuevaPassword: string;
 }
 
+// Body de cambio de contraseña estando autenticado (INT4-24). El backend
+// validará la contraseña actual y aplicará las mismas reglas que en el
+// registro (mínimo 8 caracteres).
+export interface CambiarContrasenaRequest {
+  passwordActual: string;
+  nuevaPassword: string;
+}
+
 export interface Campus {
   id: string;
   nombre: string;

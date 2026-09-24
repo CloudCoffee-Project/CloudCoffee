@@ -34,8 +34,8 @@ describe('sessionStorage (INT4-22)', () => {
     it('persiste cada token en su propia clave de SecureStore', async () => {
       await guardarSesion({ accessToken: 'a', refreshToken: 'r' });
 
-      expect(mockedSetItemAsync).toHaveBeenCalledWith('@app_sesion_access_token', 'a');
-      expect(mockedSetItemAsync).toHaveBeenCalledWith('@app_sesion_refresh_token', 'r');
+      expect(mockedSetItemAsync).toHaveBeenCalledWith('app.sesion.access_token', 'a');
+      expect(mockedSetItemAsync).toHaveBeenCalledWith('app.sesion.refresh_token', 'r');
     });
   });
 
@@ -60,8 +60,8 @@ describe('sessionStorage (INT4-22)', () => {
     it('borra ambas claves de SecureStore', async () => {
       await eliminarSesion();
 
-      expect(mockedDeleteItemAsync).toHaveBeenCalledWith('@app_sesion_access_token');
-      expect(mockedDeleteItemAsync).toHaveBeenCalledWith('@app_sesion_refresh_token');
+      expect(mockedDeleteItemAsync).toHaveBeenCalledWith('app.sesion.access_token');
+      expect(mockedDeleteItemAsync).toHaveBeenCalledWith('app.sesion.refresh_token');
     });
   });
 });

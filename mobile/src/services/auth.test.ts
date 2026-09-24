@@ -1,6 +1,8 @@
 // src/services/auth.test.ts
 import {
   actualizarPerfil,
+  cambiarContrasena,
+  CAMBIAR_PASSWORD_ENDPOINT,
   decodificarSesion,
   login,
   mapearRol,
@@ -220,6 +222,24 @@ describe('restablecerPassword', () => {
     expect(postSpy).toHaveBeenCalledWith('/v1/auth/password/reset', {
       token: 'token-del-correo',
       nuevaPassword: 'nueva-clave-123',
+    });
+  });
+});
+
+describe('cambiarContrasena', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/password/change con la contraseña actual y la nueva', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
+
+    await cambiarContrasena({ passwordActual: 'vieja-123', nuevaPassword: 'nueva-12345' });
+
+    expect(postSpy).toHaveBeenCalledWith(CAMBIAR_PASSWORD_ENDPOINT, {
+      passwordActual: 'vieja-123',
+      nuevaPassword: 'nueva-12345',
     });
   });
 });

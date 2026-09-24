@@ -13,8 +13,15 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const ACCESS_TOKEN_KEY = '@app_sesion_access_token';
-const REFRESH_TOKEN_KEY = '@app_sesion_refresh_token';
+// SecureStore solo acepta claves con caracteres alfanuméricos, ".", "-" y "_"
+// (un "@" como el de AsyncStorage tira "Invalid key provided to SecureStore").
+const ACCESS_TOKEN_KEY = 'app.sesion.access_token';
+const REFRESH_TOKEN_KEY = 'app.sesion.refresh_token';
+
+// Claves viejas (con "@") inválidas para SecureStore; se limpian en el primer
+// arranque para no dejar sesiones huérfanas guardadas antes de la corrección.
+const ACCESS_TOKEN_KEY_VIEJO = '@app_sesion_access_token';
+const REFRESH_TOKEN_KEY_VIEJO = '@app_sesion_refresh_token';
 
 export interface SesionGuardada {
   accessToken: string;
@@ -75,15 +82,29 @@ export async function leerSesion(): Promise<SesionGuardada | null> {
   return { accessToken, refreshToken };
 }
 
-/** Elimina el par de tokens de SecureStore. */
+/** Elimina el par de tokens de SecureStore (nunca lanza: la limpieza no debe
+ *  romper el arranque ni el cierre de sesión). */
 export async function eliminarSesion(): Promise<void> {
+  const claves = [
+    ACCESS_TOKEN_KEY,
+    REFRESH_TOKEN_KEY,
+    ACCESS_TOKEN_KEY_VIEJO,
+    REFRESH_TOKEN_KEY_VIEJO,
+  ];
+
   if (Platform.OS === 'web') {
-    eliminarEnWeb(ACCESS_TOKEN_KEY);
-    eliminarEnWeb(REFRESH_TOKEN_KEY);
+    claves.forEach((clave) => eliminarEnWeb(clave));
     return;
   }
-  await Promise.all([
-    SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-    SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
-  ]);
+
+  await Promise.all(
+    claves.map(async (clave) => {
+      try {
+        await SecureStore.deleteItemAsync(clave);
+      } catch (error) {
+        // Una clave inválida o ausente no debe romper la limpieza.
+        console.warn(`[sessionStorage] No se pudo eliminar la clave ${clave}:`, error);
+      }
+    })
+  );
 }

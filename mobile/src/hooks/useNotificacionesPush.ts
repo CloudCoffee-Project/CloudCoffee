@@ -9,8 +9,8 @@
 //   - Se desuscribe y limpia todo al desmontar.
 
 import { useEffect, useState } from 'react';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import type { NotificationResponse } from 'expo-notifications';
 
 import {
   configurarManejadorNotificaciones,
@@ -19,6 +19,20 @@ import {
   urlDeNotificacion,
 } from '../services/notificacionesPush';
 import type { EstadoPush } from '../services/notificacionesPush';
+
+// Require diferido: en Expo Go (Android, SDK 53+) importar expo-notifications
+// lanza un error y tumbaría el root layout (este hook se usa en _layout). Cuando
+// no está disponible, Notifications es null y el hook queda inactivo sin romper.
+type NotificationsDeExpo = typeof import('expo-notifications');
+const Notifications: NotificationsDeExpo | null = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications');
+  } catch (error) {
+    console.warn('[push] expo-notifications no disponible en este entorno:', error);
+    return null;
+  }
+})();
 
 export interface NotificacionRecibida {
   titulo: string | undefined;
@@ -29,10 +43,10 @@ export interface NotificacionRecibida {
 // Abre la ruta interna cuando el usuario toca una notificación (acción
 // "default"); ignora respuestas de acciones custom y notificaciones sin URL.
 function procesarApertura(
-  respuesta: Notifications.NotificationResponse,
+  respuesta: NotificationResponse,
   abrir: ((url: string) => void) | undefined
 ): void {
-  if (!abrir || respuesta.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+  if (!abrir || respuesta.actionIdentifier !== Notifications?.DEFAULT_ACTION_IDENTIFIER) {
     return;
   }
 
@@ -54,7 +68,7 @@ export function useNotificacionesPush(
   // apertura (p. ej. cuando inicia sesión y ya se puede navegar).
   useEffect(() => {
     configurarManejadorNotificaciones();
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !Notifications) {
       return;
     }
 
