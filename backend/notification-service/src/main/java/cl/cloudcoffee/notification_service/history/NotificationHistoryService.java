@@ -13,14 +13,14 @@ public class NotificationHistoryService {
         this.repository = repository;
     }
 
+    @Transactional(readOnly = true)
+    public boolean existsByEventId(java.util.UUID eventId) {
+        return repository.existsByEventId(eventId);
+    }
+
     @Transactional
     public void register(CloudCoffeeEvent event) {
-        if (repository.existsByEventId(event.eventId())) {
-            return;
-        }
-
         String trackingId = event.traceId();
-
         repository.save(new NotificationHistory(
                 event.eventId(),
                 event.eventType(),
