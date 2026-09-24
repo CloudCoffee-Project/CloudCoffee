@@ -5,3 +5,7 @@
 README.md
 **/.classpath
 **/.project
+
+**/*.pem
+**/*.key
+**/secrets

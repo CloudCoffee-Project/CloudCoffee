@@ -3,3 +3,8 @@
 .env
 .env.*
 !.env.example
+
+# Llaves JWT locales (nunca versionar).
+/secrets/
+**/*.pem
+**/*.key
