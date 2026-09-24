@@ -10,10 +10,52 @@ export type Rol = 'cliente' | 'cajero' | 'admin_cafeteria' | 'super_admin';
 export type EstadoOrden =
   | 'reservando'
   | 'pagado'
+  | 'listo_para_retiro'
   | 'no_retirado_pendiente_revision'
   | 'entregado'
   | 'no_retirado_final'
   | 'cancelado';
+
+// Lista canónica de estados de orden: permite validar en runtime valores que
+// llegan desde el WebSocket (/topic/orden/{id}/estado) o desde los params de
+// navegación, para que ninguna pantalla invente un string de estado por su
+// cuenta (ver cabecera de este archivo).
+export const ESTADOS_ORDEN: readonly EstadoOrden[] = [
+  'reservando',
+  'pagado',
+  'listo_para_retiro',
+  'no_retirado_pendiente_revision',
+  'entregado',
+  'no_retirado_final',
+  'cancelado',
+];
+
+export function esEstadoOrden(valor: unknown): valor is EstadoOrden {
+  return typeof valor === 'string' && (ESTADOS_ORDEN as readonly string[]).includes(valor);
+}
+
+// Agrupaciones semánticas del union EstadoOrden para el listado del cajero
+// (INT4-7, filtros básicos de pedidos activos / no retirados). Se centralizan
+// aquí para que ninguna pantalla invente su propia lógica de categoría: los
+// filtros se derivan del union, nunca de strings planos.
+export const ESTADOS_ORDEN_ACTIVOS: readonly EstadoOrden[] = [
+  'reservando',
+  'pagado',
+  'listo_para_retiro',
+];
+
+export const ESTADOS_ORDEN_NO_RETIRADOS: readonly EstadoOrden[] = [
+  'no_retirado_pendiente_revision',
+  'no_retirado_final',
+];
+
+export function esEstadoOrdenActivo(estado: EstadoOrden): boolean {
+  return ESTADOS_ORDEN_ACTIVOS.includes(estado);
+}
+
+export function esEstadoOrdenNoRetirado(estado: EstadoOrden): boolean {
+  return ESTADOS_ORDEN_NO_RETIRADOS.includes(estado);
+}
 
 export type EstadoCompra =
   'reservando' | 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
@@ -114,6 +156,30 @@ export interface Orden {
   estado: EstadoOrden;
   montoTotal: number;
   items: OrdenItem[];
+}
+
+// Eventos STOMP de tiempo real (contrato a fijar con el backend cuando
+// exista el endpoint). Se tipan acá para que los hooks/servicios no definan
+// DTOs propios: los estados usan el union EstadoOrden, nunca string plano.
+export interface OrdenEstadoEvento {
+  ordenId: string;
+  estado: EstadoOrden;
+}
+
+export interface StockCafeteriaEvento {
+  ofertaId: string;
+  productoId: string;
+  cafeteriaId: string;
+  campusId: string;
+  stockActual: number;
+}
+
+// Payload que codifica el QR de retiro: lo escanea el cajero en el punto de
+// retiro para validar el pedido. El estado siempre es un valor del union
+// EstadoOrden (nunca un string inventado en la pantalla).
+export interface QrRetiro {
+  pedido: string;
+  estado: EstadoOrden;
 }
 
 export interface Compra {

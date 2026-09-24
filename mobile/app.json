@@ -11,6 +11,8 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "cl.cloudcoffee.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -35,10 +37,31 @@
       ],
       "expo-web-browser",
       "expo-secure-store"
+      [
+        "expo-notifications",
+        {
+          "color": "#208AEF",
+          "defaultChannel": "pedidos"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
+          "microphonePermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
+          "barcodeScannerEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "470426dd-6390-4892-8cdc-d88b4b99e1f3"
+      }
+    },
+    "owner": "tomasjss-team"
   }
 }
