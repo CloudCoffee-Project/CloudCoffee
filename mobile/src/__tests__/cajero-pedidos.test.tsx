@@ -3,11 +3,17 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 
-import PedidosEntrantesScreen from '../app/(cajero)/index';
+import PedidosEntrantesScreen, { buscarOrdenPorCodigo } from '../app/(cajero)/index';
 import { fetchPedidosEntrantes } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
 import type { Orden } from '../types/domain';
+
+const mockReplace = jest.fn();
+
+jest.mock('expo-router', () => ({
+  useRouter: jest.fn(() => ({ replace: mockReplace })),
+}));
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
@@ -332,4 +338,134 @@ describe('Pantalla de pedidos del cajero', () => {
 
     act(() => tree.unmount());
   });
+});
+
+describe('Búsqueda manual por código de orden (INT4-10)', () => {
+  beforeEach(() => {
+    mockGetAccessToken.mockReset();
+    mockFetchPedidos.mockReset();
+    mockReplace.mockReset();
+    (useOrdenEstado as unknown as jest.Mock).mockReturnValue(null);
+  });
+
+  it('encuentra la orden por folio corto ignorando mayúsculas y espacios', () => {
+    expect(buscarOrdenPorCodigo(ordenesMock, '  cc-9801 ')).toEqual({
+      tipo: 'exito',
+      orden: ordenesMock[0],
+    });
+  });
+
+  it('encuentra la orden por su id', () => {
+    expect(buscarOrdenPorCodigo(ordenesMock, 'O-1')).toEqual({
+      tipo: 'exito',
+      orden: ordenesMock[0],
+    });
+  });
+
+  it('reporta cuando el folio no existe', () => {
+    expect(buscarOrdenPorCodigo(ordenesMock, 'CC-9999')).toEqual({
+      tipo: 'no_encontrada',
+      codigo: 'CC-9999',
+    });
+  });
+
+  it('rechaza órdenes ya entregadas y canceladas', () => {
+    expect(buscarOrdenPorCodigo(ordenesMock, 'CC-9802')).toEqual({
+      tipo: 'ya_entregada',
+      codigo: 'CC-9802',
+    });
+    expect(buscarOrdenPorCodigo(ordenesFiltrosMock, 'CC-9806')).toEqual({
+      tipo: 'cancelada',
+      codigo: 'CC-9806',
+    });
+  });
+
+  it('pide un folio cuando el campo está vacío', () => {
+    expect(buscarOrdenPorCodigo(ordenesMock, '   ')).toEqual({ tipo: 'vacia' });
+  });
+
+  it('valida el folio y navega a la confirmación de entrega con pedido y estado', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarPedidos();
+
+    const input = tree.root.findByProps({ testID: 'cajero-folio-input' });
+    await act(async () => {
+      input.props.onChangeText('cc-9801');
+    });
+    const validar = tree.root.findByProps({ testID: 'cajero-folio-validar' });
+    await act(async () => {
+      validar.props.onPress();
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(cajero)/confirmacion-entrega',
+      params: { pedido: 'o-1', estado: 'pagado' },
+    });
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('muestra el error del mockup cuando el folio no existe', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarPedidos();
+
+    const input = tree.root.findByProps({ testID: 'cajero-folio-input' });
+    await act(async () => {
+      input.props.onChangeText('CC-9999');
+    });
+    const validar = tree.root.findByProps({ testID: 'cajero-folio-validar' });
+    await act(async () => {
+      validar.props.onPress();
+    });
+
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-folio-error' });
+    expect(textoDe(errorBanner)).toContain(
+      'No se encontró ninguna orden con el código/folio: CC-9999'
+    );
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('pide el folio cuando el campo está vacío desde la pantalla', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarPedidos();
+
+    const validar = tree.root.findByProps({ testID: 'cajero-folio-validar' });
+    await act(async () => {
+      validar.props.onPress();
+    });
+
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-folio-error' });
+    expect(textoDe(errorBanner)).toContain('Ingresa el folio o el código de la orden.');
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('rechaza una orden ya entregada desde la pantalla', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarPedidos();
+
+    const input = tree.root.findByProps({ testID: 'cajero-folio-input' });
+    await act(async () => {
+      input.props.onChangeText('CC-9802');
+    });
+    const validar = tree.root.findByProps({ testID: 'cajero-folio-validar' });
+    await act(async () => {
+      validar.props.onPress();
+    });
+
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-folio-error' });
+    expect(textoDe(errorBanner)).toContain('Esta orden ya fue entregada.');
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    act(() => tree.unmount());
+  }, 20000);
 });

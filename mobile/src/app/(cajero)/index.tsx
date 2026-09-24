@@ -7,8 +7,14 @@
 // + no_retirado_final), derivados del union EstadoOrden; los datos salen del
 // contrato real (src/types/domain.ts): nada de estados inventados. Por defecto
 // la cola muestra solo pedidos activos, como en el mockup.
+//
+// Búsqueda manual por código de orden (INT4-10): respaldo para ubicar una
+// orden por su folio corto ante fallas de escaneo. Sigue el mockup (el input
+// "O buscar folio corto (ej: CC-9801)" + botón "Validar" de Cajero_Main): al
+// validar, navega a la misma pantalla de confirmación de entrega que el QR
+// (confirmacion-entrega.tsx) o muestra el motivo del rechazo en la tarjeta.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,6 +26,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { fetchPedidosEntrantes } from '../../services/ordenes';
 import { getAccessToken, toApiError } from '../../services/httpClient';
@@ -117,6 +124,46 @@ function cumpleFiltroEstado(estado: EstadoOrden, filtro: FiltroPedido): boolean 
   }
 }
 
+// Resultado de la búsqueda manual por folio corto (INT4-10). Función pura: se
+// exporta para testearla sin la pantalla, igual que procesarCodigo en el
+// escáner (INT4-8). El estado de la orden siempre viene del union EstadoOrden,
+// nunca de un string inventado en la pantalla.
+export type ResultadoBusquedaManual =
+  | { tipo: 'exito'; orden: Orden }
+  | { tipo: 'no_encontrada'; codigo: string }
+  | { tipo: 'ya_entregada'; codigo: string }
+  | { tipo: 'cancelada'; codigo: string }
+  | { tipo: 'vacia' };
+
+export function buscarOrdenPorCodigo(pedidos: Orden[], texto: string): ResultadoBusquedaManual {
+  const codigo = texto.trim();
+  if (!codigo) {
+    return { tipo: 'vacia' };
+  }
+
+  const normalizado = codigo.toLowerCase();
+  const orden = pedidos.find(
+    (pedido) =>
+      pedido.codigoOrden.toLowerCase() === normalizado ||
+      pedido.ordenId.toLowerCase() === normalizado
+  );
+
+  if (!orden) {
+    return { tipo: 'no_encontrada', codigo };
+  }
+
+  // Mismo criterio que el escáner (procesarCodigo): una orden ya entregada o
+  // cancelada no vuelve a confirmarse aunque el folio exista.
+  if (orden.estado === 'entregado') {
+    return { tipo: 'ya_entregada', codigo };
+  }
+  if (orden.estado === 'cancelado') {
+    return { tipo: 'cancelada', codigo };
+  }
+
+  return { tipo: 'exito', orden };
+}
+
 interface PropsChipFiltro {
   activo: boolean;
   etiqueta: string;
@@ -138,11 +185,18 @@ function ChipFiltro({ activo, etiqueta, onPress, testID }: PropsChipFiltro) {
 }
 
 export default function PedidosEntrantesScreen() {
+  const router = useRouter();
   const [pedidos, setPedidos] = useState<Orden[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<FiltroPedido>('activos');
   const [busqueda, setBusqueda] = useState('');
+
+  // Búsqueda manual por folio corto (INT4-10): respaldo ante fallas de
+  // escaneo. La validación es una función pura (buscarOrdenPorCodigo) para
+  // testearla sin la pantalla.
+  const [folioManual, setFolioManual] = useState('');
+  const [mensajeManual, setMensajeManual] = useState<string | null>(null);
 
   async function cargarPedidos(): Promise<void> {
     try {
@@ -160,6 +214,35 @@ export default function PedidosEntrantesScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch inicial de datos, patrón válido
     void cargarPedidos();
   }, []);
+
+  // Valida el folio ingresado y navega a la confirmación de entrega (misma
+  // ruta que el QR escaneado en escaner.tsx), o muestra el motivo del rechazo
+  // en la tarjeta. El estado que viaja por params siempre es un valor del
+  // union EstadoOrden tomado de la orden encontrada.
+  const validarFolio = useCallback((): void => {
+    const resultado = buscarOrdenPorCodigo(pedidos, folioManual);
+    switch (resultado.tipo) {
+      case 'exito':
+        setMensajeManual(null);
+        router.replace({
+          pathname: '/(cajero)/confirmacion-entrega',
+          params: { pedido: resultado.orden.ordenId, estado: resultado.orden.estado },
+        });
+        break;
+      case 'vacia':
+        setMensajeManual('Ingresa el folio o el código de la orden.');
+        break;
+      case 'no_encontrada':
+        setMensajeManual(`No se encontró ninguna orden con el código/folio: ${resultado.codigo}`);
+        break;
+      case 'ya_entregada':
+        setMensajeManual('Esta orden ya fue entregada.');
+        break;
+      case 'cancelada':
+        setMensajeManual('El pedido fue cancelado y no puede entregarse.');
+        break;
+    }
+  }, [pedidos, folioManual, router]);
 
   const estadosDisponibles = useMemo<EstadoOrden[]>(() => {
     const unicos = new Set<EstadoOrden>();
@@ -222,6 +305,47 @@ export default function PedidosEntrantesScreen() {
           <Text style={styles.rolePill}>POS Cajero</Text>
           <Text style={styles.headerTitulo}>{cafeteriaNombre}</Text>
         </View>
+      </View>
+
+      {/* Búsqueda manual por folio corto (INT4-10): respaldo ante fallas de
+          escaneo, como el formulario "O buscar folio corto" del mockup. */}
+      <View style={styles.folioCard} testID="cajero-folio-busqueda">
+        <Text style={styles.folioTitulo}>🧾 Búsqueda manual por folio</Text>
+        <Text style={styles.folioSubtitulo}>
+          Respaldo ante fallas de escaneo: ingresa el folio corto de la orden.
+        </Text>
+        <View style={styles.folioFila}>
+          <TextInput
+            style={styles.folioInput}
+            placeholder="O buscar folio corto (ej: CC-9801)"
+            placeholderTextColor="#9CA3AF"
+            value={folioManual}
+            onChangeText={(texto) => {
+              setFolioManual(texto);
+              if (mensajeManual) {
+                setMensajeManual(null);
+              }
+            }}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            onSubmitEditing={validarFolio}
+            testID="cajero-folio-input"
+          />
+          <Pressable
+            style={styles.folioBoton}
+            onPress={validarFolio}
+            hitSlop={6}
+            testID="cajero-folio-validar"
+          >
+            <Text style={styles.folioBotonTexto}>Validar</Text>
+          </Pressable>
+        </View>
+        {mensajeManual ? (
+          <View style={styles.folioError} testID="cajero-folio-error">
+            <Text style={styles.folioErrorTexto}>{mensajeManual}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.searchWrapper}>
@@ -515,5 +639,69 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 13,
     textAlign: 'center',
+  },
+  folioCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE9DE',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  folioTitulo: {
+    color: '#1D2433',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  folioSubtitulo: {
+    color: '#6B7280',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  folioFila: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  folioInput: {
+    flex: 1,
+    backgroundColor: '#FAF7F2',
+    borderWidth: 1.5,
+    borderColor: '#EFE9DE',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#1D2433',
+  },
+  folioBoton: {
+    backgroundColor: '#0052CC',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  folioBotonTexto: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  folioError: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  folioErrorTexto: {
+    color: '#991B1B',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
