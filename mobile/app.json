@@ -47,6 +47,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "470426dd-6390-4892-8cdc-d88b4b99e1f3"
+      }
+    },
+    "owner": "tomasjss-team"
   }
 }
