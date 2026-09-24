@@ -42,6 +42,14 @@
           "color": "#208AEF",
           "defaultChannel": "pedidos"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
+          "microphonePermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
+          "barcodeScannerEnabled": true
+        }
       ]
     ],
     "experiments": {

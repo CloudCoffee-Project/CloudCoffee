@@ -8,7 +8,9 @@
 // orden y su estado, siempre un valor real del union EstadoOrden (nunca un
 // string inventado). El id llega por params desde seguimientos; si no viene un
 // estado válido se usa 'listo_para_retiro', el único estado desde el que
-// tiene sentido presentar el código de retiro.
+// tiene sentido presentar el código de retiro. La serialización del payload
+// vive en src/services/qrRetiro.ts para que el cajero (escaner.tsx) consuma
+// exactamente el mismo formato.
 //
 // El botón de descarga conserva su TODO (expo-sharing / expo-media-library).
 
@@ -18,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
 import { esEstadoOrden } from '../../types/domain';
+import { serializarQrRetiro } from '../../services/qrRetiro';
 import type { EstadoOrden, QrRetiro } from '../../types/domain';
 
 function textoUnico(valor: string | string[] | undefined): string | undefined {
@@ -71,7 +74,7 @@ export default function QrRetiroScreen() {
   const estado: EstadoOrden = esEstadoOrden(estadoParam) ? estadoParam : 'listo_para_retiro';
 
   const payload: QrRetiro = { pedido: ordenId, estado };
-  const qrValue = JSON.stringify(payload);
+  const qrValue = serializarQrRetiro(payload);
 
   const handleDescargar = () => {
     // TODO: Implementar expo-sharing o expo-media-library para guardar la imagen en la galería

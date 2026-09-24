@@ -1,13 +1,14 @@
 // src/services/ordenes.test.ts
 import { httpClient } from './httpClient';
-import { fetchPedidosEntrantes, ORDENES_ENDPOINT } from './ordenes';
+import { fetchPedidosEntrantes, marcarOrdenEntregada, ORDENES_ENDPOINT } from './ordenes';
 import type { Orden } from '../types/domain';
 
 jest.mock('./httpClient', () => ({
-  httpClient: { get: jest.fn() },
+  httpClient: { get: jest.fn(), post: jest.fn() },
 }));
 
 const mockedGet = httpClient.get as unknown as jest.Mock;
+const mockedPost = httpClient.post as unknown as jest.Mock;
 
 const ordenesMock: Orden[] = [
   {
@@ -51,7 +52,24 @@ describe('fetchPedidosEntrantes', () => {
     const resultado = await fetchPedidosEntrantes('token-real');
 
     expect(resultado[0].estado).toMatch(
-      /^(reservando|pagado|no_retirado_pendiente_revision|entregado|no_retirado_final|cancelado)$/
+      /^(reservando|pagado|listo_para_retiro|no_retirado_pendiente_revision|entregado|no_retirado_final|cancelado)$/
     );
+  });
+});
+
+describe('marcarOrdenEntregada', () => {
+  afterEach(() => {
+    mockedPost.mockReset();
+  });
+
+  it('marca la orden como entregada en el endpoint del gateway', async () => {
+    mockedPost.mockResolvedValue({ data: ordenesMock[0] });
+
+    const resultado = await marcarOrdenEntregada('o-1', 'token-real');
+
+    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/entregar`, undefined, {
+      headers: { Authorization: 'Bearer token-real' },
+    });
+    expect(resultado).toEqual(ordenesMock[0]);
   });
 });
