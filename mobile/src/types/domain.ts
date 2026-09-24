@@ -98,6 +98,29 @@ export interface RegistroClienteResponse {
   verificado: boolean;
 }
 
+// Perfil del usuario autenticado. Reutiliza la forma del RegistroClienteResponse
+// del backend (el auth-service no expone hoy un endpoint de perfil; cuando lo
+// haga devolverá la misma entidad Usuario). Definir estos tipos acá evita que la
+// pantalla invente sus propios campos (ver cabecera de este archivo).
+export interface PerfilUsuario {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  rol: string;
+  verificado: boolean;
+}
+
+// Body de edición de perfil: solo los campos editables (INT4-23). El backend
+// validará igual que en el registro: nombre/apellido max 100 y teléfono con el
+// formato ^[0-9+ ()-]{6,20}$.
+export interface ActualizarPerfilRequest {
+  nombre: string;
+  apellido: string;
+  telefono: string;
+}
+
 export interface VerificarCorreoResponse {
   email: string;
   verificado: boolean;
