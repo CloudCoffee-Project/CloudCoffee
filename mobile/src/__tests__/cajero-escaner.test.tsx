@@ -3,16 +3,17 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 import EscanerQRScreen, { procesarCodigo } from '../app/(cajero)/escaner';
-import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../services/ordenes';
+import { fetchPedidosEntrantes } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
 import { serializarQrRetiro } from '../services/qrRetiro';
 import { useIsFocused } from 'expo-router';
 import { useCameraPermissions } from 'expo-camera';
 import type { Orden, QrRetiro } from '../types/domain';
 
+const mockReplace = jest.fn();
+
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
-  marcarOrdenEntregada: jest.fn(),
 }));
 
 jest.mock('../services/httpClient', () => {
@@ -22,6 +23,8 @@ jest.mock('../services/httpClient', () => {
 
 jest.mock('expo-router', () => ({
   useIsFocused: jest.fn(() => true),
+  useRouter: jest.fn(() => ({ replace: mockReplace })),
+  useFocusEffect: jest.fn(),
 }));
 
 // expo-camera es un módulo nativo: en los tests se reemplaza por un View que
@@ -45,7 +48,6 @@ jest.mock('expo-camera', () => {
 });
 
 const mockFetchPedidos = fetchPedidosEntrantes as unknown as jest.Mock;
-const mockMarcarEntregada = marcarOrdenEntregada as unknown as jest.Mock;
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
 const mockUseIsFocused = useIsFocused as unknown as jest.Mock;
 const mockUseCameraPermissions = useCameraPermissions as unknown as jest.Mock;
@@ -162,8 +164,8 @@ describe('Pantalla de escaneo de QR (cajero)', () => {
   beforeEach(() => {
     mockGetAccessToken.mockReset();
     mockFetchPedidos.mockReset();
-    mockMarcarEntregada.mockReset();
     requestPermission.mockReset();
+    mockReplace.mockClear();
     mockUseIsFocused.mockReturnValue(true);
     mockUseCameraPermissions.mockReset();
     mockUseCameraPermissions.mockReturnValue([{ granted: true }, requestPermission]);
@@ -180,27 +182,17 @@ describe('Pantalla de escaneo de QR (cajero)', () => {
     act(() => tree.unmount());
   });
 
-  it('valida un QR y confirma la entrega contra el endpoint real', async () => {
+  it('navega a la pantalla de confirmación de entrega tras un QR válido', async () => {
     mockFetchPedidos.mockResolvedValue([ordenEntregable]);
     mockGetAccessToken.mockReturnValue('token-real');
-    mockMarcarEntregada.mockResolvedValue({ ...ordenEntregable, estado: 'entregado' });
 
     const tree = await renderizarEscaner();
     await escanear(tree, contenidoValido);
 
-    const detalle = tree.root.findByProps({ testID: 'cajero-escaner-detalle' });
-    expect(textoDe(detalle)).toContain('#o-1');
-    expect(textoDe(detalle)).toContain('Ignacio Soto');
-    expect(textoDe(detalle)).toContain('Café Americano 12oz');
-
-    const confirmar = tree.root.findByProps({ testID: 'cajero-escaner-confirmar' });
-    await act(async () => {
-      confirmar.props.onPress();
-      await Promise.resolve();
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(cajero)/confirmacion-entrega',
+      params: { pedido: 'o-1', estado: 'listo_para_retiro' },
     });
-
-    expect(mockMarcarEntregada).toHaveBeenCalledWith('o-1', 'token-real');
-    tree.root.findByProps({ testID: 'cajero-escaner-entrega-ok' });
 
     act(() => tree.unmount());
   });
