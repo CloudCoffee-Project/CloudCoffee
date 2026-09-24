@@ -9,11 +9,12 @@ services:
         build:
             context: ./backend
             dockerfile: Dockerfile
+            target: auth-runtime
             args:
                 SERVICE_NAME: auth-service
         environment:
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
-            JWT_PRIVATE_KEY_LOCATION: file:/run/secrets/jwt_private_key
+            JWT_PRIVATE_KEY_LOCATION: file:/run/cloudcoffee-jwt/jwt_private_key
             SPRING_PROFILES_ACTIVE: docker
             SERVER_PORT: 8081
             DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME}
@@ -35,6 +36,10 @@ services:
         secrets:
             - jwt_public_key
             - jwt_private_key
+        tmpfs:
+            - /run/cloudcoffee-jwt:rw,noexec,nosuid,nodev,size=64k,mode=0700
+        security_opt:
+            - no-new-privileges:true
         ports:
             - "${AUTH_SERVICE_PORT}:8081"
         depends_on:

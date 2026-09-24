@@ -84,15 +84,53 @@ openssl pkey -in secrets/jwt-private.pem -pubout -out secrets/jwt-public.pem
 La privada usa PEM PKCS#8 (`BEGIN PRIVATE KEY`); la pública usa PEM X.509
 (`BEGIN PUBLIC KEY`). `secrets/` queda fuera del contexto de build de Docker y de
 Git. Los archivos `.pem` y `.key` también se excluyen de Git y de las imágenes.
-En Linux, permitir la lectura al usuario `spring` del contenedor y restringir el
-resto de los accesos: Compose con secretos basados en archivos conserva los permisos
-del host.
 No sobrescribir un par existente: cambiarlo invalida los JWT firmados con él.
 
 Docker Compose monta ambos archivos en Auth mediante `secrets`; Gateway, Catalog,
 Order y Notification reciben **únicamente la pública**. Las rutas del host se
 configuran con `JWT_PRIVATE_KEY_FILE` y `JWT_PUBLIC_KEY_FILE` en `.env`.
 No copiar la privada a imágenes, recursos del classpath ni otros servicios.
+
+### Permisos de la privada en Docker
+
+Después de generar las llaves, basta con `docker compose up --build -d`: no se
+necesitan `chmod` ni `chown` manuales sobre la privada del host. Compose conserva
+los permisos de los secretos basados en archivos; configurar `uid`, `gid` o
+`mode` en ese montaje no resuelve esa limitación.
+
+Auth usa el target `auth-runtime` del Dockerfile. Su entrypoint comienza como
+root **solo para preparar la llave**: lee `/run/secrets/jwt_private_key` y crea
+una copia en `/run/cloudcoffee-jwt/jwt_private_key`, dentro del `tmpfs` exclusivo
+del contenedor. La copia pertenece a `spring:spring`, tiene permiso `0400` y su
+directorio tiene permiso `0700`. El archivo original permanece de solo lectura,
+sin cambiar su propietario, contenido ni permisos, incluso si tiene modo `0600`
+o `0400` y pertenece a otro UID.
+
+Luego `exec su-exec spring:spring` inicia Java como PID 1, sin privilegios de root;
+`no-new-privileges` impide recuperarlos mediante ejecutables setuid. El tmpfs se
+vuelve a preparar en cada arranque y su contenido desaparece al detener el
+contenedor. La copia no se escribe en la imagen ni en un volumen persistente
+(el manejo de swap del host sigue siendo responsabilidad del entorno).
+Si falta el tmpfs o la privada está ausente, vacía o no puede leerse, Auth falla
+antes de iniciar Java. Gateway y los demás servicios conservan el target por
+defecto `service-runtime`, el usuario `spring` y únicamente la llave pública.
+
+La preparación funciona con archivos que el motor Docker pueda montar y leer;
+no evita restricciones externas como ACL del host o políticas de SELinux.
+
+Prueba reproducible desde la raíz, con Docker disponible y una shell POSIX
+(por ejemplo Git Bash en Windows con Docker Desktop usando contenedores Linux):
+
+```bash
+sh backend/docker/test-jwt-permissions.sh
+```
+
+La prueba usa un volumen temporal con una llave ficticia, modos `0400`, `0600`
+y `0644`, y UID/GID ajenos a `spring`. Comprueba lectura, propietario y permisos
+de la copia, ejecución sin root, reinicios, conservación del origen y rechazo
+cuando falta la llave o el tmpfs. No necesita PostgreSQL, RabbitMQ ni llaves reales.
+
+### Ejecución sin Docker y contrato JWT
 
 Al ejecutar sin Docker, configurar `JWT_PUBLIC_KEY_LOCATION` en cada proceso y
 `JWT_PRIVATE_KEY_LOCATION` **solo en Auth**. Usar URLs de archivo absolutas, por
