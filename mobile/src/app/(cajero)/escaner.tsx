@@ -2,34 +2,29 @@
 //
 // Escaneo de QR de retiro (INT4-8): integración de cámara (expo-camera) para
 // escanear el código que genera el cliente (qr-retiro.tsx) y validar la
-// entrega en el punto de retiro. Sigue el mockup (Cajero_Main → modal "QR
-// Validado Correctamente"): se valida el payload QrRetiro contra el union
-// EstadoOrden, se rechaza un QR ya usado (estado 'entregado') o de una orden
-// cancelada y, al confirmar, se marca la orden como entregada contra el
-// contrato real /v1/orders/{id}/entregar (ruta TODO: el gateway todavía no la
-// rutea, igual que el listado de INT4-7).
+// entrega en el punto de retiro. Se valida el payload QrRetiro contra el union
+// EstadoOrden y se rechaza un QR ya usado (estado 'entregado') o de una orden
+// cancelada. Al validar, se navega a la pantalla de confirmación de entrega
+// (confirmacion-entrega.tsx, INT4-9), que muestra el detalle de ítems a
+// entregar y confirma contra POST /v1/orders/{id}/entregar.
 //
 // La cámara solo se monta mientras la pestaña está enfocada y no hay un
 // resultado pendiente: expo-camera permite un único preview activo a la vez
 // (docs: "unmount Camera components whenever a screen is unfocused").
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useIsFocused } from 'expo-router';
+import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 
-import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../../services/ordenes';
+import { fetchPedidosEntrantes } from '../../services/ordenes';
 import { parsearQrRetiro } from '../../services/qrRetiro';
-import { getAccessToken, toApiError } from '../../services/httpClient';
+import { getAccessToken } from '../../services/httpClient';
 import type { Orden, QrRetiro } from '../../types/domain';
 
-function formatearMonto(monto: number): string {
-  return `$${monto.toLocaleString('es-CL')}`;
-}
-
 // Resultado de procesar un código escaneado. 'error' muestra un banner con el
-// motivo del rechazo; 'exito' abre el detalle de entrega (la orden es opcional:
-// si el listado no cargó, la validación usa solo el payload del QR).
+// motivo del rechazo; 'exito' navega a la pantalla de confirmación de entrega
+// (la orden es opcional: si el listado no cargó, la validación usa el payload).
 export type ResultadoEscaneo =
   { tipo: 'error'; mensaje: string } | { tipo: 'exito'; payload: QrRetiro; orden?: Orden };
 
@@ -57,14 +52,12 @@ export function procesarCodigo(contenido: string, pedidos: Orden[]): ResultadoEs
 
 export default function EscanerQRScreen() {
   const estaFocada = useIsFocused();
+  const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [pedidos, setPedidos] = useState<Orden[]>([]);
   const [escaneando, setEscaneando] = useState(true);
   const [resultado, setResultado] = useState<ResultadoEscaneo | null>(null);
-  const [confirmando, setConfirmando] = useState(false);
-  const [errorEntrega, setErrorEntrega] = useState<string | null>(null);
-  const [entregaConfirmada, setEntregaConfirmada] = useState(false);
   const [torchEncendida, setTorchEncendida] = useState(false);
 
   // Carga auxiliar del listado para enriquecer la validación con los datos de
@@ -81,35 +74,38 @@ export default function EscanerQRScreen() {
     })();
   }, []);
 
+  // Al recuperar el foco de la pestaña vuelve a activar la cámara y limpia
+  // cualquier estado anterior (QR inválido o vuelta desde la confirmación).
+  useFocusEffect(
+    useCallback(() => {
+      setResultado(null);
+      setEscaneando(true);
+    }, [])
+  );
+
   const manejarEscaneo = useCallback(
     (contenido: string) => {
       setEscaneando(false);
-      setResultado(procesarCodigo(contenido, pedidos));
+      const validado = procesarCodigo(contenido, pedidos);
+      if (validado.tipo === 'error') {
+        setResultado(validado);
+        return;
+      }
+      // QR válido: el detalle de ítems a entregar vive en su propia pantalla
+      // (INT4-9), así que el escáner solo valida y navega.
+      router.replace({
+        pathname: '/(cajero)/confirmacion-entrega',
+        params: {
+          pedido: validado.payload.pedido,
+          estado: validado.payload.estado,
+        },
+      });
     },
-    [pedidos]
+    [pedidos, router]
   );
-
-  const confirmarEntrega = useCallback(async () => {
-    if (!resultado || resultado.tipo !== 'exito') {
-      return;
-    }
-
-    setConfirmando(true);
-    setErrorEntrega(null);
-    try {
-      await marcarOrdenEntregada(resultado.payload.pedido, getAccessToken() ?? '');
-      setEntregaConfirmada(true);
-    } catch (errorApi) {
-      setErrorEntrega(toApiError(errorApi as never).message);
-    } finally {
-      setConfirmando(false);
-    }
-  }, [resultado]);
 
   const reiniciarEscaneo = useCallback(() => {
     setResultado(null);
-    setEntregaConfirmada(false);
-    setErrorEntrega(null);
     setEscaneando(true);
   }, []);
 
@@ -153,7 +149,7 @@ export default function EscanerQRScreen() {
     return <View style={styles.contenedor} testID="cajero-escaner-inactivo" />;
   }
 
-  // --- 4. QR ya procesado (error). ---
+  // --- 4. QR procesado con error. ---
   if (resultado?.tipo === 'error') {
     return (
       <View style={styles.contenedor} testID="cajero-escaner-error">
@@ -177,110 +173,7 @@ export default function EscanerQRScreen() {
     );
   }
 
-  // --- 5. QR validado y entrega confirmada. ---
-  if (entregaConfirmada && resultado?.tipo === 'exito') {
-    return (
-      <View style={styles.contenedor} testID="cajero-escaner-entrega-ok">
-        <View style={styles.header}>
-          <Text style={styles.headerTitulo}>Escanear QR de Retiro</Text>
-          <Text style={styles.headerSubtitulo}>Valida el retiro en el punto de entrega</Text>
-        </View>
-        <View style={styles.card}>
-          <View style={styles.checkCircle}>
-            <Text style={styles.checkCircleTexto}>✓</Text>
-          </View>
-          <Text style={styles.cardTitulo}>Entrega registrada</Text>
-          <Text style={styles.cardTexto}>
-            La orden #{resultado.payload.pedido} fue marcada como entregada.
-          </Text>
-          <Pressable
-            style={styles.botonPrimario}
-            onPress={reiniciarEscaneo}
-            testID="cajero-escaner-otro"
-          >
-            <Text style={styles.botonPrimarioTexto}>Escanear otro pedido</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  // --- 6. QR validado: detalle de entrega (checklist de productos). ---
-  if (resultado?.tipo === 'exito') {
-    return (
-      <ScrollView
-        style={styles.contenedor}
-        contentContainerStyle={styles.scrollContenido}
-        testID="cajero-escaner-detalle"
-      >
-        <View style={styles.header}>
-          <Text style={styles.headerTitulo}>Escanear QR de Retiro</Text>
-          <Text style={styles.headerSubtitulo}>Valida el retiro en el punto de entrega</Text>
-        </View>
-        <View style={styles.card}>
-          <View style={styles.checkCircle}>
-            <Text style={styles.checkCircleTexto}>✓</Text>
-          </View>
-          <Text style={styles.cardTitulo}>QR Validado Correctamente</Text>
-          <Text style={styles.cardTexto}>
-            Entrega físicamente los siguientes productos al cliente:
-          </Text>
-
-          <View style={styles.ordenMeta}>
-            <Text style={styles.ordenLabel}>N° DE PEDIDO</Text>
-            <Text style={styles.ordenId}>#{resultado.payload.pedido}</Text>
-            {resultado.orden?.clienteNombre ? (
-              <Text style={styles.ordenCliente}>Cliente: {resultado.orden.clienteNombre}</Text>
-            ) : null}
-          </View>
-
-          {resultado.orden && resultado.orden.items.length > 0 ? (
-            <View style={styles.checklist}>
-              {resultado.orden.items.map((item) => (
-                <View key={item.ordenItemId} style={styles.itemPill}>
-                  <Text style={styles.itemCantidad}>{item.cantidad}x</Text>
-                  <Text style={styles.itemNombre}>{item.productoNombre}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {resultado.orden ? (
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total pagado</Text>
-              <Text style={styles.totalMonto}>{formatearMonto(resultado.orden.montoTotal)}</Text>
-            </View>
-          ) : null}
-
-          {errorEntrega ? (
-            <View style={styles.errorBanner} testID="cajero-escaner-error-entrega">
-              <Text style={styles.errorTexto}>{errorEntrega}</Text>
-            </View>
-          ) : null}
-
-          <Pressable
-            style={[styles.botonPrimario, confirmando && styles.botonDeshabilitado]}
-            onPress={() => void confirmarEntrega()}
-            disabled={confirmando}
-            testID="cajero-escaner-confirmar"
-          >
-            <Text style={styles.botonPrimarioTexto}>
-              {confirmando ? 'Registrando entrega…' : '✓ Confirmar entrega'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.botonSecundario}
-            onPress={reiniciarEscaneo}
-            testID="cajero-escaner-volver"
-          >
-            <Text style={styles.botonSecundarioTexto}>Volver a escanear</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  // --- 7. Cámara activa esperando un QR. ---
+  // --- 5. Cámara activa esperando un QR. ---
   return (
     <View style={styles.cameraPantalla} testID="cajero-escaner-camara">
       <CameraView
@@ -384,125 +277,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
-  },
-  botonDeshabilitado: {
-    opacity: 0.6,
-  },
-  botonSecundario: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    paddingVertical: 10,
-    marginTop: 6,
-  },
-  botonSecundarioTexto: {
-    color: '#0052CC',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  checkCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  checkCircleTexto: {
-    color: '#166534',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  scrollContenido: {
-    paddingBottom: 24,
-  },
-  ordenMeta: {
-    alignSelf: 'stretch',
-    backgroundColor: '#F8F5EF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  ordenLabel: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  ordenId: {
-    color: '#1D2433',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  ordenCliente: {
-    color: '#6B7280',
-    fontSize: 13,
-    marginTop: 6,
-  },
-  checklist: {
-    alignSelf: 'stretch',
-    gap: 8,
-    marginBottom: 12,
-  },
-  itemPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFE9DE',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  itemCantidad: {
-    color: '#0052CC',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  itemNombre: {
-    color: '#1D2433',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    borderTopWidth: 1,
-    borderTopColor: '#EFE9DE',
-    paddingTop: 12,
-    marginBottom: 14,
-  },
-  totalLabel: {
-    color: '#6B7280',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  totalMonto: {
-    color: '#1D2433',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  errorBanner: {
-    alignSelf: 'stretch',
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  errorTexto: {
-    color: '#991B1B',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   cameraPantalla: {
     flex: 1,
