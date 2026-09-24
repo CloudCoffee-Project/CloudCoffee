@@ -13,6 +13,8 @@
 //      token FCM, lo persiste en AsyncStorage y lo registra en el backend.
 //   3. suscribirRoladoDeToken()  → reacciona si FCM rota el token en caliente
 //      (el token viejo deja de ser válido y el nuevo debe re-registrarse).
+//   4. eliminarRegistroPush()    → al cerrar sesión (INT4-42): borra el token
+//      en el backend y limpia el almacenamiento local.
 //
 // NOTA: las notificaciones push remotas requieren un development build; en
 // Expo Go (Android, SDK 53+) no están disponibles. Además, en Android el push
@@ -138,6 +140,34 @@ export async function registrarTokenEnBackend(token: string): Promise<void> {
     // igual y se continúa sin romper el flujo de la app.
     console.warn('[push] No se pudo registrar el token FCM en el backend:', error);
   }
+}
+
+// Elimina el registro del dispositivo en el backend vía el API Gateway.
+// Contrato esperado (pendiente de implementar en notification-service, no
+// modificar backend en esta tarea): DELETE /v1/notifications/device-token
+//   Body: { "token": "...", "plataforma": "android" | "ios" }
+export async function eliminarTokenEnBackend(token: string): Promise<void> {
+  try {
+    await httpClient.delete('/v1/notifications/device-token', {
+      data: { token, plataforma: Platform.OS },
+    });
+  } catch (error) {
+    // El endpoint aún no existe en el backend: se limpia el token localmente
+    // igual y se continúa sin romper el cierre de sesión.
+    console.warn('[push] No se pudo eliminar el token FCM en el backend:', error);
+  }
+}
+
+// Elimina el registro push completo del dispositivo (INT4-42): borra el token
+// en el backend (si hay uno guardado) y lo limpia del almacenamiento local.
+// Debe ejecutarse ANTES de limpiar los tokens de auth para que el DELETE
+// viaje con el Bearer vigente. Nunca lanza.
+export async function eliminarRegistroPush(): Promise<void> {
+  const token = await obtenerTokenGuardado();
+  if (token) {
+    await eliminarTokenEnBackend(token);
+  }
+  await limpiarTokenGuardado();
 }
 
 // Persiste el token localmente para re-registrarlo sin depender de la sesión.

@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { clearTokens, onTokensCambiados, setTokens } from '../services/httpClient';
 import { decodificarSesion } from '../services/auth';
 import { eliminarSesion, guardarSesion, leerSesion } from '../services/sessionStorage';
+import { eliminarRegistroPush } from '../services/notificacionesPush';
 import type { LoginResponse, SesionDecodificada } from '../types/domain';
 
 interface AuthContextValue {
@@ -90,6 +91,9 @@ export function AuthProvider({ children }: Props) {
   );
 
   const cerrarSesion = useCallback(async () => {
+    // Elimina el token push del backend ANTES de limpiar los tokens de auth
+    // (INT4-42): así el DELETE viaja con el Authorization Bearer vigente.
+    await eliminarRegistroPush();
     clearTokens();
     setSesion(null);
   }, []);
