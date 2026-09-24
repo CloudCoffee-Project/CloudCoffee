@@ -19,6 +19,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Firebase / FCM
+google-services.json
+
 # Metro
 .metro-health-check*
 

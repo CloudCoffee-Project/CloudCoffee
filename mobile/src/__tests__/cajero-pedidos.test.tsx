@@ -68,8 +68,8 @@ const ordenesMock: Orden[] = [
   },
 ];
 
-// Cubre los seis valores del union EstadoOrden para probar los filtros
-// básicos "Activos" (reservando + pagado) y "No retirados".
+// Cubre los valores del union EstadoOrden para probar los filtros básicos
+// "Activos" (reservando, pagado, listo_para_retiro) y "No retirados".
 const ordenesFiltrosMock: Orden[] = [
   ...ordenesMock,
   {
@@ -137,6 +137,23 @@ const ordenesFiltrosMock: Orden[] = [
         productoNombre: 'Sándwich Ave Palta',
         cantidad: 1,
         precioUnitario: 3000,
+      },
+    ],
+  },
+  {
+    ordenId: 'o-7',
+    codigoOrden: 'CC-9807',
+    cafeteriaId: 'c-1',
+    cafeteriaNombre: 'Cafetería Central',
+    clienteNombre: 'Javiera Rojas',
+    estado: 'listo_para_retiro',
+    montoTotal: 2400,
+    items: [
+      {
+        ordenItemId: 'itm-8',
+        productoNombre: 'Croissant Jamón y Queso',
+        cantidad: 1,
+        precioUnitario: 2400,
       },
     ],
   },
@@ -272,8 +289,12 @@ describe('Pantalla de pedidos del cajero', () => {
 
     const tree = await renderizarPedidos();
 
-    // Cola por defecto: solo reservando + pagado (o-1 y o-5).
-    expect(dataDe(tree)).toEqual([ordenesFiltrosMock[0], ordenesFiltrosMock[4]]);
+    // Cola por defecto: solo activos (reservando, pagado, listo_para_retiro).
+    expect(dataDe(tree)).toEqual([
+      ordenesFiltrosMock[0],
+      ordenesFiltrosMock[4],
+      ordenesFiltrosMock[6],
+    ]);
 
     const chipNoRetirados = tree.root.findByProps({ testID: 'cajero-filtro-no-retirados' });
     await act(async () => {
@@ -285,7 +306,11 @@ describe('Pantalla de pedidos del cajero', () => {
     await act(async () => {
       chipActivos.props.onPress();
     });
-    expect(dataDe(tree)).toEqual([ordenesFiltrosMock[0], ordenesFiltrosMock[4]]);
+    expect(dataDe(tree)).toEqual([
+      ordenesFiltrosMock[0],
+      ordenesFiltrosMock[4],
+      ordenesFiltrosMock[6],
+    ]);
 
     const chipTodos = tree.root.findByProps({ testID: 'cajero-filtro-todos' });
     await act(async () => {

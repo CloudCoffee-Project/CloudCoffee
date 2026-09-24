@@ -41,6 +41,8 @@ function estadoVisual(estado: EstadoOrden): EstadoVisual {
   switch (estado) {
     case 'pagado':
       return { etiqueta: '🔵 Pagado', fondo: '#DBEAFE', texto: '#1E40AF' };
+    case 'listo_para_retiro':
+      return { etiqueta: '🟢 Listo para Retiro', fondo: '#DCFCE7', texto: '#166534' };
     case 'entregado':
       return { etiqueta: '🟢 Entregado', fondo: '#DCFCE7', texto: '#166534' };
     case 'reservando':
