@@ -21,11 +21,27 @@
 // usa el proyecto Firebase del archivo google-services.json; hasta que el
 // equipo lo agregue, obtener el token puede fallar y se reporta sin romper.
 
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { httpClient } from './httpClient';
+
+// En Expo Go (Android, SDK 53+) importar expo-notifications lanza
+// "Android Push notifications was removed from Expo Go" y tumbaría toda la app
+// (este módulo se importa desde AuthContext). Se carga de forma diferida con
+// require dentro de try/catch: donde no esté disponible, Notifications es null
+// y las funciones de push actúan como no-op sin romper la app. El push remoto
+// requiere un development build de todos modos.
+type NotificationsDeExpo = typeof import('expo-notifications');
+const Notifications: NotificationsDeExpo | null = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications');
+  } catch (error) {
+    console.warn('[push] expo-notifications no disponible en este entorno:', error);
+    return null;
+  }
+})();
 
 // Canal Android donde se muestran las notificaciones de pedidos/retiros.
 // Debe coincidir con defaultChannel del plugin en app.json.
@@ -42,6 +58,9 @@ const TOKEN_STORAGE_KEY = '@app_fcm_token';
 // Define cómo se presentan las notificaciones cuando la app está en primer
 // plano (imperativo llamarlo temprano; setNotificationHandler es global).
 export function configurarManejadorNotificaciones(): void {
+  if (!Notifications) {
+    return;
+  }
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -57,7 +76,7 @@ export function configurarManejadorNotificaciones(): void {
 export async function crearCanalPedidos(
   onAndroid: boolean = Platform.OS === 'android'
 ): Promise<void> {
-  if (!onAndroid) {
+  if (!onAndroid || !Notifications) {
     return;
   }
 
@@ -72,6 +91,9 @@ export async function crearCanalPedidos(
 // Pide el permiso de notificaciones si aún no está otorgado. En iOS hay que
 // mirar ios.status (el campo granted raíz no cubre PROVISIONAL).
 export async function solicitarPermisoNotificaciones(): Promise<boolean> {
+  if (!Notifications) {
+    return false;
+  }
   const actual = await Notifications.getPermissionsAsync();
   if (permitido(actual)) {
     return true;
@@ -89,6 +111,9 @@ export async function solicitarPermisoNotificaciones(): Promise<boolean> {
 
 // Devuelve el token FCM (Android) o APNs (iOS) del dispositivo.
 export async function obtenerTokenFCM(): Promise<string | null> {
+  if (!Notifications) {
+    return null;
+  }
   const dispositivo = await Notifications.getDevicePushTokenAsync();
   return typeof dispositivo.data === 'string' ? dispositivo.data : null;
 }
@@ -101,6 +126,14 @@ export async function registrarPush(
   try {
     if (!onAndroid && Platform.OS === 'web') {
       return { permiso: false, token: null, mensaje: 'Push no disponible en web.' };
+    }
+
+    if (!Notifications) {
+      return {
+        permiso: false,
+        token: null,
+        mensaje: 'Push no disponible: requiere un development build (no funciona en Expo Go).',
+      };
     }
 
     await crearCanalPedidos(onAndroid);
@@ -186,6 +219,9 @@ export async function limpiarTokenGuardado(): Promise<void> {
 // Se suscribe a la rotación del token por parte de FCM/APNs. Devuelve una
 // función de limpieza para el cleanup del useEffect.
 export function suscribirRoladoDeToken(alNuevoToken: (token: string) => void): () => void {
+  if (!Notifications) {
+    return () => {};
+  }
   const suscripcion = Notifications.addPushTokenListener((dispositivo) => {
     if (typeof dispositivo.data === 'string') {
       const token = dispositivo.data;
@@ -213,6 +249,13 @@ export function urlDeNotificacion(data: Record<string, unknown> | undefined): st
   return url;
 }
 
-function permitido(estado: Notifications.NotificationPermissionsStatus): boolean {
-  return estado.granted || estado.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+interface PermisoNotificacionesComparable {
+  granted: boolean;
+  ios?: { status?: number } | null;
+}
+
+function permitido(estado: PermisoNotificacionesComparable): boolean {
+  return (
+    estado.granted || estado.ios?.status === Notifications?.IosAuthorizationStatus?.PROVISIONAL
+  );
 }

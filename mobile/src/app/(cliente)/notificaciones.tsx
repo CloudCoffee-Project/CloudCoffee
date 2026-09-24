@@ -11,14 +11,28 @@
 
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { obtenerTokenGuardado } from '../../services/notificacionesPush';
 
+// require diferido: en Expo Go (Android, SDK 53+) importar expo-notifications
+// lanza un error y tumbaría esta ruta. Cuando no está disponible, la pantalla
+// muestra el estado sin romper.
+const Notifications: typeof import('expo-notifications') | null = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications');
+  } catch (error) {
+    console.warn('[push] expo-notifications no disponible en este entorno:', error);
+    return null;
+  }
+})();
+
 export default function NotificacionesScreen() {
   const [token, setToken] = useState<string | null>(null);
-  const [permiso, setPermiso] = useState<string>('Comprobando…');
+  const [permiso, setPermiso] = useState<string>(
+    Notifications ? 'Comprobando…' : 'No disponible (Expo Go)'
+  );
 
   useEffect(() => {
     let activo = true;
@@ -29,6 +43,12 @@ export default function NotificacionesScreen() {
       }
     });
 
+    if (!Notifications) {
+      return () => {
+        activo = false;
+      };
+    }
+
     void Notifications.getPermissionsAsync().then((estado) => {
       if (!activo) {
         return;
@@ -36,7 +56,7 @@ export default function NotificacionesScreen() {
       setPermiso(
         estado.granted
           ? 'Otorgado'
-          : estado.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+          : estado.ios?.status === Notifications?.IosAuthorizationStatus?.PROVISIONAL
             ? 'Provisional (iOS)'
             : 'No otorgado'
       );
