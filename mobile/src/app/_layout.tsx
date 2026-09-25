@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import type { Href } from 'expo-router';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
@@ -6,7 +6,10 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import BannerNotificacionPush from '../components/BannerNotificacionPush';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { useCafeteriaActual } from '../hooks/useCafeteriaActual';
 import { useNotificacionesPush } from '../hooks/useNotificacionesPush';
+import type { NotificacionRecibida } from '../hooks/useNotificacionesPush';
+import { useNotificacionesStock } from '../hooks/useNotificacionesStock';
 import { getAccessToken } from '../services/httpClient';
 import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
 
@@ -33,6 +36,36 @@ function RootNavigator() {
     sesion ? abrirDesdePush : undefined,
     Boolean(sesion)
   );
+
+  // Stock en tiempo real (INT4-46): la cafetería a la que suscribirse depende
+  // del rol (cajero → sesion.cafeteriaId; cliente → cafetería del campus
+  // seleccionado). Cuando un producto pasa a agotado o vuelve a disponible,
+  // la notificación entra a la bandeja y se muestra en el banner.
+  const cafeteriaActual = useCafeteriaActual(
+    sesion?.rol,
+    sesion?.cafeteriaId ?? null,
+    sesion?.userId
+  );
+  const { ultimaNotificacion: ultimaNotificacionStock } = useNotificacionesStock(
+    cafeteriaActual,
+    Boolean(sesion)
+  );
+
+  // El banner muestra la última notificación recibida de cualquiera de las dos
+  // fuentes (push FCM o evento de stock): gana la que llegue más reciente.
+  const [notificacionBanner, setNotificacionBanner] = useState<NotificacionRecibida | null>(null);
+  useEffect(() => {
+    if (ultimaNotificacion) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- el banner debe reflejar la última notificación de cada fuente en cuanto llega
+      setNotificacionBanner(ultimaNotificacion);
+    }
+  }, [ultimaNotificacion]);
+  useEffect(() => {
+    if (ultimaNotificacionStock) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- el banner debe reflejar la última notificación de cada fuente en cuanto llega
+      setNotificacionBanner(ultimaNotificacionStock);
+    }
+  }, [ultimaNotificacionStock]);
 
   // Depuración de FCM: mientras el push remoto no esté operativo (requiere
   // development build + google-services.json del proyecto Firebase), estos
@@ -95,7 +128,7 @@ function RootNavigator() {
       {/* Despliegue en primer plano (INT4-43): banner in-app con la última
           notificación recibida. Sin sesión no navega, solo informa. */}
       <BannerNotificacionPush
-        notificacion={ultimaNotificacion}
+        notificacion={notificacionBanner}
         onAbrir={sesion ? abrirDesdePush : undefined}
       />
     </View>
