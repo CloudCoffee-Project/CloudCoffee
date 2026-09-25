@@ -1,14 +1,8 @@
 package cl.cloudcoffee.auth_service.service;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,7 +21,6 @@ import cl.cloudcoffee.errors.BusinessException;
 public class VerificacionService {
 
     private static final Duration VIGENCIA_TOKEN = Duration.ofHours(24);
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UsuarioRepository usuarioRepository;
     private final TokenAuthRepository tokenAuthRepository;
@@ -45,9 +38,9 @@ public class VerificacionService {
         tokenAuthRepository.findByUsuarioIdAndTipoAndRevokedAtIsNull(usuario.getId(), TipoToken.VERIFICACION_CORREO)
                 .forEach(TokenAuth::revocar);
 
-        String tokenPlano = generarTokenPlano();
+        String tokenPlano = TokenHasher.generarTokenPlano();
         Instant expiresAt = Instant.now().plus(VIGENCIA_TOKEN);
-        TokenAuth token = new TokenAuth(usuario, hash(tokenPlano), expiresAt, TipoToken.VERIFICACION_CORREO);
+        TokenAuth token = new TokenAuth(usuario, TokenHasher.hash(tokenPlano), expiresAt, TipoToken.VERIFICACION_CORREO);
         tokenAuthRepository.save(token);
 
         eventPublisher.publishSolicitudVerificacionCorreo(
@@ -56,7 +49,8 @@ public class VerificacionService {
 
     @Transactional
     public VerificacionCorreoResponse verificarCorreo(String tokenPlano) {
-        TokenAuth token = tokenAuthRepository.findByTokenHashAndTipo(hash(tokenPlano), TipoToken.VERIFICACION_CORREO)
+        TokenAuth token = tokenAuthRepository
+                .findByTokenHashAndTipo(TokenHasher.hash(tokenPlano), TipoToken.VERIFICACION_CORREO)
                 .filter(TokenAuth::estaVigente)
                 .orElseThrow(VerificacionService::tokenInvalido);
 
@@ -85,21 +79,5 @@ public class VerificacionService {
     private static BusinessException tokenInvalido() {
         return new BusinessException(HttpStatus.BAD_REQUEST, URI.create("/problems/token-invalido"),
                 "Token inválido", "El token de verificación es inválido o expiró.");
-    }
-
-    private static String generarTokenPlano() {
-        byte[] bytes = new byte[32];
-        SECURE_RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private static String hash(String tokenPlano) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(tokenPlano.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hashBytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 no disponible en esta JVM", e);
-        }
     }
 }
