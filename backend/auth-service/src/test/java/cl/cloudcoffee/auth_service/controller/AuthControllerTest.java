@@ -4,6 +4,7 @@ import cl.cloudcoffee.security.testing.JwtTestSupport;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -13,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -20,8 +23,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import cl.cloudcoffee.auth_service.messaging.AuthEventPublisher;
 import cl.cloudcoffee.auth_service.messaging.CloudCoffeeEvent;
@@ -37,6 +45,11 @@ class AuthControllerTest extends JwtTestSupport {
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private JwtDecoder jwtDecoder;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Sin broker real disponible en el entorno de test; se reemplaza para no depender de infraestructura externa.
     @MockitoBean
@@ -73,6 +86,25 @@ class AuthControllerTest extends JwtTestSupport {
                   "telefono": "+56912345678"
                 }
                 """.formatted(email);
+    }
+
+    private static String loginJson(String email, String password) {
+        return "{\"email\": \"%s\", \"password\": \"%s\"}".formatted(email, password);
+    }
+
+    /** Registra un cliente con la contraseña estándar de las pruebas y confirma su correo. */
+    private void registrarYVerificarCliente(String email) throws Exception {
+        mvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registroJson(email)))
+                .andExpect(status().isCreated());
+
+        String token = capturarTokenVerificacionPublicado(email);
+
+        mvc.perform(post("/auth/verificacion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(verificarJson(token)))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -224,5 +256,88 @@ class AuthControllerTest extends JwtTestSupport {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(reenviarJson("no-registrado@cloudcoffee.cl")))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void loginExitosoRetornaAccessTokenRs256ConRolYRefreshToken() throws Exception {
+        String email = "login-exitoso@cloudcoffee.cl";
+        registrarYVerificarCliente(email);
+
+        String body = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode json = objectMapper.readTree(body);
+        Jwt jwt = jwtDecoder.decode(json.get("accessToken").asText());
+        assertThatJwt(jwt);
+    }
+
+    private static void assertThatJwt(Jwt jwt) {
+        assertThat(jwt.getHeaders().get("alg")).isEqualTo("RS256");
+        assertThat(jwt.getClaimAsString("role")).isEqualTo("CLIENTE");
+        assertThat(jwt.getExpiresAt()).isEqualTo(jwt.getIssuedAt().plus(Duration.ofMinutes(15)));
+    }
+
+    @Test
+    void loginRechazaCredencialesInvalidas() throws Exception {
+        String email = "login-password-incorrecto@cloudcoffee.cl";
+        registrarYVerificarCliente(email);
+
+        mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password-incorrecto")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void loginRechazaEmailInexistente() throws Exception {
+        mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson("no-registrado@cloudcoffee.cl", "password123")))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void loginRechazaCuentaNoVerificadaConErrorEspecifico() throws Exception {
+        String email = "login-sin-verificar@cloudcoffee.cl";
+        mvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registroJson(email)))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("/problems/cuenta-no-verificada"));
+    }
+
+    @Test
+    void cadaLoginEmiteUnRefreshTokenDistintoParaSesionesIndependientesPorDispositivo() throws Exception {
+        String email = "login-multi-dispositivo@cloudcoffee.cl";
+        registrarYVerificarCliente(email);
+
+        String primeraRespuesta = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String segundaRespuesta = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String primerRefreshToken = objectMapper.readTree(primeraRespuesta).get("refreshToken").asText();
+        String segundoRefreshToken = objectMapper.readTree(segundaRespuesta).get("refreshToken").asText();
+
+        assertThat(primerRefreshToken).isNotEqualTo(segundoRefreshToken);
     }
 }
