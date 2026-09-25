@@ -4,6 +4,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,19 +21,20 @@ import cl.cloudcoffee.errors.BusinessException;
 @Service
 public class LoginService {
 
-    private static final Duration VIGENCIA_REFRESH_TOKEN = Duration.ofDays(30);
-
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenAuthRepository tokenAuthRepository;
     private final JwtTokenService jwtTokenService;
+    private final Duration vigenciaRefreshToken;
 
     public LoginService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
-            TokenAuthRepository tokenAuthRepository, JwtTokenService jwtTokenService) {
+            TokenAuthRepository tokenAuthRepository, JwtTokenService jwtTokenService,
+            @Value("${cloudcoffee.jwt.refresh-token-ttl:P30D}") Duration vigenciaRefreshToken) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenAuthRepository = tokenAuthRepository;
         this.jwtTokenService = jwtTokenService;
+        this.vigenciaRefreshToken = vigenciaRefreshToken;
     }
 
     @Transactional
@@ -52,7 +54,7 @@ public class LoginService {
         // vigentes de otras sesiones activas del mismo usuario.
         String refreshTokenPlano = TokenHasher.generarTokenPlano();
         TokenAuth refreshToken = new TokenAuth(usuario, TokenHasher.hash(refreshTokenPlano),
-                Instant.now().plus(VIGENCIA_REFRESH_TOKEN), TipoToken.REFRESH);
+                Instant.now().plus(vigenciaRefreshToken), TipoToken.REFRESH);
         tokenAuthRepository.save(refreshToken);
 
         return new LoginResponse(accessToken, refreshTokenPlano);
