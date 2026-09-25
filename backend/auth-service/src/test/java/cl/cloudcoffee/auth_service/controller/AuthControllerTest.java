@@ -1,5 +1,9 @@
 package cl.cloudcoffee.auth_service.controller;
 
+import cl.cloudcoffee.security.testing.JwtTestSupport;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.DynamicPropertyRegistry;
+
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -24,7 +28,12 @@ import cl.cloudcoffee.auth_service.messaging.CloudCoffeeEvent;
 
 @SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 @AutoConfigureMockMvc
-class AuthControllerTest {
+class AuthControllerTest extends JwtTestSupport {
+
+    @DynamicPropertySource
+    static void privateKey(DynamicPropertyRegistry registry) {
+        registry.add("JWT_PRIVATE_KEY_LOCATION", () -> PRIVATE_KEY_LOCATION);
+    }
 
     @Autowired
     private MockMvc mvc;

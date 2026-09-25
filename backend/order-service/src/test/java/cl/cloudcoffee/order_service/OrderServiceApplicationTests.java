@@ -1,5 +1,7 @@
 package cl.cloudcoffee.order_service;
 
+import cl.cloudcoffee.security.testing.ServiceJwtTests;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,14 +14,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class OrderServiceApplicationTests {
+class OrderServiceApplicationTests extends ServiceJwtTests {
 
     @Autowired
     MockMvc mvc;
 
     @Test
-    void missingRouteUsesSharedProblemDetailsWithoutRequiringAuthentication() throws Exception {
-        mvc.perform(get("/missing-resource"))
+    void authenticatedMissingRouteUsesSharedProblemDetails() throws Exception {
+        mvc.perform(get("/missing-resource").header("Authorization", "Bearer " + token()))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.type").value("about:blank"))
@@ -28,5 +30,11 @@ class OrderServiceApplicationTests {
                 .andExpect(jsonPath("$.detail").isNotEmpty())
                 .andExpect(jsonPath("$.instance").value("/missing-resource"))
                 .andExpect(jsonPath("$.timestamp").isString());
+    }
+
+    @Test
+    void serviceNamespaceRequiresAuthentication() throws Exception {
+        mvc.perform(get("/orders"))
+                .andExpect(status().isUnauthorized());
     }
 }

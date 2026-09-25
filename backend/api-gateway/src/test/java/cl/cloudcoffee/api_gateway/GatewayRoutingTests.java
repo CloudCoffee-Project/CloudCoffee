@@ -36,10 +36,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties =
-        "CORS_ALLOWED_ORIGINS=http://localhost:3000, https://app.example.com")
+// Estas pruebas de routing/JWT usan HTTP local; HTTPS permanece habilitado en la aplicacion.
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        "CORS_ALLOWED_ORIGINS=http://localhost:3000, https://app.example.com",
+        "server.ssl.enabled=false"})
 @AutoConfigureMockMvc
-class GatewayRoutingTests {
+class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport {
 
     private static final Map<String, BackendStub> BACKENDS = Map.of(
             "auth", new BackendStub("auth"),
@@ -113,10 +115,11 @@ class GatewayRoutingTests {
 
     @Test
     void preservesBodyQueryParametersAndAuthorizationHeader() throws Exception {
+        String authorization = "Bearer " + token();
         String body = "{\"nombre\":\"María\"}";
         mvc.perform(patch(URI.create("/v1/auth/users/me?tag=caf%C3%A9&tag=a%2Bb"))
                         .with(user("cliente"))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer test-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body.getBytes(StandardCharsets.UTF_8)))
                 .andExpect(status().isOk());
@@ -126,7 +129,7 @@ class GatewayRoutingTests {
         assertThat(received.path()).isEqualTo("/auth/users/me");
         assertThat(received.query()).isEqualTo("tag=caf%C3%A9&tag=a%2Bb");
         assertThat(received.body()).isEqualTo(body);
-        assertThat(received.authorization()).isEqualTo("Bearer test-token");
+        assertThat(received.authorization()).isEqualTo(authorization);
         assertThat(received.contentType()).startsWith(MediaType.APPLICATION_JSON_VALUE);
     }
 
@@ -265,6 +268,31 @@ class GatewayRoutingTests {
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, headers))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void realSignedJwtIsForwardedWithoutChangingTheToken() throws Exception {
+        String authorization = "Bearer " + token();
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                            URI.create("http://localhost:" + gatewayPort + "/v1/notifications"))
+                            .header(HttpHeaders.AUTHORIZATION, authorization).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+        }
+        assertThat(BACKENDS.get("notifications").take().authorization()).isEqualTo(authorization);
+        assertNoBackendRequests();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"malformed", "expired", "wrong-key", "wrong-algorithm", "missing-exp",
+            "missing-sub", "missing-role", "invalid-role", "future", "tampered", "hmac"})
+    void invalidJwtNeverReachesTheBackend(String kind) throws Exception {
+        mvc.perform(get("/v1/notifications").header(HttpHeaders.AUTHORIZATION, "Bearer " + invalidToken(kind)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401));
         assertNoBackendRequests();
     }
 

@@ -9,9 +9,12 @@ services:
         build:
             context: ./backend
             dockerfile: Dockerfile
+            target: auth-runtime
             args:
                 SERVICE_NAME: auth-service
         environment:
+            JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+            JWT_PRIVATE_KEY_LOCATION: file:/run/cloudcoffee-jwt/jwt_private_key
             SPRING_PROFILES_ACTIVE: docker
             SERVER_PORT: 8081
             DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME}
@@ -30,6 +33,13 @@ services:
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
             SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
             CLOUDCOFFEE_MESSAGING_TEST_ENDPOINT_ENABLED: "true"
+        secrets:
+            - jwt_public_key
+            - jwt_private_key
+        tmpfs:
+            - /run/cloudcoffee-jwt:rw,noexec,nosuid,nodev,size=64k,mode=0700
+        security_opt:
+            - no-new-privileges:true
         ports:
             - "${AUTH_SERVICE_PORT}:8081"
         depends_on:
@@ -47,6 +57,7 @@ services:
             args:
                 SERVICE_NAME: catalog-service
         environment:
+            JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             SPRING_PROFILES_ACTIVE: docker
             SERVER_PORT: 8082
             DB_URL: jdbc:postgresql://catalog-db:5432/${CATALOG_DB_NAME}
@@ -54,6 +65,8 @@ services:
             DB_PASSWORD: ${CATALOG_DB_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        secrets:
+            - jwt_public_key
         ports:
             - "${CATALOG_SERVICE_PORT}:8082"
         depends_on:
@@ -69,6 +82,7 @@ services:
             args:
                 SERVICE_NAME: order-service
         environment:
+            JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             SPRING_PROFILES_ACTIVE: docker
             SERVER_PORT: 8083
             DB_URL: jdbc:postgresql://order-db:5432/${ORDER_DB_NAME}
@@ -76,6 +90,8 @@ services:
             DB_PASSWORD: ${ORDER_DB_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        secrets:
+            - jwt_public_key
         ports:
             - "${ORDER_SERVICE_PORT}:8083"
         depends_on:
@@ -91,6 +107,7 @@ services:
             args:
                 SERVICE_NAME: notification-service
         environment:
+            JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             SPRING_PROFILES_ACTIVE: docker
             SERVER_PORT: 8084
             DB_URL: jdbc:postgresql://notification-db:5432/${NOTIFICATION_DB_NAME}
@@ -108,6 +125,8 @@ services:
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
             SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
+        secrets:
+            - jwt_public_key
         ports:
             - "${NOTIFICATION_SERVICE_PORT}:8084"
         depends_on:
@@ -124,6 +143,7 @@ services:
             args:
                 SERVICE_NAME: api-gateway
         environment:
+            JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             SERVER_PORT: 8080
             CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
             AUTH_SERVICE_URL: http://auth-service:8081
@@ -132,6 +152,8 @@ services:
             NOTIFICATION_SERVICE_URL: http://notification-service:8084
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        secrets:
+            - jwt_public_key
         ports:
             - "${API_GATEWAY_PORT}:8080"
         depends_on:
@@ -246,3 +268,10 @@ volumes:
   catalog_db_data:
   order_db_data:
   notification_db_data:
+
+# Solo auth-service recibe el secreto privado. Los archivos quedan fuera del build.
+secrets:
+    jwt_public_key:
+        file: ${JWT_PUBLIC_KEY_FILE:-./secrets/jwt-public.pem}
+    jwt_private_key:
+        file: ${JWT_PRIVATE_KEY_FILE:-./secrets/jwt-private.pem}
