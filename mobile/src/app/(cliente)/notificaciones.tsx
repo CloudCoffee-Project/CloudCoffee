@@ -123,8 +123,8 @@ export default function NotificacionesScreen() {
       <ScrollView contentContainerStyle={styles.contenido}>
         <Text style={styles.titulo}>Notificaciones</Text>
         <Text style={styles.descripcion}>
-          Avisos de tus pedidos, pagos y retiros. Quedan guardados aquí aunque la app esté en
-          segundo plano o cerrada.
+          Avisos de tus pedidos, pagos, retiros y del estado de los productos (agotados o
+          disponibles). Quedan guardados aquí aunque la app esté en segundo plano o cerrada.
         </Text>
 
         {historial === null ? (
@@ -135,7 +135,8 @@ export default function NotificacionesScreen() {
           <View style={styles.tarjetaCentrada} testID="bandeja-vacia">
             <Text style={styles.vacioTitulo}>Aún no hay notificaciones</Text>
             <Text style={styles.ayuda}>
-              Cuando llegue un aviso de un pedido, un pago o un retiro, aparecerá aquí.
+              Cuando llegue un aviso de un pedido, un pago, un retiro o del estado de un producto
+              (agotado/disponible), aparecerá aquí.
             </Text>
           </View>
         ) : (
