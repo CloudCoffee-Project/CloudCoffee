@@ -2,8 +2,8 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
-// URL configurable vía variable de entorno (ver .env). Fallback solo para desarrollo
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+import { httpClient } from './httpClient';
+
 const DEEP_LINK_RETORNO = 'cloudcoffee://pago/retorno';
 
 export interface ItemCarrito {
@@ -22,20 +22,17 @@ export async function crearCompra(
   items: ItemCarrito[],
   accessToken: string
 ): Promise<CompraCreada> {
-  const response = await fetch(`${API_URL}/v1/compras`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ items }),
-  });
+  const response = await httpClient.post<CompraCreada>(
+    '/v1/compras',
+    { items },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
 
-  if (!response.ok) {
-    throw new Error(`Error al crear la compra: ${response.status}`);
-  }
-
-  return response.json();
+  return response.data;
 }
 
 export type ResultadoCheckout =

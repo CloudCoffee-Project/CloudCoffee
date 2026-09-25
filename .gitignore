@@ -3,3 +3,11 @@
 .env
 .env.*
 !.env.example
+.agents
+.agent
+.project
+
+# Llaves JWT locales (nunca versionar).
+/secrets/
+**/*.pem
+**/*.key

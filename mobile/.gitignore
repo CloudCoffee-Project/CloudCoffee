@@ -19,6 +19,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Firebase / FCM: google-services.json se commitea (solo identificadores
+# públicos; EAS Build requiere archivos trackeados por git).
+
 # Metro
 .metro-health-check*
 

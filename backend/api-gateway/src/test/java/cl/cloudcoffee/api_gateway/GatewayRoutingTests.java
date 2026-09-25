@@ -36,9 +36,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// Estas pruebas de routing/JWT usan HTTP local; HTTPS permanece habilitado en la aplicacion.
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        "CORS_ALLOWED_ORIGINS=http://localhost:3000, https://app.example.com",
+        "server.ssl.enabled=false"})
 @AutoConfigureMockMvc
-class GatewayRoutingTests {
+class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport {
 
     private static final Map<String, BackendStub> BACKENDS = Map.of(
             "auth", new BackendStub("auth"),
@@ -112,10 +115,11 @@ class GatewayRoutingTests {
 
     @Test
     void preservesBodyQueryParametersAndAuthorizationHeader() throws Exception {
+        String authorization = "Bearer " + token();
         String body = "{\"nombre\":\"María\"}";
         mvc.perform(patch(URI.create("/v1/auth/users/me?tag=caf%C3%A9&tag=a%2Bb"))
                         .with(user("cliente"))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer test-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body.getBytes(StandardCharsets.UTF_8)))
                 .andExpect(status().isOk());
@@ -125,7 +129,7 @@ class GatewayRoutingTests {
         assertThat(received.path()).isEqualTo("/auth/users/me");
         assertThat(received.query()).isEqualTo("tag=caf%C3%A9&tag=a%2Bb");
         assertThat(received.body()).isEqualTo(body);
-        assertThat(received.authorization()).isEqualTo("Bearer test-token");
+        assertThat(received.authorization()).isEqualTo(authorization);
         assertThat(received.contentType()).startsWith(MediaType.APPLICATION_JSON_VALUE);
     }
 
@@ -195,6 +199,101 @@ class GatewayRoutingTests {
     private void assertNoBackendRequests() {
         BACKENDS.forEach((service, backend) ->
                 assertThat(backend.requests).as("Solicitudes pendientes en %s", service).isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/v1/auth/users/me", "/v1/catalog/productos", "/v1/notifications"})
+    void preflightIsHandledAtTheGatewayWithoutAuthenticationOrBackendCalls(String path) throws Exception {
+        mvc.perform(options(path)
+                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization, content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "authorization, content-type"))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        assertNoBackendRequests();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost:3000", "https://app.example.com"})
+    void configuredOriginsCanReadResponsesFromBackendsWithoutCors(String origin) throws Exception {
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                            URI.create("http://localhost:" + gatewayPort + "/v1/catalog/campus"))
+                            .header(HttpHeaders.ORIGIN, origin).GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().allValues(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN)).containsExactly(origin);
+            assertThat(response.body()).isEqualTo("{\"service\":\"catalog\"}");
+        }
+        assertThat(BACKENDS.get("catalog").take().path()).isEqualTo("/catalog/campus");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost:3001", "https://untrusted.example.com", "null"})
+    void unconfiguredOriginsAreRejectedForPreflightAndActualRequests(String origin) throws Exception {
+        mvc.perform(options("/v1/auth/login")
+                        .header(HttpHeaders.ORIGIN, origin)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        mvc.perform(get("/v1/catalog/campus").header(HttpHeaders.ORIGIN, origin))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void corsDoesNotBypassAuthenticationAndIncludesHeadersOnErrors() throws Exception {
+        mvc.perform(get("/v1/auth/users/me").header(HttpHeaders.ORIGIN, "https://app.example.com"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.example.com"));
+        assertNoBackendRequests();
+
+        mvc.perform(post("/v1/auth/login").header(HttpHeaders.ORIGIN, "https://app.example.com")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reject\":true}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.example.com"));
+        assertThat(BACKENDS.get("auth").take().path()).isEqualTo("/auth/login");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"TRACE, authorization", "POST, x-unapproved-header"})
+    void preflightRejectsUnapprovedMethodsAndHeaders(String method, String headers) throws Exception {
+        mvc.perform(options("/v1/auth/login")
+                        .header(HttpHeaders.ORIGIN, "https://app.example.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, headers))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void realSignedJwtIsForwardedWithoutChangingTheToken() throws Exception {
+        String authorization = "Bearer " + token();
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                            URI.create("http://localhost:" + gatewayPort + "/v1/notifications"))
+                            .header(HttpHeaders.AUTHORIZATION, authorization).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+        }
+        assertThat(BACKENDS.get("notifications").take().authorization()).isEqualTo(authorization);
+        assertNoBackendRequests();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"malformed", "expired", "wrong-key", "wrong-algorithm", "missing-exp",
+            "missing-sub", "missing-role", "invalid-role", "future", "tampered", "hmac"})
+    void invalidJwtNeverReachesTheBackend(String kind) throws Exception {
+        mvc.perform(get("/v1/notifications").header(HttpHeaders.AUTHORIZATION, "Bearer " + invalidToken(kind)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(401));
+        assertNoBackendRequests();
     }
 
     private record RecordedRequest(String method, String path, String query,
