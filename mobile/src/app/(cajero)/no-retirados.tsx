@@ -1,18 +1,24 @@
 // src/app/(cajero)/no-retirados.tsx
 //
-// Listado de órdenes no retiradas pendientes (INT4-11). Reemplaza el
-// placeholder con la pestaña "No Retirados" del mockup (cloudcoffee-react →
-// Cajero_Main → sección 3.2.6 "Órdenes no retiradas pendientes de revisión"):
-// tarjetas de órdenes con los estados no_retirado_pendiente_revision y
-// no_retirado_final (siempre valores del union EstadoOrden, derivados con
-// esEstadoOrdenNoRetirado), un chip para separar "Pendientes de revisión" de
-// las "Finales", y el badge de estado por tarjeta.
+// Listado de órdenes no retiradas pendientes (INT4-11) y flujo de decisión ítem
+// por ítem (INT4-12). Reemplaza el placeholder con la pestaña "No Retirados"
+// del mockup (cloudcoffee-react → Cajero_Main → sección 3.2.6 "Órdenes no
+// retiradas pendientes de revisión"):
 //
-// El mockup también muestra el filtro por fecha y las acciones por ítem
-// (reingresar/descartar) con su confirmación: esas acciones son de otra tarea,
-// y el filtro por fecha no aplica aún porque el contrato Orden no trae fecha
-// (nada de campos inventados, ver src/types/domain.ts). Las acciones por
-// ítem y la resolución quedan para la pantalla de detalle correspondiente.
+//   - Tarjetas de órdenes con los estados no_retirado_pendiente_revision y
+//     no_retirado_final (siempre valores del union EstadoOrden, derivados con
+//     esEstadoOrdenNoRetirado), un chip para separar "Pendientes de revisión"
+//     de las "Finales", y el badge de estado por tarjeta (INT4-11).
+//   - En las órdenes pendientes de revisión: "Decide la acción individual para
+//     cada ítem" con ♻️ Reingresar Stock / 🗑️ Descartar por ítem y el botón
+//     "✓ Confirmar Revisión de Orden" (INT4-12). Confirmar llama a
+//     resolverOrdenNoRetirada; cada ítem debe tener una acción antes de
+//     confirmar (mismo mensaje de validación que el mockup).
+//
+// El mockup también muestra el filtro por fecha: no aplica aún porque el
+// contrato Orden no trae fecha (nada de campos inventados, ver
+// src/types/domain.ts). Las acciones solo aparecen en órdenes pendientes de
+// revisión; las finales se muestran solo lectura.
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -26,11 +32,11 @@ import {
   View,
 } from 'react-native';
 
-import { fetchPedidosEntrantes } from '../../services/ordenes';
+import { fetchPedidosEntrantes, resolverOrdenNoRetirada } from '../../services/ordenes';
 import { getAccessToken, toApiError } from '../../services/httpClient';
 import { useOrdenEstado } from '../../hooks/useOrdenEstado';
 import { esEstadoOrdenNoRetirado } from '../../types/domain';
-import type { EstadoOrden, Orden } from '../../types/domain';
+import type { AccionNoRetirado, EstadoOrden, Orden } from '../../types/domain';
 
 function formatearMonto(monto: number): string {
   return `$${monto.toLocaleString('es-CL')}`;
@@ -55,10 +61,29 @@ function estadoVisual(estado: EstadoOrden): EstadoVisual {
   }
 }
 
-function FilaNoRetirado({ orden }: { orden: Orden }) {
+interface PropsFilaNoRetirado {
+  orden: Orden;
+  decisiones: Record<string, AccionNoRetirado>;
+  onCambiarDecision: (ordenItemId: string, accion: AccionNoRetirado) => void;
+  resolviendo: boolean;
+  error: string | null;
+  onConfirmar: () => void;
+}
+
+function FilaNoRetirado({
+  orden,
+  decisiones,
+  onCambiarDecision,
+  resolviendo,
+  error,
+  onConfirmar,
+}: PropsFilaNoRetirado) {
   const estadoEnVivo = useOrdenEstado(orden.ordenId);
   const estadoActual: EstadoOrden = estadoEnVivo ?? orden.estado;
   const visual = estadoVisual(estadoActual);
+  // El flujo de decisión pertenece a las órdenes pendientes de revisión; las
+  // finales se muestran solo lectura en la misma tarjeta.
+  const pendienteRevision = orden.estado === 'no_retirado_pendiente_revision';
 
   return (
     <View style={styles.card} testID={`cajero-no-retirado-${orden.ordenId}`}>
@@ -68,7 +93,12 @@ function FilaNoRetirado({ orden }: { orden: Orden }) {
           <Text style={styles.cardOrdenId}>ID: {orden.ordenId}</Text>
         </View>
         <View style={[styles.badge, { backgroundColor: visual.fondo }]}>
-          <Text style={[styles.badgeText, { color: visual.texto }]}>{visual.etiqueta}</Text>
+          <Text
+            style={[styles.badgeText, { color: visual.texto }]}
+            testID={`cajero-nr-badge-${orden.ordenId}`}
+          >
+            {visual.etiqueta}
+          </Text>
         </View>
       </View>
 
@@ -78,18 +108,85 @@ function FilaNoRetirado({ orden }: { orden: Orden }) {
         </View>
       ) : null}
 
+      {pendienteRevision && (
+        <Text style={styles.instruccion}>Decide la acción individual para cada ítem:</Text>
+      )}
+
       <View style={styles.items}>
         {orden.items.map((item) => (
-          <View key={item.ordenItemId} style={styles.itemRow}>
-            <Text style={styles.itemNombre}>
-              {item.cantidad}x {item.productoNombre}
-            </Text>
-            <Text style={styles.itemPrecio}>
-              {formatearMonto(item.precioUnitario * item.cantidad)}
-            </Text>
+          <View key={item.ordenItemId} style={styles.itemBloque}>
+            <View style={styles.itemRow}>
+              <Text style={styles.itemNombre}>
+                {item.cantidad}x {item.productoNombre}
+              </Text>
+              <Text style={styles.itemPrecio}>
+                {formatearMonto(item.precioUnitario * item.cantidad)}
+              </Text>
+            </View>
+            {pendienteRevision && (
+              <View style={styles.itemAcciones}>
+                <Pressable
+                  onPress={() => onCambiarDecision(item.ordenItemId, 'reingresar')}
+                  style={[
+                    styles.btnAccion,
+                    decisiones[item.ordenItemId] === 'reingresar' && styles.btnAccionReingresar,
+                  ]}
+                  testID={`cajero-nr-accion-${item.ordenItemId}-reingresar`}
+                >
+                  <Text
+                    style={[
+                      styles.btnAccionText,
+                      decisiones[item.ordenItemId] === 'reingresar' &&
+                        styles.btnAccionTextReingresar,
+                    ]}
+                  >
+                    ♻️ Reingresar Stock
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onCambiarDecision(item.ordenItemId, 'descartar')}
+                  style={[
+                    styles.btnAccion,
+                    decisiones[item.ordenItemId] === 'descartar' && styles.btnAccionDescartar,
+                  ]}
+                  testID={`cajero-nr-accion-${item.ordenItemId}-descartar`}
+                >
+                  <Text
+                    style={[
+                      styles.btnAccionText,
+                      decisiones[item.ordenItemId] === 'descartar' && styles.btnAccionTextDescartar,
+                    ]}
+                  >
+                    🗑️ Descartar
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         ))}
       </View>
+
+      {pendienteRevision && (
+        <View style={styles.accionesOrden}>
+          <Pressable
+            onPress={onConfirmar}
+            disabled={resolviendo}
+            style={[styles.btnConfirmar, resolviendo && styles.btnDeshabilitado]}
+            testID={`cajero-nr-confirmar-${orden.ordenId}`}
+          >
+            {resolviendo ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.btnConfirmarText}>✓ Confirmar Revisión de Orden</Text>
+            )}
+          </Pressable>
+          {error && (
+            <View style={styles.errorBanner} testID={`cajero-nr-error-${orden.ordenId}`}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       <View style={styles.cardFooter}>
         <Text style={styles.footerLabel}>Total pagado</Text>
@@ -135,11 +232,22 @@ function ChipFiltro({ activo, etiqueta, onPress, testID }: PropsChipFiltro) {
   );
 }
 
+// Mensaje de validación del mockup (Cajero_Main.jsx, handleResolverOrdenNoRetirada).
+const MENSAJE_FALTAN_ACCIONES =
+  'Debes seleccionar una acción (Reingresar o Descartar) para cada ítem antes de confirmar.';
+
 export default function NoRetiradosScreen() {
   const [pedidos, setPedidos] = useState<Orden[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<FiltroNoRetirado>('todos');
+
+  // Estado del flujo INT4-12: decisión por ítem (clave = ordenItemId), orden
+  // que se está confirmando y errores de validación/API por orden.
+  const [decisiones, setDecisiones] = useState<Record<string, AccionNoRetirado>>({});
+  const [resolviendo, setResolviendo] = useState<string | null>(null);
+  const [erroresOrden, setErroresOrden] = useState<Record<string, string>>({});
+  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
   async function cargarPedidos(): Promise<void> {
     try {
@@ -154,7 +262,6 @@ export default function NoRetiradosScreen() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch inicial de datos, patrón válido
     void cargarPedidos();
   }, []);
 
@@ -194,6 +301,74 @@ export default function NoRetiradosScreen() {
         return 'No hay órdenes no retiradas pendientes para esta cafetería.';
     }
   }, [noRetirados.length, filtro]);
+
+  function cambiarDecision(ordenItemId: string, accion: AccionNoRetirado): void {
+    setDecisiones((prev) => ({ ...prev, [ordenItemId]: accion }));
+    // Una nueva decisión limpia el error de validación de su orden.
+    const duenio = pedidos.find((p) => p.items.some((it) => it.ordenItemId === ordenItemId));
+    if (duenio) {
+      setErroresOrden((prev) => {
+        if (!prev[duenio.ordenId]) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[duenio.ordenId];
+        return next;
+      });
+    }
+  }
+
+  async function confirmarRevision(orden: Orden): Promise<void> {
+    // Una orden a la vez (patrón del mockup: alert de validación por orden).
+    if (resolviendo) {
+      return;
+    }
+
+    const decisionesOrden = orden.items.map((it) => ({
+      ordenItemId: it.ordenItemId,
+      accion: decisiones[it.ordenItemId],
+    }));
+    const faltaAlguna = decisionesOrden.some((d) => !d.accion);
+    if (faltaAlguna) {
+      setErroresOrden((prev) => ({ ...prev, [orden.ordenId]: MENSAJE_FALTAN_ACCIONES }));
+      return;
+    }
+
+    setResolviendo(orden.ordenId);
+    setErroresOrden((prev) => {
+      const next = { ...prev };
+      delete next[orden.ordenId];
+      return next;
+    });
+
+    try {
+      const decisionesTipadas = decisionesOrden.map((d) => ({
+        ordenItemId: d.ordenItemId,
+        accion: d.accion as AccionNoRetirado,
+      }));
+      await resolverOrdenNoRetirada(orden.ordenId, decisionesTipadas, getAccessToken() ?? '');
+
+      // Éxito: la orden sale del listado y se informa el resumen por ítem.
+      const reingresar = decisionesTipadas.filter((d) => d.accion === 'reingresar').length;
+      const descartar = decisionesTipadas.filter((d) => d.accion === 'descartar').length;
+      setMensajeExito(
+        `Orden ${orden.codigoOrden} procesada: ${reingresar} ítem(s) reingresado(s) al stock, ${descartar} descartado(s).`
+      );
+      setPedidos((prev) => prev.filter((p) => p.ordenId !== orden.ordenId));
+      setDecisiones((prev) => {
+        const next = { ...prev };
+        orden.items.forEach((it) => delete next[it.ordenItemId]);
+        return next;
+      });
+    } catch (errorApi) {
+      setErroresOrden((prev) => ({
+        ...prev,
+        [orden.ordenId]: toApiError(errorApi as never).message,
+      }));
+    } finally {
+      setResolviendo(null);
+    }
+  }
 
   const cafeteriaNombre = pedidos.length > 0 ? pedidos[0].cafeteriaNombre : 'Cafetería';
 
@@ -243,10 +418,32 @@ export default function NoRetiradosScreen() {
         </View>
       )}
 
+      {mensajeExito && (
+        <View style={styles.exitoBanner} testID="cajero-nr-exito">
+          <Text style={styles.exitoText}>{mensajeExito}</Text>
+          <Pressable
+            onPress={() => setMensajeExito(null)}
+            hitSlop={8}
+            testID="cajero-nr-cerrar-exito"
+          >
+            <Text style={styles.exitoCerrar}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
       <FlatList
         data={pedidosFiltrados}
         keyExtractor={(item) => item.ordenId}
-        renderItem={({ item }) => <FilaNoRetirado orden={item} />}
+        renderItem={({ item }) => (
+          <FilaNoRetirado
+            orden={item}
+            decisiones={decisiones}
+            onCambiarDecision={cambiarDecision}
+            resolviendo={resolviendo === item.ordenId}
+            error={erroresOrden[item.ordenId] ?? null}
+            onConfirmar={() => void confirmarRevision(item)}
+          />
+        )}
         contentContainerStyle={styles.listaContenido}
         refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargarPedidos} />}
         ListEmptyComponent={
@@ -350,6 +547,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  exitoBanner: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  exitoText: {
+    color: '#166534',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  exitoCerrar: {
+    color: '#166534',
+    fontSize: 15,
+    fontWeight: '800',
+  },
   listaContenido: {
     paddingBottom: 24,
     gap: 12,
@@ -408,8 +629,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  instruccion: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   items: {
-    gap: 4,
+    gap: 8,
+  },
+  itemBloque: {
+    gap: 6,
   },
   itemRow: {
     flexDirection: 'row',
@@ -425,6 +654,56 @@ const styles = StyleSheet.create({
     color: '#1D2433',
     fontSize: 13,
     fontWeight: '700',
+  },
+  itemAcciones: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  btnAccion: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  btnAccionReingresar: {
+    borderColor: '#16A34A',
+    backgroundColor: '#F0FDF4',
+  },
+  btnAccionText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  btnAccionTextReingresar: {
+    color: '#166534',
+  },
+  btnAccionDescartar: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  btnAccionTextDescartar: {
+    color: '#991B1B',
+  },
+  accionesOrden: {
+    gap: 8,
+  },
+  btnConfirmar: {
+    backgroundColor: '#0052CC',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnDeshabilitado: {
+    opacity: 0.6,
+  },
+  btnConfirmarText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   cardFooter: {
     borderTopWidth: 1,

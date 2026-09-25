@@ -1,6 +1,11 @@
 // src/services/ordenes.test.ts
 import { httpClient } from './httpClient';
-import { fetchPedidosEntrantes, marcarOrdenEntregada, ORDENES_ENDPOINT } from './ordenes';
+import {
+  fetchPedidosEntrantes,
+  marcarOrdenEntregada,
+  ORDENES_ENDPOINT,
+  resolverOrdenNoRetirada,
+} from './ordenes';
 import type { Orden } from '../types/domain';
 
 jest.mock('./httpClient', () => ({
@@ -71,5 +76,26 @@ describe('marcarOrdenEntregada', () => {
       headers: { Authorization: 'Bearer token-real' },
     });
     expect(resultado).toEqual(ordenesMock[0]);
+  });
+});
+
+describe('resolverOrdenNoRetirada', () => {
+  afterEach(() => {
+    mockedPost.mockReset();
+  });
+
+  it('envía la decisión ítem por ítem al endpoint de revisión de la orden', async () => {
+    const resuelta = { ...ordenesMock[0], estado: 'no_retirado_final' as const };
+    mockedPost.mockResolvedValue({ data: resuelta });
+
+    const decisiones = [{ ordenItemId: 'itm-1', accion: 'descartar' as const }];
+    const resultado = await resolverOrdenNoRetirada('o-1', decisiones, 'token-real');
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      `${ORDENES_ENDPOINT}/o-1/no-retirado/revisar`,
+      { items: decisiones },
+      { headers: { Authorization: 'Bearer token-real' } }
+    );
+    expect(resultado).toEqual(resuelta);
   });
 });

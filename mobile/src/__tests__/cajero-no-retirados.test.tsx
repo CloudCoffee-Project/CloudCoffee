@@ -4,13 +4,14 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 
 import NoRetiradosScreen from '../app/(cajero)/no-retirados';
-import { fetchPedidosEntrantes } from '../services/ordenes';
+import { fetchPedidosEntrantes, resolverOrdenNoRetirada } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
 import type { Orden } from '../types/domain';
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
+  resolverOrdenNoRetirada: jest.fn(),
 }));
 
 jest.mock('../services/httpClient', () => {
@@ -24,6 +25,7 @@ jest.mock('../hooks/useOrdenEstado', () => ({
 
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
 const mockFetchPedidos = fetchPedidosEntrantes as unknown as jest.Mock;
+const mockResolverOrden = resolverOrdenNoRetirada as unknown as jest.Mock;
 const mockUseOrdenEstado = useOrdenEstado as unknown as jest.Mock;
 
 // Mezcla de estados: activos y entregado quedan fuera del listado (solo se
@@ -120,10 +122,37 @@ async function renderizarNoRetirados(): Promise<ReactTestRenderer> {
   return tree;
 }
 
+// Orden pendiente de revisión con dos ítems: exige decidir ambos antes de
+// confirmar (flujo INT4-12).
+const ordenRevisionDosItems: Orden = {
+  ordenId: 'o-5',
+  codigoOrden: 'CC-9805',
+  cafeteriaId: 'c-1',
+  cafeteriaNombre: 'Cafetería Central',
+  clienteNombre: 'Francisca Ríos',
+  estado: 'no_retirado_pendiente_revision',
+  montoTotal: 4900,
+  items: [
+    {
+      ordenItemId: 'itm-5',
+      productoNombre: 'Té Chai Latte 12oz',
+      cantidad: 1,
+      precioUnitario: 3400,
+    },
+    {
+      ordenItemId: 'itm-6',
+      productoNombre: 'Brownie Chocolate',
+      cantidad: 1,
+      precioUnitario: 1500,
+    },
+  ],
+};
+
 describe('Listado de órdenes no retiradas del cajero (INT4-11)', () => {
   beforeEach(() => {
     mockGetAccessToken.mockReset();
     mockFetchPedidos.mockReset();
+    mockResolverOrden.mockReset();
     mockUseOrdenEstado.mockReset();
     mockUseOrdenEstado.mockReturnValue(null);
   });
@@ -196,9 +225,11 @@ describe('Listado de órdenes no retiradas del cajero (INT4-11)', () => {
 
     const tree = await renderizarNoRetirados();
 
-    const rowRevision = tree.root.findByProps({ testID: 'cajero-no-retirado-o-3' });
-    expect(textoDe(rowRevision)).toContain('No Retirado');
-    expect(textoDe(rowRevision)).not.toContain('Revisión');
+    // El badge usa el estado en vivo: o-3 (base: pendiente de revisión) llega
+    // como final, así el badge no muestra "· Revisión".
+    const badge = tree.root.findByProps({ testID: 'cajero-nr-badge-o-3' });
+    expect(textoDe(badge)).toContain('No Retirado');
+    expect(textoDe(badge)).not.toContain('Revisión');
 
     act(() => tree.unmount());
   }, 20000);
@@ -253,6 +284,182 @@ describe('Listado de órdenes no retiradas del cajero (INT4-11)', () => {
 
     const vacio = tree.root.findByProps({ testID: 'cajero-nr-vacio' });
     expect(textoDe(vacio)).toContain('No hay órdenes no retiradas pendientes de revisión.');
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('muestra las acciones de decisión solo en órdenes pendientes de revisión', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarNoRetirados();
+
+    // o-3 (pendiente de revisión) tiene los botones por ítem y confirmar.
+    expect(tree.root.findByProps({ testID: 'cajero-nr-accion-itm-3-reingresar' })).toBeTruthy();
+    expect(tree.root.findByProps({ testID: 'cajero-nr-accion-itm-3-descartar' })).toBeTruthy();
+    expect(tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-3' })).toBeTruthy();
+
+    // o-4 (final) es solo lectura: sin botones de decisión ni confirmación.
+    expect(() => tree.root.findByProps({ testID: 'cajero-nr-accion-itm-4-reingresar' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-4' })).toThrow();
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('exige decidir todos los ítems antes de confirmar', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarNoRetirados();
+
+    const confirmar = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-3' });
+    await act(async () => {
+      confirmar.props.onPress();
+    });
+
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-nr-error-o-3' });
+    expect(textoDe(errorBanner)).toContain(
+      'Debes seleccionar una acción (Reingresar o Descartar) para cada ítem antes de confirmar.'
+    );
+    expect(mockResolverOrden).not.toHaveBeenCalled();
+    // La orden permanece en el listado.
+    expect(dataDe(tree).map((o) => o.ordenId)).toContain('o-3');
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('confirma la orden con las decisiones, llama al servicio y la quita del listado', async () => {
+    mockResolverOrden.mockResolvedValue({ ...ordenesMock[2], estado: 'no_retirado_final' });
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarNoRetirados();
+
+    const btnReingresar = tree.root.findByProps({
+      testID: 'cajero-nr-accion-itm-3-reingresar',
+    });
+    await act(async () => {
+      btnReingresar.props.onPress();
+    });
+
+    const confirmar = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-3' });
+    await act(async () => {
+      confirmar.props.onPress();
+    });
+
+    expect(mockResolverOrden).toHaveBeenCalledWith(
+      'o-3',
+      [{ ordenItemId: 'itm-3', accion: 'reingresar' }],
+      'token-real'
+    );
+    expect(dataDe(tree).map((o) => o.ordenId)).not.toContain('o-3');
+    const exito = tree.root.findByProps({ testID: 'cajero-nr-exito' });
+    expect(textoDe(exito)).toContain('CC-9803');
+    expect(textoDe(exito)).toContain('1 ítem(s) reingresado(s)');
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('permite cambiar la decisión de un ítem antes de confirmar', async () => {
+    mockResolverOrden.mockResolvedValue({ ...ordenesMock[2], estado: 'no_retirado_final' });
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarNoRetirados();
+
+    const btnReingresar = tree.root.findByProps({
+      testID: 'cajero-nr-accion-itm-3-reingresar',
+    });
+    await act(async () => {
+      btnReingresar.props.onPress();
+    });
+    const btnDescartar = tree.root.findByProps({ testID: 'cajero-nr-accion-itm-3-descartar' });
+    await act(async () => {
+      btnDescartar.props.onPress();
+    });
+
+    const confirmar = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-3' });
+    await act(async () => {
+      confirmar.props.onPress();
+    });
+
+    expect(mockResolverOrden).toHaveBeenCalledWith(
+      'o-3',
+      [{ ordenItemId: 'itm-3', accion: 'descartar' }],
+      'token-real'
+    );
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('muestra el error normalizado de la API al confirmar y mantiene la orden', async () => {
+    mockResolverOrden.mockRejectedValue(new Error('Request failed with status code 503'));
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarNoRetirados();
+
+    const btnReingresar = tree.root.findByProps({
+      testID: 'cajero-nr-accion-itm-3-reingresar',
+    });
+    await act(async () => {
+      btnReingresar.props.onPress();
+    });
+    const confirmar = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-3' });
+    await act(async () => {
+      confirmar.props.onPress();
+    });
+
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-nr-error-o-3' });
+    expect(textoDe(errorBanner)).toContain('503');
+    expect(dataDe(tree).map((o) => o.ordenId)).toContain('o-3');
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('con dos ítems: exige decidir ambos, limpia el error y confirma', async () => {
+    mockResolverOrden.mockResolvedValue({ ...ordenRevisionDosItems, estado: 'no_retirado_final' });
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue([ordenesMock[2], ordenRevisionDosItems]);
+
+    const tree = await renderizarNoRetirados();
+
+    // Solo una decisión: debe fallar la validación sin llamar al servicio.
+    const btnReingresarItm5 = tree.root.findByProps({
+      testID: 'cajero-nr-accion-itm-5-reingresar',
+    });
+    await act(async () => {
+      btnReingresarItm5.props.onPress();
+    });
+    const confirmar = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-5' });
+    await act(async () => {
+      confirmar.props.onPress();
+    });
+    expect(mockResolverOrden).not.toHaveBeenCalled();
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-nr-error-o-5' });
+    expect(textoDe(errorBanner)).toContain('para cada ítem antes de confirmar');
+
+    // Decidir el segundo ítem limpia el error y permite confirmar.
+    const btnDescartarItm6 = tree.root.findByProps({
+      testID: 'cajero-nr-accion-itm-6-descartar',
+    });
+    await act(async () => {
+      btnDescartarItm6.props.onPress();
+    });
+    const confirmar2 = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-5' });
+    await act(async () => {
+      confirmar2.props.onPress();
+    });
+
+    expect(mockResolverOrden).toHaveBeenCalledWith(
+      'o-5',
+      [
+        { ordenItemId: 'itm-5', accion: 'reingresar' },
+        { ordenItemId: 'itm-6', accion: 'descartar' },
+      ],
+      'token-real'
+    );
+    expect(() => tree.root.findByProps({ testID: 'cajero-nr-error-o-5' })).toThrow();
 
     act(() => tree.unmount());
   }, 20000);
