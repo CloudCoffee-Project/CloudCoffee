@@ -313,6 +313,13 @@ export default function PerfilScreen() {
                   >
                     <Text style={styles.btnContrasenaTexto}>🔒 Cambiar Contraseña</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.btnNotificaciones}
+                    onPress={() => router.push('/(cliente)/notificaciones')}
+                    testID="ver-notificaciones"
+                  >
+                    <Text style={styles.btnNotificacionesTexto}>🔔 Notificaciones</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -501,6 +508,19 @@ const styles = StyleSheet.create({
   },
   btnContrasenaTexto: {
     color: '#1E293B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  btnNotificaciones: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnNotificacionesTexto: {
+    color: '#0052CC',
     fontSize: 13,
     fontWeight: '700',
   },

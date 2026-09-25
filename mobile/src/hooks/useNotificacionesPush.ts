@@ -1,16 +1,19 @@
 // src/hooks/useNotificacionesPush.ts
 //
-// Hook de alto nivel para la integración FCM (INT4-41):
+// Hook de alto nivel para la integración FCM (INT4-41/INT4-43):
 //   - Al montarse, configura el manejador de notificaciones y registra el
 //     dispositivo (permisos + canal + token FCM + backend).
 //   - Escucha notificaciones recibidas con la app abierta y expone la última.
+//   - Mantiene la bandeja local (INT4-43): cada notificación recibida se
+//     persiste en el historial; al abrirla (primer plano, segundo plano o app
+//     cerrada) queda marcada como leída.
 //   - Al abrir una notificación (toca en la bandeja o mientras corre),
 //     invoca `abrirNotificacion` con la ruta interna que trae data.url.
 //   - Se desuscribe y limpia todo al desmontar.
 
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import type { NotificationResponse } from 'expo-notifications';
+import type { Notification, NotificationResponse } from 'expo-notifications';
 
 import {
   configurarManejadorNotificaciones,
@@ -19,6 +22,7 @@ import {
   urlDeNotificacion,
 } from '../services/notificacionesPush';
 import type { EstadoPush } from '../services/notificacionesPush';
+import { agregarNotificacion, paraHistorial } from '../services/historialNotificaciones';
 
 // Require diferido: en Expo Go (Android, SDK 53+) importar expo-notifications
 // lanza un error y tumbaría el root layout (este hook se usa en _layout). Cuando
@@ -40,12 +44,26 @@ export interface NotificacionRecibida {
   url: string | null;
 }
 
+// Persiste una notificación en la bandeja local (INT4-43). Según el estado en
+// que se recibió: con la app en primer plano llega "sin leer"; al abrirla (toca
+// en segundo plano o con la app cerrada) se persiste como leída. Las
+// notificaciones data-only (sin título ni cuerpo) no entran a la bandeja.
+function registrarEnBandeja(notificacion: Notification, leida: boolean): void {
+  const registro = paraHistorial(notificacion);
+  if (!registro) {
+    return;
+  }
+  void agregarNotificacion({ ...registro, leida });
+}
+
 // Abre la ruta interna cuando el usuario toca una notificación (acción
 // "default"); ignora respuestas de acciones custom y notificaciones sin URL.
 function procesarApertura(
   respuesta: NotificationResponse,
   abrir: ((url: string) => void) | undefined
 ): void {
+  registrarEnBandeja(respuesta.notification, true);
+
   if (!abrir || respuesta.actionIdentifier !== Notifications?.DEFAULT_ACTION_IDENTIFIER) {
     return;
   }
@@ -85,6 +103,9 @@ export function useNotificacionesPush(
       if (!activo) {
         return;
       }
+      // Bandeja local: con la app en primer plano la notificación se persiste
+      // como no leída (INT4-43). El banner in-app usa ultimaNotificacion.
+      registrarEnBandeja(notificacion, false);
       const content = notificacion.request.content;
       setUltimaNotificacion({
         titulo: content.title ?? undefined,

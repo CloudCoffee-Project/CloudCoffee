@@ -1,9 +1,10 @@
 import { useCallback, useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import type { Href } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import BannerNotificacionPush from '../components/BannerNotificacionPush';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { useNotificacionesPush } from '../hooks/useNotificacionesPush';
 import { getAccessToken } from '../services/httpClient';
@@ -25,8 +26,9 @@ function RootNavigator() {
     [router]
   );
 
-  // Push (FCM, INT4-41): registra el dispositivo solo con sesión activa y
-  // escucha notificaciones recibidas/abiertas.
+  // Push (FCM, INT4-41/INT4-43): registra el dispositivo solo con sesión
+  // activa y escucha notificaciones recibidas/abiertas. La bandeja local la
+  // mantienen los listeners del hook (historialNotificaciones).
   const { estado: estadoPush, ultimaNotificacion } = useNotificacionesPush(
     sesion ? abrirDesdePush : undefined,
     Boolean(sesion)
@@ -87,8 +89,22 @@ function RootNavigator() {
     );
   }
 
-  return <Slot />;
+  return (
+    <View style={styles.contenedor}>
+      <Slot />
+      {/* Despliegue en primer plano (INT4-43): banner in-app con la última
+          notificación recibida. Sin sesión no navega, solo informa. */}
+      <BannerNotificacionPush
+        notificacion={ultimaNotificacion}
+        onAbrir={sesion ? abrirDesdePush : undefined}
+      />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  contenedor: { flex: 1 },
+});
 
 export default function RootLayout() {
   return (
