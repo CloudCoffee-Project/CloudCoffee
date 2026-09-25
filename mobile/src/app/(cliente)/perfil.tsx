@@ -320,6 +320,13 @@ export default function PerfilScreen() {
                   >
                     <Text style={styles.btnNotificacionesTexto}>🔔 Notificaciones</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.btnSeguimientos}
+                    onPress={() => router.push('/(cliente)/mis-seguimientos')}
+                    testID="mis-seguimientos"
+                  >
+                    <Text style={styles.btnSeguimientosTexto}>⭐ Mis Seguimientos</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -521,6 +528,19 @@ const styles = StyleSheet.create({
   },
   btnNotificacionesTexto: {
     color: '#0052CC',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  btnSeguimientos: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1.5,
+    borderColor: '#F5DE7A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnSeguimientosTexto: {
+    color: '#8A6D00',
     fontSize: 13,
     fontWeight: '700',
   },

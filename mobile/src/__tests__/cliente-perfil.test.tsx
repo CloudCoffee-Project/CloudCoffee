@@ -240,6 +240,19 @@ describe('Pantalla Mi Perfil', () => {
     act(() => tree.unmount());
   });
 
+  it('navega a mis-seguimientos desde el botón del mockup', async () => {
+    mockObtenerPerfil.mockResolvedValue(perfilMock);
+    const mockPush = jest.fn();
+    mockUseRouter.mockReturnValue({ push: mockPush });
+
+    const tree = await renderizarPerfil();
+    await pulsar(tree, 'mis-seguimientos');
+
+    expect(mockPush).toHaveBeenCalledWith('/(cliente)/mis-seguimientos');
+
+    act(() => tree.unmount());
+  });
+
   it('cierra sesión desde el botón del footer', async () => {
     mockObtenerPerfil.mockResolvedValue(perfilMock);
     const mockCerrarSesion = jest.fn().mockResolvedValue(undefined);
