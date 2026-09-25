@@ -12,11 +12,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 
+import cl.cloudcoffee.auth_service.dto.LoginRequest;
+import cl.cloudcoffee.auth_service.dto.LoginResponse;
 import cl.cloudcoffee.auth_service.dto.ReenviarVerificacionRequest;
 import cl.cloudcoffee.auth_service.dto.RegistroClienteRequest;
 import cl.cloudcoffee.auth_service.dto.RegistroClienteResponse;
 import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
 import cl.cloudcoffee.auth_service.dto.VerificarCorreoRequest;
+import cl.cloudcoffee.auth_service.service.LoginService;
 import cl.cloudcoffee.auth_service.service.RegistroService;
 import cl.cloudcoffee.auth_service.service.VerificacionService;
 
@@ -26,10 +29,18 @@ public class AuthController {
 
     private final RegistroService registroService;
     private final VerificacionService verificacionService;
+    private final LoginService loginService;
 
-    public AuthController(RegistroService registroService, VerificacionService verificacionService) {
+    public AuthController(RegistroService registroService, VerificacionService verificacionService,
+            LoginService loginService) {
         this.registroService = registroService;
         this.verificacionService = verificacionService;
+        this.loginService = loginService;
+    }
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        return loginService.iniciarSesion(request.email(), request.password());
     }
 
     @PostMapping("/register")
