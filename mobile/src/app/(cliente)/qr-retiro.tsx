@@ -81,6 +81,16 @@ export default function QrRetiroScreen() {
     alert('Próximamente: El QR se guardará en tu galería de fotos.');
   };
 
+  const abrirBoleta = () => {
+    if (!ordenId) {
+      return;
+    }
+    router.push({
+      pathname: '/(cliente)/orden/[id]',
+      params: { id: ordenId, estado },
+    });
+  };
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
@@ -138,6 +148,14 @@ export default function QrRetiroScreen() {
               onPress={handleDescargar}
             >
               <Text style={styles.downloadButtonText}>↓ Descargar QR</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.boletaButton, pressed && styles.buttonPressed]}
+              onPress={abrirBoleta}
+              testID="abrir-boleta"
+            >
+              <Text style={styles.boletaButtonText}>📄 Ver Boleta en PDF</Text>
             </Pressable>
           </>
         )}
@@ -291,6 +309,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  boletaButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#0052CC',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  boletaButtonText: {
+    color: '#0052CC',
+    fontSize: 15,
+    fontWeight: '700',
   },
   buttonPressed: {
     opacity: 0.85,
