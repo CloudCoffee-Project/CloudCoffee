@@ -92,6 +92,10 @@ class AuthControllerTest extends JwtTestSupport {
         return "{\"email\": \"%s\", \"password\": \"%s\"}".formatted(email, password);
     }
 
+    private static String refreshJson(String refreshToken) {
+        return "{\"refreshToken\": \"%s\"}".formatted(refreshToken);
+    }
+
     /** Registra un cliente con la contraseña estándar de las pruebas y confirma su correo. */
     private void registrarYVerificarCliente(String email) throws Exception {
         mvc.perform(post("/auth/register")
@@ -339,5 +343,96 @@ class AuthControllerTest extends JwtTestSupport {
         String segundoRefreshToken = objectMapper.readTree(segundaRespuesta).get("refreshToken").asText();
 
         assertThat(primerRefreshToken).isNotEqualTo(segundoRefreshToken);
+    }
+
+    @Test
+    void refreshValidoGeneraNuevoAccessTokenYNuevoRefreshToken() throws Exception {
+        String email = "refresh-valido@cloudcoffee.cl";
+        registrarYVerificarCliente(email);
+
+        String loginBody = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshTokenOriginal = objectMapper.readTree(loginBody).get("refreshToken").asText();
+
+        String refreshBody = mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson(refreshTokenOriginal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode json = objectMapper.readTree(refreshBody);
+        Jwt jwt = jwtDecoder.decode(json.get("accessToken").asText());
+        assertThatJwt(jwt);
+        assertThat(json.get("refreshToken").asText()).isNotEqualTo(refreshTokenOriginal);
+    }
+
+    @Test
+    void reutilizarUnRefreshTokenYaRotadoEsRechazado() throws Exception {
+        String email = "refresh-reutilizado@cloudcoffee.cl";
+        registrarYVerificarCliente(email);
+
+        String loginBody = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshTokenOriginal = objectMapper.readTree(loginBody).get("refreshToken").asText();
+
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson(refreshTokenOriginal)))
+                .andExpect(status().isOk());
+
+        // El token ya fue rotado: reutilizarlo debe rechazarse, aunque antes haya sido válido.
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson(refreshTokenOriginal)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void refreshRechazaTokenInexistenteOInvalido() throws Exception {
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson("token-que-no-existe")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void renovarUnaSesionNoAfectaLasSesionesDeOtrosDispositivos() throws Exception {
+        String email = "refresh-multi-dispositivo@cloudcoffee.cl";
+        registrarYVerificarCliente(email);
+
+        String primerLogin = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String segundoLogin = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String refreshTokenDispositivoA = objectMapper.readTree(primerLogin).get("refreshToken").asText();
+        String refreshTokenDispositivoB = objectMapper.readTree(segundoLogin).get("refreshToken").asText();
+
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson(refreshTokenDispositivoA)))
+                .andExpect(status().isOk());
+
+        // El refresh token del dispositivo B sigue vigente: rotar el del dispositivo A no lo afecta.
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson(refreshTokenDispositivoB)))
+                .andExpect(status().isOk());
     }
 }

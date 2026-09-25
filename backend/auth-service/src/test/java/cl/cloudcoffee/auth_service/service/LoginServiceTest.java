@@ -7,13 +7,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,8 +44,13 @@ class LoginServiceTest {
     @Mock
     private JwtTokenService jwtTokenService;
 
-    @InjectMocks
     private LoginService loginService;
+
+    @BeforeEach
+    void setUp() {
+        loginService = new LoginService(usuarioRepository, passwordEncoder, tokenAuthRepository, jwtTokenService,
+                Duration.ofDays(30));
+    }
 
     private Usuario usuarioVerificado() {
         Usuario usuario = new Usuario("cliente@cloudcoffee.cl", "hash-almacenado", Rol.CLIENTE, "Ana", "Pérez",
