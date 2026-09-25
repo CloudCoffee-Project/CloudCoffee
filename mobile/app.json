@@ -51,7 +51,8 @@
           "microphonePermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
           "barcodeScannerEnabled": true
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
