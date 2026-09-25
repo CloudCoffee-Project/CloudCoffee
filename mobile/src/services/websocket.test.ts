@@ -1,24 +1,52 @@
 // src/services/websocket.test.ts
-import { connectWebSocket, disconnectWebSocket, subscribeToTopic } from './websocket';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 
-jest.mock('@stomp/stompjs', () => {
-  return {
-    Client: jest.fn().mockImplementation(function (this: any, config: any) {
-      this.config = config;
+import { WS_BASE_URL } from '../config/api';
+import {
+  connectWebSocket,
+  disconnectWebSocket,
+  subscribeToTopic,
+  topicCafeteriaStock,
+  topicOrdenEstado,
+} from './websocket';
+
+interface StompClientMock {
+  config: unknown;
+  connected: boolean;
+  subscribe: jest.Mock;
+  activate: jest.Mock;
+  deactivate: jest.Mock;
+  onConnect?: () => void;
+}
+
+jest.mock('@stomp/stompjs', () => ({
+  Client: jest.fn().mockImplementation(function MockClient(this: StompClientMock, config: unknown) {
+    this.config = config;
+    this.connected = false;
+    this.subscribe = jest.fn();
+    this.activate = jest.fn(() => {
+      this.connected = true;
+      this.onConnect?.();
+    });
+    this.deactivate = jest.fn(() => {
       this.connected = false;
-      this.subscribe = jest.fn();
-      this.activate = jest.fn(() => {
-        this.connected = true;
-        this.onConnect?.();
-      });
-      this.deactivate = jest.fn(() => {
-        this.connected = false;
-      });
-    }),
-  };
-});
+    });
+  }),
+}));
 
 jest.mock('sockjs-client', () => jest.fn());
+
+const ClientMock = Client as unknown as jest.Mock;
+const SockJSMock = SockJS as unknown as jest.Mock;
+
+function ultimaConfig(): { connectHeaders: { Authorization: string } } {
+  return ClientMock.mock.calls[ClientMock.mock.calls.length - 1]?.[0];
+}
+
+function ultimaInstancia(): StompClientMock {
+  return ClientMock.mock.instances[ClientMock.mock.instances.length - 1];
+}
 
 describe('websocket service', () => {
   beforeEach(() => {
@@ -27,41 +55,48 @@ describe('websocket service', () => {
   });
 
   it('configura reconnectDelay en 5000ms para reconexion automatica', () => {
-    const { Client } = require('@stomp/stompjs');
     connectWebSocket('token-de-prueba');
 
-    expect(Client).toHaveBeenCalledWith(
-      expect.objectContaining({ reconnectDelay: 5000 })
-    );
+    expect(Client).toHaveBeenCalledWith(expect.objectContaining({ reconnectDelay: 5000 }));
   });
 
   it('envia el accessToken como header de autorizacion', () => {
-    const { Client } = require('@stomp/stompjs');
     connectWebSocket('mi-token-123');
 
-    const config = Client.mock.calls[Client.mock.calls.length - 1][0];
-    expect(config.connectHeaders.Authorization).toBe('Bearer mi-token-123');
+    expect(ultimaConfig().connectHeaders.Authorization).toBe('Bearer mi-token-123');
   });
 
-  it('llama onConnected cuando el cliente conecta exitosamente', () => {
-    const onConnected = jest.fn();
-    connectWebSocket('token-de-prueba', onConnected);
+  it('usa la URL base de WebSocket centralizada en config/api', () => {
+    connectWebSocket('token-de-prueba');
 
-    expect(onConnected).toHaveBeenCalled();
+    const config = ultimaConfig() as unknown as { webSocketFactory: () => void };
+    config.webSocketFactory();
+
+    expect(SockJSMock).toHaveBeenCalledWith(WS_BASE_URL);
+  });
+
+  it('notifica el estado conectado via callback', () => {
+    const onEstado = jest.fn();
+    connectWebSocket('token-de-prueba', onEstado);
+
+    expect(onEstado).toHaveBeenCalledWith({ conectado: true });
+  });
+
+  it('centraliza los topics STOMP del dominio', () => {
+    expect(topicOrdenEstado('orden-1')).toBe('/topic/orden/orden-1/estado');
+    expect(topicCafeteriaStock('cafe-1')).toBe('/topic/cafeteria/cafe-1/stock');
   });
 
   it('guarda una suscripcion pendiente si se llama antes de conectar, y la aplica al conectar', () => {
-    const { Client } = require('@stomp/stompjs');
     const callback = jest.fn();
 
-    const unsubscribe = subscribeToTopic('/topic/cafeteria/1/stock', callback);
+    const unsubscribe = subscribeToTopic(topicCafeteriaStock('cafe-1'), callback);
     expect(typeof unsubscribe).toBe('function');
 
     connectWebSocket('token-de-prueba');
 
-    const ultimaInstancia = Client.mock.instances[Client.mock.instances.length - 1];
-    expect(ultimaInstancia.subscribe).toHaveBeenCalledWith(
-      '/topic/cafeteria/1/stock',
+    expect(ultimaInstancia().subscribe).toHaveBeenCalledWith(
+      '/topic/cafeteria/cafe-1/stock',
       callback
     );
   });
@@ -70,13 +105,11 @@ describe('websocket service', () => {
     connectWebSocket('token-de-prueba');
     disconnectWebSocket();
 
-    const callback = jest.fn();
-    subscribeToTopic('/topic/cafeteria/1/stock', callback);
+    subscribeToTopic(topicCafeteriaStock('cafe-1'), jest.fn());
 
-    const { Client } = require('@stomp/stompjs');
-    const ultimaInstancia = Client.mock.instances[Client.mock.instances.length - 1];
-    if (ultimaInstancia) {
-      expect(ultimaInstancia.subscribe).not.toHaveBeenCalled();
+    const instancia = ultimaInstancia();
+    if (instancia) {
+      expect(instancia.subscribe).not.toHaveBeenCalled();
     }
   });
 });

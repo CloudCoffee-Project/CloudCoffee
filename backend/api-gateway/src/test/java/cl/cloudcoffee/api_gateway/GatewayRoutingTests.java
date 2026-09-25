@@ -36,8 +36,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties =
-        "CORS_ALLOWED_ORIGINS=http://localhost:3000, https://app.example.com")
+// Estas pruebas de routing/JWT usan HTTP local; HTTPS permanece habilitado en la aplicacion.
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        "CORS_ALLOWED_ORIGINS=http://localhost:3000, https://app.example.com",
+        "server.ssl.enabled=false"})
 @AutoConfigureMockMvc
 class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport {
 

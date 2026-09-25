@@ -7,16 +7,26 @@
 //   - POST /v1/auth/verificacion/reenviar → emite un token de verificación nuevo.
 //   - POST /v1/auth/password/recovery → solicita recuperar la contraseña (INT2-21-bis).
 //   - POST /v1/auth/password/reset    → restablece la contraseña con el token del correo.
+//   - POST /v1/auth/password/change   → cambia la contraseña estando autenticado (INT4-24).
+//   - GET  /v1/auth/me                → perfil del usuario autenticado (INT4-23).
+//   - PUT  /v1/auth/me                → actualiza nombre/apellido/teléfono (INT4-23).
 //
 // NOTA: los endpoints de login y recuperación del backend están siendo
 // implementados en INT2-21. Hoy solo existen sus rutas públicas en el
 // gateway, así que las formas de request/response que asumimos acá siguen el
-// patrón del resto del contrato.
+// patrón del resto del contrato. Lo mismo ocurre con los endpoints de perfil
+// (INT4-23): el gateway ya enruta /v1/auth/**, pero el auth-service todavía no
+// expone el controller, así que hoy devolverían 404 hasta que el backend lo
+// implemente; los tipos se definen en domain.ts siguiendo la entidad Usuario
+// (mismo shape que RegistroClienteResponse).
 
 import { decodeJwtPayload, httpClient } from './httpClient';
 import type {
+  ActualizarPerfilRequest,
+  CambiarContrasenaRequest,
   CredencialesLogin,
   LoginResponse,
+  PerfilUsuario,
   RegistroClienteRequest,
   RegistroClienteResponse,
   RestablecerPasswordRequest,
@@ -24,6 +34,29 @@ import type {
   SesionDecodificada,
   VerificarCorreoResponse,
 } from '../types/domain';
+
+// Ruta canónica de los endpoints de perfil propio. GET devuelve el
+// PerfilUsuario y PUT lo actualiza (contrato a implementar en el auth-service).
+export const PERFIL_ENDPOINT = '/v1/auth/me';
+
+// Llama a GET /v1/auth/me y devuelve los datos del usuario autenticado.
+export async function obtenerPerfil(): Promise<PerfilUsuario> {
+  const response = await httpClient.get<PerfilUsuario>(PERFIL_ENDPOINT);
+
+  return response.data;
+}
+
+// Llama a PUT /v1/auth/me actualizando nombre, apellido y teléfono. Devuelve
+// el perfil persistido por el backend.
+export async function actualizarPerfil(datos: ActualizarPerfilRequest): Promise<PerfilUsuario> {
+  const response = await httpClient.put<PerfilUsuario>(PERFIL_ENDPOINT, {
+    nombre: datos.nombre.trim(),
+    apellido: datos.apellido.trim(),
+    telefono: datos.telefono.trim(),
+  });
+
+  return response.data;
+}
 
 /** Llama a POST /v1/auth/login con las credenciales del usuario. */
 export async function login(credenciales: CredencialesLogin): Promise<LoginResponse> {
@@ -78,6 +111,20 @@ export async function restablecerPassword(token: string, nuevaPassword: string):
     nuevaPassword,
   };
   await httpClient.post('/v1/auth/password/reset', body);
+}
+
+// Ruta canónica del cambio de contraseña autenticado (INT4-24). Contrato
+// pendiente en el auth-service: recibe la contraseña actual + la nueva y
+// cambia la clave del usuario autenticado. El gateway ya enruta /v1/auth/**,
+// así que hoy devolvería 404 hasta que el backend lo implemente.
+export const CAMBIAR_PASSWORD_ENDPOINT = '/v1/auth/password/change';
+
+/** Llama a POST /v1/auth/password/change con la contraseña actual y la nueva. */
+export async function cambiarContrasena(datos: CambiarContrasenaRequest): Promise<void> {
+  await httpClient.post(CAMBIAR_PASSWORD_ENDPOINT, {
+    passwordActual: datos.passwordActual,
+    nuevaPassword: datos.nuevaPassword,
+  });
 }
 
 // Mapea el rol del backend (CLIENTE, CAJERO, ADMIN_CAFETERIA, SUPER_ADMIN)
