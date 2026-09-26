@@ -4,7 +4,7 @@
 // selección de punto de retiro, cantidad acotada al stock, total real, y los
 // estados de error/vacío/sin campus con sus salidas.
 // Y el paso a INT4-32: el botón de agregar suma la oferta elegida al carrito
-// global. No muestra aviso ni navega, como el mockup.
+// global y confirma con un aviso que se va solo. No navega.
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { View } from 'react-native';
@@ -511,6 +511,161 @@ describe('Detalle de producto', () => {
 
     expect(mockObtenerProducto).not.toHaveBeenCalled();
     expect(tree.root.findByProps({ testID: 'producto-detalle-error' })).toBeTruthy();
+  });
+});
+
+// Aviso de "agregado al carrito". El mockup no lo tiene: se agregó porque el
+// botón dejó de navegar al carrito, así que sin una confirmación el usuario no
+// tiene forma de saber que el producto entró. Solo debe confirmar, nunca
+// cambiar lo que se agregó ni tapping de más.
+describe('aviso de producto agregado (INT4-32)', () => {
+  const AVISO = 'producto-detalle-aviso';
+
+  const boton = (tree: ReactTestRenderer): ReactTestInstance =>
+    tree.root.findByProps({ testID: 'producto-detalle-agregar' });
+  const mas = (tree: ReactTestRenderer): ReactTestInstance =>
+    tree.root.findByProps({ testID: 'producto-detalle-mas' });
+
+  async function agregar(tree: ReactTestRenderer): Promise<void> {
+    await act(async () => {
+      boton(tree).props.onPress();
+    });
+  }
+
+  function avisosEnPantalla(tree: ReactTestRenderer): ReactTestInstance[] {
+    // Animated.View emite el testID en el componente y en la View que
+    // renderiza, así que findAllByProps contaría de más. Se filtra por nodo
+    // host (type string) para contar el aviso una sola vez.
+    return tree.root.findAll(
+      (nodo) => typeof nodo.type === 'string' && nodo.props?.testID === AVISO
+    );
+  }
+
+  it('no muestra aviso antes de agregar nada', async () => {
+    const tree = await renderDetalle();
+
+    expect(avisosEnPantalla(tree)).toHaveLength(0);
+  });
+
+  it('confirma con el producto y la cantidad que entraron', async () => {
+    const tree = await renderDetalle();
+
+    await agregar(tree);
+
+    const texto = textoDe(avisosEnPantalla(tree)[0]);
+    expect(texto).toContain('Agregado al carrito');
+    expect(texto).toContain('Café Americano 12oz');
+    expect(texto).toContain('1 ×');
+  });
+
+  it('dice la cantidad que se estaba mirando, no siempre una', async () => {
+    const tree = await renderDetalle();
+
+    await act(async () => {
+      mas(tree).props.onPress();
+    });
+    await agregar(tree);
+
+    expect(textoDe(avisosEnPantalla(tree)[0])).toContain('2 ×');
+  });
+
+  it('confirma la cafetería que se eligió, no la más barata', async () => {
+    // El aviso es informativo: la línea que entró al carrito la decide el
+    // usuario, y el texto tiene que acompañar esa decisión.
+    mockObtenerProducto.mockResolvedValue(
+      producto({
+        offers: [
+          oferta({ ofertaId: 'of-central', cafeteriaNombre: 'Cafetería Central', precio: 1500 }),
+          oferta({ ofertaId: 'of-norte', cafeteriaNombre: 'Cafetería Norte', precio: 2100 }),
+        ],
+      })
+    );
+
+    const tree = await renderDetalle();
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-oferta-of-norte' }).props.onPress();
+    });
+    await agregar(tree);
+
+    expect(leerCarrito(tree).items[0].precioUnitario).toBe(2100);
+    expect(textoDe(avisosEnPantalla(tree)[0])).toContain('1 × Café Americano 12oz');
+  });
+
+  it('se va solo a los dos segundos, sin que el usuario toque nada', async () => {
+    const tree = await renderDetalle();
+
+    // Se monta con reloj real y se fakea recién antes de agregar: el montaje
+    // inicial resuelve promesas, y con el reloj fake el act se enreda.
+    jest.useFakeTimers();
+    try {
+      await agregar(tree);
+      expect(avisosEnPantalla(tree)).toHaveLength(1);
+
+      // La secuencia de la pantalla es entrada (160) + 2s + salida (200).
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+
+      expect(avisosEnPantalla(tree)).toHaveLength(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reinicia el aviso al agregar otra vez en vez de dejarlo a medias', async () => {
+    const tree = await renderDetalle();
+
+    jest.useFakeTimers();
+    try {
+      await agregar(tree);
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      // A mitad de los 2 segundos, todavía en pantalla.
+      expect(avisosEnPantalla(tree)).toHaveLength(1);
+
+      // Agregar de nuevo reinicia la cuenta: el aviso anterior se frena.
+      await agregar(tree);
+      expect(avisosEnPantalla(tree)).toHaveLength(1);
+      expect(leerCarrito(tree).items[0].cantidad).toBe(2);
+
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+      });
+      expect(avisosEnPantalla(tree)).toHaveLength(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('no avisa nada si el botón está deshabilitado por estar agotado', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({ offers: [oferta({ stock: 0, disponible: false })] })
+    );
+
+    const tree = await renderDetalle();
+    await agregar(tree);
+
+    expect(avisosEnPantalla(tree)).toHaveLength(0);
+    expect(leerCarrito(tree).items).toEqual([]);
+  });
+
+  it('frena la animación al cerrar la pantalla con el aviso en pantalla', async () => {
+    const tree = await renderDetalle();
+    await agregar(tree);
+
+    jest.useFakeTimers();
+    try {
+      await act(async () => {
+        tree.unmount();
+      });
+      arbolActual = null;
+
+      // La animación quedó frenada al desmontar: el reloj no dispara nada.
+      expect(() => jest.advanceTimersByTime(5000)).not.toThrow();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
