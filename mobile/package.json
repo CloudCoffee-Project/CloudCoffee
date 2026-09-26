@@ -67,6 +67,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "format": "prettier --write .",
+    "mock:api": "node mock-server/server.mjs",
     "test": "jest",
     "prepare": "cd .. && git config core.hooksPath mobile/.husky || true"
   },

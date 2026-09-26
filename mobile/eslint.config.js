@@ -33,6 +33,15 @@ module.exports = [
     },
   },
   {
+    // mock-server/ es una herramienta de desarrollo, no código de la app: vive
+    // fuera de src/, no entra en el bundle de Expo y su trabajo es loguear las
+    // peticiones que recibe y las suyas al arrancar. Buffer es global de Node, y
+    // la config de Expo solo declara los del navegador y React Native.
+    files: ['mock-server/**/*.mjs'],
+    languageOptions: { globals: { Buffer: 'readonly' } },
+    rules: { 'no-console': 'off' },
+  },
+  {
     ignores: ['node_modules/**', '.expo/**', 'dist/**'],
   },
 ];
