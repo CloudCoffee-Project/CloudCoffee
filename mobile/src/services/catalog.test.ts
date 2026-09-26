@@ -5,14 +5,13 @@ import {
   CAMPUS_ENDPOINT,
   CATEGORIAS_ENDPOINT,
   PRODUCTOS_ENDPOINT,
-  cafeteriaIdDeCampusSeleccionado,
   guardarCampusSeleccionado,
   leerCampusSeleccionado,
   limpiarCampusSeleccionado,
   listarCampus,
   listarCategorias,
   listarProductos,
-  ofertaDeCafeteria,
+  obtenerProducto,
 } from './catalog';
 // La clave se importa del módulo canónico: si las pantallas la redefinieran,
 // estas aserciones fallarían porque la escritura usaría otra clave.
@@ -126,58 +125,27 @@ describe('listarProductos', () => {
   });
 });
 
-describe('cafeteriaIdDeCampusSeleccionado', () => {
-  it('prefiere la cafetería que trae el catálogo', () => {
-    const campus: Campus = {
-      id: '9f3c1a2b-0000-4000-8000-000000000001',
-      nombre: 'Campus San Francisco',
-      direccion: 'Manuel Montt 056, Temuco',
-      cafeteriaId: '7a1d0000-0000-4000-8000-000000000002',
-    };
-
-    // Un UUID real nunca está en el mapa provisional: sin el campo del DTO
-    // no habría forma de resolver la cafetería.
-    expect(cafeteriaIdDeCampusSeleccionado(campus)).toBe('7a1d0000-0000-4000-8000-000000000002');
+describe('obtenerProducto', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
-  it('cae al mapeo provisional si el catálogo no manda la cafetería', () => {
-    expect(
-      cafeteriaIdDeCampusSeleccionado({
-        id: 'san-juan-pablo-ii',
-        nombre: 'Campus San Juan Pablo II',
-        direccion: 'Peligde, Temuco',
-      })
-    ).toBe('cafe-1');
+  it('llama a GET /v1/catalog/productos/{id} con el campus activo', async () => {
+    const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({ data: productoMock });
+
+    const resultado = await obtenerProducto('prod-1', 'campus-1');
+
+    expect(getSpy).toHaveBeenCalledWith(`${PRODUCTOS_ENDPOINT}/prod-1`, {
+      params: { campusId: 'campus-1' },
+    });
+    expect(resultado).toEqual(productoMock);
   });
 
-  it('devuelve null sin campus, para no inventar una cafetería', () => {
-    expect(cafeteriaIdDeCampusSeleccionado(null)).toBeNull();
-    expect(cafeteriaIdDeCampusSeleccionado(undefined)).toBeNull();
-  });
+  it('propaga el error si el gateway responde con problem+json', async () => {
+    jest.spyOn(httpClient, 'get').mockRejectedValue(new Error('Producto no encontrado'));
 
-  it('devuelve null si el campus es un UUID que el mapa provisional no conoce', () => {
-    expect(
-      cafeteriaIdDeCampusSeleccionado({
-        id: '9f3c1a2b-0000-4000-8000-000000000001',
-        nombre: 'Campus San Francisco',
-        direccion: 'Manuel Montt 056, Temuco',
-      })
-    ).toBeNull();
-  });
-});
-
-describe('ofertaDeCafeteria', () => {
-  it('devuelve la oferta del producto en esa cafetería', () => {
-    expect(ofertaDeCafeteria(productoMock, 'cafe-1')).toEqual(ofertaMock);
-  });
-
-  it('devuelve null si el producto no tiene oferta en esa cafetería', () => {
-    expect(ofertaDeCafeteria(productoMock, 'cafe-otra')).toBeNull();
-  });
-
-  it('devuelve null sin cafetería resuelta o sin ofertas', () => {
-    expect(ofertaDeCafeteria(productoMock, null)).toBeNull();
-    expect(ofertaDeCafeteria({ ...productoMock, offers: undefined }, 'cafe-1')).toBeNull();
+    await expect(obtenerProducto('prod-1', 'campus-1')).rejects.toThrow('Producto no encontrado');
   });
 });
 
@@ -213,23 +181,31 @@ describe('persistencia del campus seleccionado', () => {
       id: 'campus-1',
       nombre: 'Sede',
       direccion: '',
-      cafeteriaId: undefined,
-      cafeteriaNombre: undefined,
+      cafeterias: undefined,
     });
   });
 
-  it('conserva la cafetería del campus al releerlo del almacén', async () => {
-    const conCafeteria: Campus = {
+  it('conserva la lista de cafeterías del campus al releerlo del almacén', async () => {
+    const conCafeterias: Campus = {
       id: '9f3c1a2b-0000-4000-8000-000000000001',
       nombre: 'Campus San Francisco',
       direccion: 'Manuel Montt 056, Temuco',
-      cafeteriaId: '7a1d0000-0000-4000-8000-000000000002',
-      cafeteriaNombre: 'Cafetería Central',
+      cafeterias: [
+        { id: '7a1d0000-0000-4000-8000-000000000002', nombre: 'Cafetería Central' },
+        { id: '7a1d0000-0000-4000-8000-000000000003', nombre: 'Cafetería Norte' },
+      ],
     };
-    mockGetItem.mockResolvedValueOnce(JSON.stringify(conCafeteria));
+    mockGetItem.mockResolvedValueOnce(JSON.stringify(conCafeterias));
 
-    // Sin esto, el precio y el stock se perderían al reabrir la app.
-    expect(await leerCampusSeleccionado()).toEqual(conCafeteria);
+    expect(await leerCampusSeleccionado()).toEqual(conCafeterias);
+  });
+
+  it('descarta cafeterías que no vengan en forma de lista', async () => {
+    mockGetItem.mockResolvedValueOnce(
+      JSON.stringify({ id: 'campus-1', nombre: 'Sede', cafeterias: 'no-es-lista' })
+    );
+
+    expect(await leerCampusSeleccionado()).toHaveProperty('cafeterias', undefined);
   });
 
   it('descarta campos sueltos al releer el campus', async () => {

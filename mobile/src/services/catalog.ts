@@ -1,14 +1,17 @@
 // src/services/catalog.ts
 //
-// Catálogo del cliente (INT4-27/28/29): campus, categorías y productos. Es la
-// única fuente de datos del catálogo para la app móvil: las pantallas nunca
-// pegan httpClient ni definen sus propios tipos.
+// Catálogo del cliente (INT4-27/28/29, INT4-30 detalle): campus, categorías,
+// productos y el detalle de un producto. Es la única fuente de datos del
+// catálogo para la app móvil: las pantallas nunca pegan httpClient ni definen
+// sus propios tipos.
 //
 // Contrato (doc del equipo, app móvil):
 //   - GET /v1/catalog/campus             → campus disponibles.
 //   - GET /v1/catalog/categorias         → categorías del catálogo.
 //   - GET /v1/catalog/productos          → productos del campus, con filtro
 //                                          opcional de categoría.
+//   - GET /v1/catalog/productos/{id}     → detalle de un producto (INT4-30),
+//                                          con sus ofertas en el campus.
 //
 // El gateway ya enruta /v1/catalog/** y declara públicas las consultas GET de
 // /campus y /categorias (GatewaySecurityConfig, INT2-33). La ruta de productos
@@ -20,18 +23,23 @@
 // vía toApiError con botón de reintento — nunca una lista hardcodeada. Mismo
 // contrato provisional que ordenes.ts y seguimientos.ts.
 //
-// Los tipos vienen de src/types/domain.ts (Campus, Categoria, Producto,
-// Oferta): no se redefinen acá ni en las pantallas, para que el contrato del
-// dominio tenga un solo lugar.
+// Los tipos vienen de src/types/domain.ts (Campus, Cafeteria, Categoria,
+// Oferta, Producto): no se redefinen acá ni en las pantallas, para que el
+// contrato del dominio tenga un solo lugar.
 //
 // La búsqueda de texto NO es un parámetro del endpoint: el servicio entrega el
 // catálogo del campus y la pantalla filtra sobre esos datos reales.
+//
+// Modelo de relación (ver backend/catalog-service): Campus 1:N Cafeteria, y
+// cada Oferta pertenece a una cafeteria de un campus. Por eso un producto puede
+// tener varias ofertas con precio y stock distintos, una por cafeteria del
+// campus. La app las lista todas; no elige una sola.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { httpClient } from './httpClient';
-import { CAMPUS_STORAGE_KEY, cafeteriaIdDeCampus } from './campus';
-import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
+import { CAMPUS_STORAGE_KEY } from './campus';
+import type { Campus, Categoria, Producto } from '../types/domain';
 
 // Rutas del dominio de catálogo dentro del gateway.
 export const CAMPUS_ENDPOINT = '/v1/catalog/campus';
@@ -66,16 +74,16 @@ export async function listarProductos(campusId: string, categoriaId?: string): P
 }
 
 /**
- * Devuelve la oferta del producto en una cafetería concreta, o null si el
- * producto no tiene oferta ahí. El precio y el stock que muestra la tarjeta
- * salen siempre de esta oferta: nunca del producto, que no los tiene.
+ * Llama a GET /v1/catalog/productos/{id} para el detalle de un producto (INT4-30).
+ * El campus se manda siempre: el precio y el stock del detalle son los de esa
+ * sede, no los de otra.
  */
-export function ofertaDeCafeteria(producto: Producto, cafeteriaId: string | null): Oferta | null {
-  if (!cafeteriaId || !producto.offers) {
-    return null;
-  }
+export async function obtenerProducto(productoId: string, campusId: string): Promise<Producto> {
+  const response = await httpClient.get<Producto>(`${PRODUCTOS_ENDPOINT}/${productoId}`, {
+    params: { campusId },
+  });
 
-  return producto.offers.find((oferta) => oferta.cafeteriaId === cafeteriaId) ?? null;
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,14 +110,13 @@ export async function leerCampusSeleccionado(): Promise<Campus | null> {
     const campus = JSON.parse(crudo) as Partial<Campus> | null;
     if (campus && typeof campus.id === 'string' && typeof campus.nombre === 'string') {
       // Se reconstruye el campus en vez de devolver el objeto crudo para
-      // descartar campos sueltos, conservando la cafeteria que trae el
-      // catálogo: es la que permite leer precios y stock después.
+      // descartar campos sueltos, conservando las cafeterías que trae el
+      // catálogo: son las que acotan dónde se puede retirar el pedido.
       return {
         id: campus.id,
         nombre: campus.nombre,
         direccion: campus.direccion ?? '',
-        cafeteriaId: campus.cafeteriaId,
-        cafeteriaNombre: campus.cafeteriaNombre,
+        cafeterias: Array.isArray(campus.cafeterias) ? campus.cafeterias : undefined,
       };
     }
 
@@ -117,30 +124,6 @@ export async function leerCampusSeleccionado(): Promise<Campus | null> {
   } catch {
     return null;
   }
-}
-
-/**
- * Resuelve la cafetería cuyo catálogo se está mostrando.
- *
- * Fuente principal: el propio DTO del campus, que ya trae cafeteriaId. Es la
- * forma definitiva y no depende de nada local.
- *
- * TODO: el gateway sirve GET /v1/catalog/campus desde INT2-33, pero el
- * catalog-service todavía no implementa el controller y su entidad Campus
- * solo tiene name/location. Para cerrar el contrato el DTO de campus debe
- * exponer cafeteriaId (y cafeteriaNombre) con los nombres de domain.ts.
- *
- * Mientras tanto se cae al mapeo provisional de services/campus.ts, que
- * cubre los cuatro campus con ids slug del mockup. Ese mapeo devuelve null
- * para los UUID reales: si pasa eso, el catálogo se muestra sin precios ni
- * stock hasta que el backend entregue la cafetería. No se inventan datos.
- */
-export function cafeteriaIdDeCampusSeleccionado(campus: Campus | null | undefined): string | null {
-  if (!campus) {
-    return null;
-  }
-
-  return campus.cafeteriaId ?? cafeteriaIdDeCampus(campus.id);
 }
 
 /** Guarda el campus elegido por el cliente como sede activa. */

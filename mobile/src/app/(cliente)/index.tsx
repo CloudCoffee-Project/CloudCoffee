@@ -10,9 +10,11 @@
 // muestra el error normalizado (toApiError) con botón de reintento, sin
 // fallback a datos hardcodeados.
 //
-// Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de la
-// Oferta del producto en la cafetería del campus (services/campus.ts resuelve
-// esa relación): Producto no tiene precio propio.
+// Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de las
+// Ofertas del producto: Producto no tiene precio propio. Se listan todas, una
+// por cafetería del campus, porque el modelo es Campus 1:N Cafeteria y cada
+// punto de retiro cobra su propio precio. Tocar la tarjeta abre el detalle
+// (INT4-30), donde se elige en cuál retirar.
 //
 // Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
 // acentos amarillos y bordes cálidos) replicada del mockup web.
@@ -32,13 +34,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
-import {
-  cafeteriaIdDeCampusSeleccionado,
-  leerCampusSeleccionado,
-  listarCategorias,
-  listarProductos,
-  ofertaDeCafeteria,
-} from '../../services/catalog';
+import { leerCampusSeleccionado, listarCategorias, listarProductos } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
@@ -157,12 +153,6 @@ export default function CatalogoProductosScreen() {
     return productos.filter((producto) => coincideConBusqueda(producto, query));
   }, [productos, busqueda]);
 
-  // La cafetería activa se resuelve desde el campus elegido: primero la que
-  // trae el propio catálogo y, si todavía no está, el mapeo provisional de
-  // services/campus.ts. Las ofertas del producto se resuelven contra ella, así
-  // que el precio que se muestra es el de esa cafetería y no el de otra sede.
-  const cafeteriaActual = cafeteriaIdDeCampusSeleccionado(campus);
-
   let contenido;
 
   if (errorCarga !== null) {
@@ -206,10 +196,16 @@ export default function CatalogoProductosScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const oferta = ofertaDeCafeteria(item, cafeteriaActual);
+          const ofertas = item.offers ?? [];
 
           return (
-            <View style={styles.productCard} testID={`catalogo-producto-${item.id}`}>
+            <Pressable
+              style={({ pressed }) => [styles.productCard, pressed && styles.btnPresionado]}
+              onPress={() =>
+                router.push({ pathname: '/(cliente)/producto/[id]', params: { id: item.id } })
+              }
+              testID={`catalogo-producto-${item.id}`}
+            >
               <View style={styles.productHeader}>
                 <View style={styles.productIconContainer}>
                   <Text style={styles.productIconText}>🍴</Text>
@@ -221,30 +217,36 @@ export default function CatalogoProductosScreen() {
               </View>
 
               <View style={styles.offerList}>
-                {oferta ? (
-                  <View style={styles.offerRow} testID={`catalogo-oferta-${oferta.ofertaId}`}>
-                    <View style={styles.offerInfo}>
-                      <Text style={styles.offerCafeName}>{oferta.cafeteriaNombre}</Text>
-                      <Text style={styles.offerPrecio}>{formatearPrecio(oferta.precio)}</Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.offerStock,
-                        !oferta.disponible || oferta.stock <= 0
-                          ? styles.offerStockAgotado
-                          : styles.offerStockDisponible,
-                      ]}
+                {ofertas.length > 0 ? (
+                  ofertas.map((oferta) => (
+                    <View
+                      key={oferta.ofertaId}
+                      style={styles.offerRow}
+                      testID={`catalogo-oferta-${oferta.ofertaId}`}
                     >
-                      {formatearDisponibilidad(oferta)}
-                    </Text>
-                  </View>
+                      <View style={styles.offerInfo}>
+                        <Text style={styles.offerCafeName}>{oferta.cafeteriaNombre}</Text>
+                        <Text style={styles.offerPrecio}>{formatearPrecio(oferta.precio)}</Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.offerStock,
+                          !oferta.disponible || oferta.stock <= 0
+                            ? styles.offerStockAgotado
+                            : styles.offerStockDisponible,
+                        ]}
+                      >
+                        {formatearDisponibilidad(oferta)}
+                      </Text>
+                    </View>
+                  ))
                 ) : (
                   <Text style={styles.noOfertas} testID={`catalogo-sin-oferta-${item.id}`}>
                     Sin ofertas disponibles en este campus.
                   </Text>
                 )}
               </View>
-            </View>
+            </Pressable>
           );
         }}
       />

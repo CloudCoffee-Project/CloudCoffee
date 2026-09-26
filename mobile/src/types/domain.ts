@@ -143,17 +143,24 @@ export interface CambiarContrasenaRequest {
   nuevaPassword: string;
 }
 
+// Cafeteria de retiro dentro de un campus. El modelo del backend es 1:N
+// (Campus.caferias es un @OneToMany), asi que un campus puede tener varias y
+// cada una tiene su propio precio y stock para un mismo producto.
+export interface Cafeteria {
+  id: string;
+  nombre: string;
+}
+
 export interface Campus {
   id: string;
   nombre: string;
   direccion: string;
-  // Cafeteria principal del campus. El catalogo la entrega junto al campus
-  // (contrato INT4-27) para que el cliente resuelva precios y stock sin
-  // depender de un mapeo local. Opcionales a proposito: mientras el backend
-  // no los mande, el catalogo sigue funcionando con el mapeo provisional de
-  // services/campus.ts.
-  cafeteriaId?: string;
-  cafeteriaNombre?: string;
+  // Cafeterias del campus. Opcional a proposito: la app no la necesita para
+  // leer precios (eso sale de Producto.offers, que el endpoint de productos
+  // devuelve filtrado por campus), solo para no ofrecer el retiro en una sede
+  // ajena. Mientras el backend no la mande, la app muestra las ofertas que
+  // recibe y no inventa ninguna.
+  cafeterias?: Cafeteria[];
 }
 
 export interface Categoria {
@@ -161,6 +168,10 @@ export interface Categoria {
   nombre: string;
 }
 
+// Oferta de un producto en una cafeteria concreta. Un mismo producto puede
+// tener varias ofertas, una por cafeteria del campus, con precio y stock
+// propios: por eso la app lista todas las que le entrega el endpoint de
+// productos y no elige una sola.
 export interface Oferta {
   ofertaId: string;
   cafeteriaId: string;
@@ -175,6 +186,9 @@ export interface Producto {
   nombre: string;
   descripcion: string;
   categoriaId: string;
+  // Ofertas del producto en las cafeterias del campus consultado. El backend
+  // las agrupa desde Offer (que tiene la FK product_id) y acota el resultado al
+  // campus del parametro: lo que llega aca pertenece a la sede activa.
   offers?: Oferta[];
 }
 

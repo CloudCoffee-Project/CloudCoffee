@@ -16,15 +16,9 @@ jest.mock('../services/catalog', () => ({
   leerCampusSeleccionado: jest.fn(),
   listarCategorias: jest.fn(),
   listarProductos: jest.fn(),
-  // Lógica pura: la pantalla usa la implementación real para resolver precios.
-  cafeteriaIdDeCampusSeleccionado:
-    jest.requireActual('../services/catalog').cafeteriaIdDeCampusSeleccionado,
-  ofertaDeCafeteria: jest.requireActual('../services/catalog').ofertaDeCafeteria,
 }));
 
 // AsyncStorage no existe como módulo nativo en Jest; se mockea su superficie.
-// La pantalla usa ofertaDeCafeteria real, así que el servicio se carga con
-// requireActual y arrastra su import de AsyncStorage.
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(async () => null),
   setItem: jest.fn(async () => undefined),
@@ -175,15 +169,35 @@ describe('Catálogo del cliente', () => {
     expect(precio.props.children).toBe('$1.800');
   });
 
-  it('muestra el precio usando la cafetería que trae el catálogo, no el mapeo local', async () => {
-    // Campus con UUID real: el mapeo provisional de services/campus.ts no lo
-    // conoce, así que el precio solo aparece si se usa cafeteriaId del DTO.
+  it('lista todas las ofertas del producto, una por cafetería del campus', async () => {
+    // El modelo es Campus 1:N Cafeteria: el mismo producto puede tener un
+    // precio distinto en cada punto de retiro de la sede.
+    mockListarProductos.mockResolvedValue([
+      producto('p-2-ofertas', {
+        offers: [
+          oferta({ ofertaId: 'of-central', cafeteriaNombre: 'Cafetería Central', precio: 1800 }),
+          oferta({ ofertaId: 'of-norte', cafeteriaNombre: 'Cafetería Norte', precio: 2100 }),
+        ],
+      }),
+    ]);
+
+    const tree = await renderCatalogo();
+
+    const central = tree.root.findByProps({ testID: 'catalogo-oferta-of-central' });
+    const norte = tree.root.findByProps({ testID: 'catalogo-oferta-of-norte' });
+    expect(textoDe(central)).toContain('Cafetería Central');
+    expect(textoDe(central)).toContain('$1.800');
+    expect(textoDe(norte)).toContain('Cafetería Norte');
+    expect(textoDe(norte)).toContain('$2.100');
+  });
+
+  it('muestra el precio aunque el campus no declare cafeterías', async () => {
+    // El precio sale de Producto.offers, que el endpoint ya devuelve acotado al
+    // campus: no hace falta que el DTO del campus traiga la cafetería.
     mockLeerCampus.mockResolvedValue({
       id: '9f3c1a2b-0000-4000-8000-000000000001',
       nombre: 'Campus Nordico',
       direccion: 'Ruta 5, Temuco',
-      cafeteriaId: 'cafe-1',
-      cafeteriaNombre: 'Cafetería Central',
     });
 
     const tree = await renderCatalogo();
@@ -196,18 +210,17 @@ describe('Catálogo del cliente', () => {
     expect(textoDe(fila)).toContain('$1.800');
   });
 
-  it('avisa que no hay precios cuando el campus no resuelve cafetería', async () => {
-    // UUID sin cafeteriaId y fuera del mapa provisional: no hay cafetería que
-    // resolver, así que se avisa en vez de mostrar el precio de otra sede.
-    mockLeerCampus.mockResolvedValue({
-      id: '9f3c1a2b-0000-4000-8000-000000000001',
-      nombre: 'Campus Nordico',
-      direccion: 'Ruta 5, Temuco',
-    });
-
+  it('abre el detalle del producto al tocar la tarjeta', async () => {
     const tree = await renderCatalogo();
 
-    expect(tree.root.findByProps({ testID: 'catalogo-sin-oferta-p-1' })).toBeTruthy();
+    await act(async () => {
+      tree.root.findByProps({ testID: 'catalogo-producto-p-1' }).props.onPress();
+    });
+
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/(cliente)/producto/[id]',
+      params: { id: 'p-1' },
+    });
   });
 
   it('indica agotado cuando la oferta no tiene stock', async () => {
@@ -245,10 +258,8 @@ describe('Catálogo del cliente', () => {
     expect(textoDe(fila)).toContain('Agotado');
   });
 
-  it('avisa cuando el producto no tiene oferta en la cafetería del campus', async () => {
-    mockListarProductos.mockResolvedValue([
-      producto('p-sin-oferta', { offers: [oferta({ cafeteriaId: 'cafe-otra-sede' })] }),
-    ]);
+  it('avisa cuando el producto no tiene ninguna oferta en el campus', async () => {
+    mockListarProductos.mockResolvedValue([producto('p-sin-oferta', { offers: [] })]);
 
     const tree = await renderCatalogo();
 
