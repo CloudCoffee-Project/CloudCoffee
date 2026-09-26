@@ -50,7 +50,8 @@ public class NotificationHistory {
             String eventType,
             String trackingId,
             Map<String, Object> payload,
-            String status
+            String status,
+            String errorDetail
     ) {
         this.id = UUID.randomUUID();
         this.eventId = eventId;
@@ -58,43 +59,28 @@ public class NotificationHistory {
         this.trackingId = trackingId;
         this.payload = payload;
         this.status = status;
+        this.errorDetail = errorDetail;
         this.processedAt = Instant.now();
         this.createdAt = Instant.now();
     }
 
-    public UUID getId() {
-        return id;
+    public NotificationHistory(
+            UUID eventId,
+            String eventType,
+            String trackingId,
+            Map<String, Object> payload,
+            String status
+    ) {
+        this(eventId, eventType, trackingId, payload, status, null);
     }
 
-    public UUID getEventId() {
-        return eventId;
-    }
-
-    public String getEventType() {
-        return eventType;
-    }
-
-    public String getTrackingId() {
-        return trackingId;
-    }
-
-    public Map<String, Object> getPayload() {
-        return payload;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public String getErrorDetail() {
-        return errorDetail;
-    }
-
-    public Instant getProcessedAt() {
-        return processedAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+    public UUID getId() { return id; }
+    public UUID getEventId() { return eventId; }
+    public String getEventType() { return eventType; }
+    public String getTrackingId() { return trackingId; }
+    public Map<String, Object> getPayload() { return payload; }
+    public String getStatus() { return status; }
+    public String getErrorDetail() { return errorDetail; }
+    public Instant getProcessedAt() { return processedAt; }
+    public Instant getCreatedAt() { return createdAt; }
 }
