@@ -13,6 +13,9 @@ import { ApiError } from '../services/httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 jest.mock('../services/catalog', () => ({
+  // requireActual para conservar las funciones puras (ordenarOfertasPorPrecio) y
+  // mockear solo el tráfico HTTP de este módulo.
+  ...jest.requireActual('../services/catalog'),
   leerCampusSeleccionado: jest.fn(),
   listarCategorias: jest.fn(),
   obtenerProducto: jest.fn(),
@@ -399,5 +402,137 @@ describe('Detalle de producto', () => {
 
     expect(mockObtenerProducto).not.toHaveBeenCalled();
     expect(tree.root.findByProps({ testID: 'producto-detalle-error' })).toBeTruthy();
+  });
+});
+
+// Orden de las cafeterías por precio (INT4-31). El servicio entrega las ofertas
+// en el orden que le sale de la consulta, así que los datos de estas pruebas van
+// deliberadamente desordenados: si la pantalla no ordenara, el orden de salida
+// sería siempre el de entrada.
+describe('comparación de precios entre cafeterías (INT4-31)', () => {
+  const PREFIJO = 'producto-detalle-oferta-';
+
+  // findAll devuelve los nodos en orden de render, que es el orden en pantalla.
+  // El mismo testID puede aparecer en el Pressable y en la View que renderiza,
+  // así que se deduplica conservando la primera aparición.
+  function idsOfertasEnPantalla(tree: ReactTestRenderer): string[] {
+    const ids = tree.root
+      .findAll(
+        (nodo) => typeof nodo.props?.testID === 'string' && nodo.props.testID.startsWith(PREFIJO)
+      )
+      .map((nodo) => (nodo.props.testID as string).slice(PREFIJO.length));
+
+    return ids.filter((id, i) => ids.indexOf(id) === i);
+  }
+
+  const tresOfertas = [
+    oferta({ ofertaId: 'of-sur', cafeteriaNombre: 'Cafetería Sur', precio: 2100, stock: 2 }),
+    oferta({
+      ofertaId: 'of-central',
+      cafeteriaNombre: 'Cafetería Central',
+      precio: 1500,
+      stock: 4,
+    }),
+    oferta({ ofertaId: 'of-norte', cafeteriaNombre: 'Cafetería Norte', precio: 1800, stock: 3 }),
+  ];
+
+  it('muestra las cafeterías de menor a mayor aunque el servicio entregue otro orden', async () => {
+    mockObtenerProducto.mockResolvedValue(producto({ offers: tresOfertas }));
+
+    const tree = await renderDetalle();
+
+    expect(idsOfertasEnPantalla(tree)).toEqual(['of-central', 'of-norte', 'of-sur']);
+  });
+
+  it('deja las agotadas en la escalera de precios, no al final', async () => {
+    // Agotada es la más barata: tiene que quedar primera, en su precio.
+    mockObtenerProducto.mockResolvedValue(
+      producto({
+        offers: [
+          oferta({
+            ofertaId: 'of-agotada',
+            cafeteriaNombre: 'Cafetería Agotada',
+            precio: 1200,
+            stock: 0,
+            disponible: false,
+          }),
+          oferta({
+            ofertaId: 'of-norte',
+            cafeteriaNombre: 'Cafetería Norte',
+            precio: 1800,
+            stock: 3,
+          }),
+          oferta({ ofertaId: 'of-sur', cafeteriaNombre: 'Cafetería Sur', precio: 2100, stock: 2 }),
+        ],
+      })
+    );
+
+    const tree = await renderDetalle();
+
+    expect(idsOfertasEnPantalla(tree)).toEqual(['of-agotada', 'of-norte', 'of-sur']);
+  });
+
+  it('preselecciona la más barata disponible', async () => {
+    mockObtenerProducto.mockResolvedValue(producto({ offers: tresOfertas }));
+
+    const tree = await renderDetalle();
+
+    // Central a $1.500, que es la primera de la lista y la más barata.
+    expect(textoDe(tree.root.findByProps({ testID: 'producto-detalle-agregar' }))).toContain(
+      '$1.500'
+    );
+  });
+
+  it('preselecciona la más barata disponible aunque haya una agotada más barata', async () => {
+    // La agotada de $1.200 va primera en la lista, pero no se puede comprar: la
+    // que debe quedar seleccionada es la más barata con stock.
+    mockObtenerProducto.mockResolvedValue(
+      producto({
+        offers: [
+          oferta({
+            ofertaId: 'of-agotada',
+            cafeteriaNombre: 'Cafetería Agotada',
+            precio: 1200,
+            stock: 0,
+            disponible: false,
+          }),
+          oferta({
+            ofertaId: 'of-norte',
+            cafeteriaNombre: 'Cafetería Norte',
+            precio: 1800,
+            stock: 3,
+          }),
+        ],
+      })
+    );
+
+    const tree = await renderDetalle();
+
+    expect(textoDe(tree.root.findByProps({ testID: 'producto-detalle-agregar' }))).toContain(
+      '$1.800'
+    );
+  });
+
+  it('mantiene el orden al recargar el producto', async () => {
+    mockObtenerProducto.mockResolvedValue(producto({ offers: tresOfertas }));
+    const tree = await renderDetalle();
+
+    // Reintento de carga: el producto vuelve a pedirse desde el servicio.
+    const llamadas = mockUseFocusEffect.mock.calls;
+    await act(async () => {
+      llamadas[llamadas.length - 1][0]();
+    });
+
+    expect(idsOfertasEnPantalla(tree)).toEqual(['of-central', 'of-norte', 'of-sur']);
+  });
+
+  it('no ofrece control de orden: la lista no se puede invertir', async () => {
+    mockObtenerProducto.mockResolvedValue(producto({ offers: tresOfertas }));
+
+    const tree = await renderDetalle();
+
+    expect(
+      tree.root.findAll((nodo) => nodo.props?.testID === 'producto-detalle-orden')
+    ).toHaveLength(0);
   });
 });

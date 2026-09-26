@@ -12,6 +12,7 @@ import {
   listarCategorias,
   listarProductos,
   obtenerProducto,
+  ordenarOfertasPorPrecio,
 } from './catalog';
 // La clave se importa del módulo canónico: si las pantallas la redefinieran,
 // estas aserciones fallarían porque la escritura usaría otra clave.
@@ -146,6 +147,100 @@ describe('obtenerProducto', () => {
     jest.spyOn(httpClient, 'get').mockRejectedValue(new Error('Producto no encontrado'));
 
     await expect(obtenerProducto('prod-1', 'campus-1')).rejects.toThrow('Producto no encontrado');
+  });
+});
+
+describe('comparación de precios entre cafeterías (INT4-31)', () => {
+  // Tres cafeterías con precios distintos y stock varied, entregadas en un orden
+  // que no coincide con el alfabético ni con el de precio: si la función no
+  // ordenara, estas pruebas no distinguirían nada.
+  const norte = {
+    ...ofertaMock,
+    ofertaId: 'of-norte',
+    cafeteriaNombre: 'Cafetería Norte',
+    precio: 1800,
+    stock: 3,
+  };
+  const sur = {
+    ...ofertaMock,
+    ofertaId: 'of-sur',
+    cafeteriaNombre: 'Cafetería Sur',
+    precio: 2100,
+    stock: 5,
+  };
+  const central = {
+    ...ofertaMock,
+    ofertaId: 'of-central',
+    cafeteriaNombre: 'Cafetería Central',
+    precio: 1500,
+    stock: 0,
+    disponible: false,
+  };
+
+  const sinOrden = [sur, norte, central];
+
+  describe('ordenarOfertasPorPrecio', () => {
+    it('ordena de menor a mayor', () => {
+      const resultado = ordenarOfertasPorPrecio(sinOrden);
+
+      expect(resultado.map((o) => o.ofertaId)).toEqual(['of-central', 'of-norte', 'of-sur']);
+    });
+
+    it('deja las agotadas en la escalera, no al final', () => {
+      // Central está agotada y es la más barata: tiene que quedar primero, en su
+      // precio. Mandarla al final rompería el criterio que la lista dice aplicar.
+      const resultado = ordenarOfertasPorPrecio(sinOrden);
+
+      expect(resultado[0].ofertaId).toBe('of-central');
+      expect(resultado[0].stock).toBe(0);
+    });
+
+    it('desempata a igual precio por nombre de cafetería', () => {
+      const a = {
+        ...ofertaMock,
+        ofertaId: 'of-b',
+        cafeteriaNombre: 'Cafetería Beta',
+        precio: 2000,
+      };
+      const b = {
+        ...ofertaMock,
+        ofertaId: 'of-a',
+        cafeteriaNombre: 'Cafetería Alfa',
+        precio: 2000,
+      };
+
+      const resultado = ordenarOfertasPorPrecio([a, b]);
+
+      expect(resultado.map((o) => o.ofertaId)).toEqual(['of-a', 'of-b']);
+    });
+
+    it('no muta el array recibido', () => {
+      const original = [...sinOrden];
+
+      ordenarOfertasPorPrecio(sinOrden);
+
+      expect(sinOrden).toEqual(original);
+    });
+
+    it('devuelve una copia aunque la lista ya venga ordenada', () => {
+      const original = [central, norte, sur];
+
+      const resultado = ordenarOfertasPorPrecio(original);
+
+      expect(resultado).not.toBe(original);
+      expect(resultado).toEqual(original);
+    });
+
+    it('devuelve lista vacía sin Offers', () => {
+      expect(ordenarOfertasPorPrecio([])).toEqual([]);
+    });
+
+    it('no revierte los precios ni el stock: solo los reordena', () => {
+      const resultado = ordenarOfertasPorPrecio(sinOrden);
+
+      expect(resultado.map((o) => o.precio)).toEqual([1500, 1800, 2100]);
+      expect(resultado.map((o) => o.stock)).toEqual([0, 3, 5]);
+    });
   });
 });
 

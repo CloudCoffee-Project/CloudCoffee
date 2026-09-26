@@ -4,6 +4,9 @@
 // todas sus ofertas (una por cafetería de esa sede), deja elegir dónde retirar
 // y con qué cantidad, y muestra el total real de esa oferta.
 //
+// INT4-31: las cafeterías se comparan por precio, así que la lista va siempre de
+// menor a mayor, sin control de orden en pantalla.
+//
 // Los datos salen de services/catalog.ts:
 //   - GET /v1/catalog/productos/{id}?campusId= → el producto con sus ofertas.
 //   - GET /v1/catalog/categorias                 → para poner el nombre de la
@@ -20,7 +23,7 @@
 // Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
 // acentos amarillos y bordes cálidos) replicada del mockup web.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +33,7 @@ import {
   leerCampusSeleccionado,
   listarCategorias,
   obtenerProducto,
+  ordenarOfertasPorPrecio,
 } from '../../../services/catalog';
 import { ApiProblem, toApiError } from '../../../services/httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../../../types/domain';
@@ -103,13 +107,17 @@ export default function DetalleProductoScreen() {
     }, [cargar])
   );
 
-  const ofertas = producto?.offers ?? [];
+  // INT4-31: las cafeterías se comparan por precio, así que la lista va de menor
+  // a mayor y las agotadas quedan en su lugar en la escalera, no al final. Se
+  // ordena sobre una copia: `producto.offers` es la respuesta del servicio y no
+  // debe reordenarse en el sitio.
+  const ofertas = useMemo(() => ordenarOfertasPorPrecio(producto?.offers ?? []), [producto]);
   const disponibles = ofertas.filter((oferta) => !estaAgotada(oferta));
   const elegida = ofertas.find((oferta) => oferta.ofertaId === ofertaElegida) ?? null;
 
   // Oferta con la que se está trabajando: la elegida si sigue disponible, o la
-  // primera disponible mientras el usuario no elija. Así el stepper y el total
-  // funcionan desde el inicio sobre la oferta que se ve destacada.
+  // más barata disponible mientras el usuario no elija. Así el stepper y el total
+  // funcionan desde el inicio sobre la oferta que se ve destacada arriba.
   const activa = estaAgotada(elegida) ? (disponibles[0] ?? null) : elegida;
 
   const nombreCategoria = categorias.find((c) => c.id === producto?.categoriaId)?.nombre;

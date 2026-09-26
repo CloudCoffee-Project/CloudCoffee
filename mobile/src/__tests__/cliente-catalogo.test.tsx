@@ -13,6 +13,9 @@ import { ApiError } from '../services/httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 jest.mock('../services/catalog', () => ({
+  // requireActual para conservar las funciones puras (ordenarOfertasPorPrecio) y
+  // mockear solo el tráfico HTTP de este módulo.
+  ...jest.requireActual('../services/catalog'),
   leerCampusSeleccionado: jest.fn(),
   listarCategorias: jest.fn(),
   listarProductos: jest.fn(),
@@ -335,5 +338,105 @@ describe('Catálogo del cliente', () => {
     });
 
     expect(mockListarCategorias.mock.calls.length).toBe(llamadasAntes + 1);
+  });
+});
+
+// Orden de las cafeterías por precio dentro de cada tarjeta (INT4-31). Mismo
+// criterio que el detalle: el servicio no garantiza el orden de las ofertas, así
+// que los datos entran desordenados a propósito.
+describe('comparación de precios entre cafeterías (INT4-31)', () => {
+  const PREFIJO = 'catalogo-oferta-';
+
+  // Solo las ofertas del producto p-1, para no mezclar las de las otras tarjetas.
+  function idsOfertasDeP1(tree: ReactTestRenderer): string[] {
+    const ids = tree.root
+      .findAll(
+        (nodo) => typeof nodo.props?.testID === 'string' && nodo.props.testID.startsWith(PREFIJO)
+      )
+      .map((nodo) => (nodo.props.testID as string).slice(PREFIJO.length))
+      .filter((id) => id.startsWith('of-p1-'));
+
+    return ids.filter((id, i) => ids.indexOf(id) === i);
+  }
+
+  function catalogoConTresCafeterias(): Producto[] {
+    return [
+      producto('p-1', {
+        nombre: 'Café Americano 12oz',
+        offers: [
+          oferta({
+            ofertaId: 'of-p1-sur',
+            cafeteriaNombre: 'Cafetería Sur',
+            precio: 2100,
+            stock: 2,
+          }),
+          oferta({
+            ofertaId: 'of-p1-central',
+            cafeteriaNombre: 'Cafetería Central',
+            precio: 1500,
+            stock: 4,
+          }),
+          oferta({
+            ofertaId: 'of-p1-norte',
+            cafeteriaNombre: 'Cafetería Norte',
+            precio: 1800,
+            stock: 3,
+          }),
+        ],
+      }),
+      producto('p-2', { nombre: 'Croissant Jamón y Queso' }),
+    ];
+  }
+
+  beforeEach(() => {
+    mockListarProductos.mockResolvedValue(catalogoConTresCafeterias());
+  });
+
+  it('ordena las cafeterías de la tarjeta de menor a mayor', async () => {
+    const tree = await renderCatalogo();
+
+    expect(idsOfertasDeP1(tree)).toEqual(['of-p1-central', 'of-p1-norte', 'of-p1-sur']);
+  });
+
+  it('deja las agotadas en la escalera de precios, no al final', async () => {
+    mockListarProductos.mockResolvedValue([
+      producto('p-1', {
+        offers: [
+          oferta({
+            ofertaId: 'of-p1-agotada',
+            cafeteriaNombre: 'Cafetería Agotada',
+            precio: 1200,
+            stock: 0,
+            disponible: false,
+          }),
+          oferta({
+            ofertaId: 'of-p1-norte',
+            cafeteriaNombre: 'Cafetería Norte',
+            precio: 1800,
+            stock: 3,
+          }),
+        ],
+      }),
+    ]);
+
+    const tree = await renderCatalogo();
+
+    expect(idsOfertasDeP1(tree)).toEqual(['of-p1-agotada', 'of-p1-norte']);
+  });
+
+  it('mantiene el orden al cambiar la búsqueda', async () => {
+    const tree = await renderCatalogo();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'catalogo-buscar' }).props.onChangeText('Café');
+    });
+
+    expect(idsOfertasDeP1(tree)).toEqual(['of-p1-central', 'of-p1-norte', 'of-p1-sur']);
+  });
+
+  it('no ofrece control de orden: la lista no se puede invertir', async () => {
+    const tree = await renderCatalogo();
+
+    expect(tree.root.findAll((nodo) => nodo.props?.testID === 'catalogo-orden')).toHaveLength(0);
   });
 });
