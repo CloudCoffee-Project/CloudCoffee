@@ -5,6 +5,7 @@ import {
   CAMPUS_ENDPOINT,
   CATEGORIAS_ENDPOINT,
   PRODUCTOS_ENDPOINT,
+  cafeteriaIdDeCampusSeleccionado,
   guardarCampusSeleccionado,
   leerCampusSeleccionado,
   limpiarCampusSeleccionado,
@@ -125,6 +126,46 @@ describe('listarProductos', () => {
   });
 });
 
+describe('cafeteriaIdDeCampusSeleccionado', () => {
+  it('prefiere la cafetería que trae el catálogo', () => {
+    const campus: Campus = {
+      id: '9f3c1a2b-0000-4000-8000-000000000001',
+      nombre: 'Campus San Francisco',
+      direccion: 'Manuel Montt 056, Temuco',
+      cafeteriaId: '7a1d0000-0000-4000-8000-000000000002',
+    };
+
+    // Un UUID real nunca está en el mapa provisional: sin el campo del DTO
+    // no habría forma de resolver la cafetería.
+    expect(cafeteriaIdDeCampusSeleccionado(campus)).toBe('7a1d0000-0000-4000-8000-000000000002');
+  });
+
+  it('cae al mapeo provisional si el catálogo no manda la cafetería', () => {
+    expect(
+      cafeteriaIdDeCampusSeleccionado({
+        id: 'san-juan-pablo-ii',
+        nombre: 'Campus San Juan Pablo II',
+        direccion: 'Peligde, Temuco',
+      })
+    ).toBe('cafe-1');
+  });
+
+  it('devuelve null sin campus, para no inventar una cafetería', () => {
+    expect(cafeteriaIdDeCampusSeleccionado(null)).toBeNull();
+    expect(cafeteriaIdDeCampusSeleccionado(undefined)).toBeNull();
+  });
+
+  it('devuelve null si el campus es un UUID que el mapa provisional no conoce', () => {
+    expect(
+      cafeteriaIdDeCampusSeleccionado({
+        id: '9f3c1a2b-0000-4000-8000-000000000001',
+        nombre: 'Campus San Francisco',
+        direccion: 'Manuel Montt 056, Temuco',
+      })
+    ).toBeNull();
+  });
+});
+
 describe('ofertaDeCafeteria', () => {
   it('devuelve la oferta del producto en esa cafetería', () => {
     expect(ofertaDeCafeteria(productoMock, 'cafe-1')).toEqual(ofertaMock);
@@ -172,7 +213,36 @@ describe('persistencia del campus seleccionado', () => {
       id: 'campus-1',
       nombre: 'Sede',
       direccion: '',
+      cafeteriaId: undefined,
+      cafeteriaNombre: undefined,
     });
+  });
+
+  it('conserva la cafetería del campus al releerlo del almacén', async () => {
+    const conCafeteria: Campus = {
+      id: '9f3c1a2b-0000-4000-8000-000000000001',
+      nombre: 'Campus San Francisco',
+      direccion: 'Manuel Montt 056, Temuco',
+      cafeteriaId: '7a1d0000-0000-4000-8000-000000000002',
+      cafeteriaNombre: 'Cafetería Central',
+    };
+    mockGetItem.mockResolvedValueOnce(JSON.stringify(conCafeteria));
+
+    // Sin esto, el precio y el stock se perderían al reabrir la app.
+    expect(await leerCampusSeleccionado()).toEqual(conCafeteria);
+  });
+
+  it('descarta campos sueltos al releer el campus', async () => {
+    mockGetItem.mockResolvedValueOnce(
+      JSON.stringify({
+        id: 'campus-1',
+        nombre: 'Sede',
+        direccion: 'Calle 1',
+        hack: 'no-debe-pasarse',
+      })
+    );
+
+    expect(await leerCampusSeleccionado()).not.toHaveProperty('hack');
   });
 
   it('devuelve null si no hay campus guardado', async () => {

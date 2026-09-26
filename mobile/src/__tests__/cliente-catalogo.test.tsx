@@ -16,6 +16,9 @@ jest.mock('../services/catalog', () => ({
   leerCampusSeleccionado: jest.fn(),
   listarCategorias: jest.fn(),
   listarProductos: jest.fn(),
+  // Lógica pura: la pantalla usa la implementación real para resolver precios.
+  cafeteriaIdDeCampusSeleccionado:
+    jest.requireActual('../services/catalog').cafeteriaIdDeCampusSeleccionado,
   ofertaDeCafeteria: jest.requireActual('../services/catalog').ofertaDeCafeteria,
 }));
 
@@ -170,6 +173,41 @@ describe('Catálogo del cliente', () => {
     )[0];
 
     expect(precio.props.children).toBe('$1.800');
+  });
+
+  it('muestra el precio usando la cafetería que trae el catálogo, no el mapeo local', async () => {
+    // Campus con UUID real: el mapeo provisional de services/campus.ts no lo
+    // conoce, así que el precio solo aparece si se usa cafeteriaId del DTO.
+    mockLeerCampus.mockResolvedValue({
+      id: '9f3c1a2b-0000-4000-8000-000000000001',
+      nombre: 'Campus Nordico',
+      direccion: 'Ruta 5, Temuco',
+      cafeteriaId: 'cafe-1',
+      cafeteriaNombre: 'Cafetería Central',
+    });
+
+    const tree = await renderCatalogo();
+
+    expect(mockListarProductos).toHaveBeenCalledWith(
+      '9f3c1a2b-0000-4000-8000-000000000001',
+      undefined
+    );
+    const fila = tree.root.findByProps({ testID: 'catalogo-oferta-oferta-p-1' });
+    expect(textoDe(fila)).toContain('$1.800');
+  });
+
+  it('avisa que no hay precios cuando el campus no resuelve cafetería', async () => {
+    // UUID sin cafeteriaId y fuera del mapa provisional: no hay cafetería que
+    // resolver, así que se avisa en vez de mostrar el precio de otra sede.
+    mockLeerCampus.mockResolvedValue({
+      id: '9f3c1a2b-0000-4000-8000-000000000001',
+      nombre: 'Campus Nordico',
+      direccion: 'Ruta 5, Temuco',
+    });
+
+    const tree = await renderCatalogo();
+
+    expect(tree.root.findByProps({ testID: 'catalogo-sin-oferta-p-1' })).toBeTruthy();
   });
 
   it('indica agotado cuando la oferta no tiene stock', async () => {

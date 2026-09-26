@@ -33,14 +33,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
 import {
+  cafeteriaIdDeCampusSeleccionado,
   leerCampusSeleccionado,
   listarCategorias,
   listarProductos,
   ofertaDeCafeteria,
 } from '../../services/catalog';
-import { cafeteriaIdDeCampus } from '../../services/campus';
 import { ApiProblem, toApiError } from '../../services/httpClient';
-import type { Categoria, Oferta, Producto } from '../../types/domain';
+import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
 // Filtro de "todas las categorías". No es un id del catálogo: es el valor del
 // estado local que significa "sin filtro", por eso vive acá y no en domain.ts.
@@ -111,24 +111,22 @@ export default function CatalogoProductosScreen() {
   const [categorias, setCategorias] = useState<Categoria[] | null>(null);
   const [productos, setProductos] = useState<Producto[] | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
-  const [campusId, setCampusId] = useState<string | null>(null);
-  const [campusNombre, setCampusNombre] = useState<string | null>(null);
+  const [campus, setCampus] = useState<Campus | null>(null);
   const [categoriaId, setCategoriaId] = useState<string>(TODAS_CATEGORIAS);
   const [busqueda, setBusqueda] = useState('');
 
   const cargar = useCallback(async (): Promise<void> => {
     try {
-      const campus = await leerCampusSeleccionado();
-      setCampusId(campus?.id ?? null);
-      setCampusNombre(campus?.nombre ?? null);
+      const campusSeleccionado = await leerCampusSeleccionado();
+      setCampus(campusSeleccionado);
 
       const listaCategorias = await listarCategorias();
       setCategorias(listaCategorias);
       setErrorCarga(null);
 
-      if (campus) {
+      if (campusSeleccionado) {
         const listaProductos = await listarProductos(
-          campus.id,
+          campusSeleccionado.id,
           categoriaId === TODAS_CATEGORIAS ? undefined : categoriaId
         );
         setProductos(listaProductos);
@@ -159,10 +157,11 @@ export default function CatalogoProductosScreen() {
     return productos.filter((producto) => coincideConBusqueda(producto, query));
   }, [productos, busqueda]);
 
-  // La cafetería activa se deriva del campus elegido (services/campus.ts). Las
-  // ofertas del producto se resuelven contra ella, así que el precio que se
-  // muestra es el de esa cafetería y no el de otra del mismo campus.
-  const cafeteriaActual = cafeteriaIdDeCampus(campusId);
+  // La cafetería activa se resuelve desde el campus elegido: primero la que
+  // trae el propio catálogo y, si todavía no está, el mapeo provisional de
+  // services/campus.ts. Las ofertas del producto se resuelven contra ella, así
+  // que el precio que se muestra es el de esa cafetería y no el de otra sede.
+  const cafeteriaActual = cafeteriaIdDeCampusSeleccionado(campus);
 
   let contenido;
 
@@ -263,7 +262,7 @@ export default function CatalogoProductosScreen() {
           <View style={styles.campusTextInfo}>
             <Text style={styles.campusLabel}>CAMPUS ACTUAL</Text>
             <Text style={styles.campusName} numberOfLines={1}>
-              {campusNombre ?? 'Sin campus seleccionado'}
+              {campus?.nombre ?? 'Sin campus seleccionado'}
             </Text>
             <Pressable
               style={({ pressed }) => pressed && styles.btnPresionado}

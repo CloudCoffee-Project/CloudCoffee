@@ -147,6 +147,13 @@ export interface Campus {
   id: string;
   nombre: string;
   direccion: string;
+  // Cafeteria principal del campus. El catalogo la entrega junto al campus
+  // (contrato INT4-27) para que el cliente resuelva precios y stock sin
+  // depender de un mapeo local. Opcionales a proposito: mientras el backend
+  // no los mande, el catalogo sigue funcionando con el mapeo provisional de
+  // services/campus.ts.
+  cafeteriaId?: string;
+  cafeteriaNombre?: string;
 }
 
 export interface Categoria {

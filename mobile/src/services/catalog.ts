@@ -30,7 +30,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { httpClient } from './httpClient';
-import { CAMPUS_STORAGE_KEY } from './campus';
+import { CAMPUS_STORAGE_KEY, cafeteriaIdDeCampus } from './campus';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 // Rutas del dominio de catálogo dentro del gateway.
@@ -101,13 +101,46 @@ export async function leerCampusSeleccionado(): Promise<Campus | null> {
 
     const campus = JSON.parse(crudo) as Partial<Campus> | null;
     if (campus && typeof campus.id === 'string' && typeof campus.nombre === 'string') {
-      return { id: campus.id, nombre: campus.nombre, direccion: campus.direccion ?? '' };
+      // Se reconstruye el campus en vez de devolver el objeto crudo para
+      // descartar campos sueltos, conservando la cafeteria que trae el
+      // catálogo: es la que permite leer precios y stock después.
+      return {
+        id: campus.id,
+        nombre: campus.nombre,
+        direccion: campus.direccion ?? '',
+        cafeteriaId: campus.cafeteriaId,
+        cafeteriaNombre: campus.cafeteriaNombre,
+      };
     }
 
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Resuelve la cafetería cuyo catálogo se está mostrando.
+ *
+ * Fuente principal: el propio DTO del campus, que ya trae cafeteriaId. Es la
+ * forma definitiva y no depende de nada local.
+ *
+ * TODO: el gateway sirve GET /v1/catalog/campus desde INT2-33, pero el
+ * catalog-service todavía no implementa el controller y su entidad Campus
+ * solo tiene name/location. Para cerrar el contrato el DTO de campus debe
+ * exponer cafeteriaId (y cafeteriaNombre) con los nombres de domain.ts.
+ *
+ * Mientras tanto se cae al mapeo provisional de services/campus.ts, que
+ * cubre los cuatro campus con ids slug del mockup. Ese mapeo devuelve null
+ * para los UUID reales: si pasa eso, el catálogo se muestra sin precios ni
+ * stock hasta que el backend entregue la cafetería. No se inventan datos.
+ */
+export function cafeteriaIdDeCampusSeleccionado(campus: Campus | null | undefined): string | null {
+  if (!campus) {
+    return null;
+  }
+
+  return campus.cafeteriaId ?? cafeteriaIdDeCampus(campus.id);
 }
 
 /** Guarda el campus elegido por el cliente como sede activa. */
