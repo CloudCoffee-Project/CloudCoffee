@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Recuperación de Contraseña</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>Recuperación de Contraseña - CloudCoffee</h2>
+    <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta.</p>
+    <p>Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+    <p>
+        <a th:href="${recuperacionUrl}" style="display: inline-block; padding: 10px 20px; color: #fff; background-color: #28a745; text-decoration: none; border-radius: 5px;">Restablecer Contraseña</a>
+    </p>
+    <p>Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+    <p><a th:href="${recuperacionUrl}" th:text="${recuperacionUrl}"></a></p>
+    <p>Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
+    <p>Saludos,<br>El equipo de CloudCoffee</p>
+</body>
+</html>
