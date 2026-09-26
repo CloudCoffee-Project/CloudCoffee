@@ -7,6 +7,11 @@
 // INT4-31: las cafeterías se comparan por precio, así que la lista va siempre de
 // menor a mayor, sin control de orden en pantalla.
 //
+// INT4-32: el botón de agregar ya no navega al carrito, lo que hace es sumar la
+// oferta elegida al carrito global (context/CarritoContext). No confirma nada acá
+// ni muestra un aviso, igual que el mockup: el resultado se ve en la pantalla
+// del carrito (INT4-33), que es donde el usuario revisa lo que compró.
+//
 // Los datos salen de services/catalog.ts:
 //   - GET /v1/catalog/productos/{id}?campusId= → el producto con sus ofertas.
 //   - GET /v1/catalog/categorias                 → para poner el nombre de la
@@ -36,6 +41,7 @@ import {
   ordenarOfertasPorPrecio,
 } from '../../../services/catalog';
 import { ApiProblem, toApiError } from '../../../services/httpClient';
+import { useCarrito } from '../../../context/CarritoContext';
 import type { Campus, Categoria, Oferta, Producto } from '../../../types/domain';
 
 function formatearPrecio(precio: number): string {
@@ -59,6 +65,8 @@ export default function DetalleProductoScreen() {
   const [cargando, setCargando] = useState(true);
   const [ofertaElegida, setOfertaElegida] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
+
+  const { agregar: agregarItem } = useCarrito();
 
   const cargar = useCallback(async (): Promise<void> => {
     if (!id) {
@@ -292,11 +300,19 @@ export default function DetalleProductoScreen() {
   }
 
   const agregarAlCarrito = () => {
-    // TODO(INT4-32..37): el carrito todavía no existe como estado real — la
-    // pantalla carrito.tsx lo declara como otra tarea. Cuando exista, acá se
-    // agrega (producto, ofertaElegida, cantidad) al store del carrito en vez de
-    // navegar. Por ahora lleva al carrito para no perder el contexto.
-    router.push('/(cliente)/carrito');
+    if (!activa || !producto) return;
+    agregarItem(
+      {
+        ofertaId: activa.ofertaId,
+        productoId: producto.id,
+        productoNombre: producto.nombre,
+        precioUnitario: activa.precio,
+        cafeteriaId: activa.cafeteriaId,
+        cafeteriaNombre: activa.cafeteriaNombre,
+        stock: activa.stock,
+      },
+      cantidad
+    );
   };
 
   const botonAgregarDisabled = !activa;

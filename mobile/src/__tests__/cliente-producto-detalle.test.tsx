@@ -3,14 +3,32 @@
 // activo, lista de ofertas (una por cafetería, con su precio y stock),
 // selección de punto de retiro, cantidad acotada al stock, total real, y los
 // estados de error/vacío/sin campus con sus salidas.
+// Y el paso a INT4-32: el botón de agregar suma la oferta elegida al carrito
+// global. No muestra aviso ni navega, como el mockup.
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import { View } from 'react-native';
 
 import DetalleProductoScreen from '../app/(cliente)/producto/[id]';
 import { leerCampusSeleccionado, listarCategorias, obtenerProducto } from '../services/catalog';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { CarritoProvider, useCarrito } from '../context/CarritoContext';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
+
+// INT4-32: la pantalla ya no navega al carrito al agregar, lo escribe en el
+// carrito global. Se monta el provider real (no un mock de useCarrito) para que
+// el test cubra de verdad que el botón alimenta el estado que después va a
+// leer la pantalla del carrito. AuthContext se mockea porque el provider solo
+// necesita saber quién tiene la sesión abierta.
+jest.mock('../context/AuthContext', () => ({
+  useAuth: jest.fn(() => ({
+    sesion: { userId: 'user-1', rol: 'cliente', cafeteriaId: null, exp: 0 },
+    bootstrapping: false,
+    iniciarSesion: jest.fn(),
+    cerrarSesion: jest.fn(),
+  })),
+}));
 
 jest.mock('../services/catalog', () => ({
   // requireActual para conservar las funciones puras (ordenarOfertasPorPrecio) y
@@ -92,10 +110,30 @@ function textoDe(nodo: ReactTestInstance): string {
 
 let arbolActual: ReactTestRenderer | null = null;
 
+// Lee el carrito global desde adentro del provider, que es como lo va a leer la
+// pantalla del carrito en INT4-33+. El valor queda en las props de un nodo del
+// árbol y no en una variable de módulo: asignarla durante el render es un efecto
+// y el compilador de React lo rechaza.
+function SondaCarrito() {
+  const valor = useCarrito();
+  return <View testID="carrito-sonda" {...valor} />;
+}
+
+function leerCarrito(tree: ReactTestRenderer): ReturnType<typeof useCarrito> {
+  return tree.root.findAllByProps({ testID: 'carrito-sonda' })[0].props as ReturnType<
+    typeof useCarrito
+  >;
+}
+
 async function renderDetalle(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
   await act(async () => {
-    tree = create(<DetalleProductoScreen />);
+    tree = create(
+      <CarritoProvider>
+        <SondaCarrito />
+        <DetalleProductoScreen />
+      </CarritoProvider>
+    );
   });
   arbolActual = tree;
 
@@ -313,14 +351,85 @@ describe('Detalle de producto', () => {
     expect(() => tree.root.findByProps({ testID: 'producto-detalle-cantidad' })).toThrow();
   });
 
-  it('lleva al carrito al agregar, con el TODO del armado pendiente', async () => {
+  it('agrega al carrito global la cafetería elegida, sin navegar al carrito', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({
+        offers: [
+          oferta({ ofertaId: 'of-central', cafeteriaNombre: 'Cafetería Central', precio: 1800 }),
+          oferta({ ofertaId: 'of-norte', cafeteriaNombre: 'Cafetería Norte', precio: 2100 }),
+        ],
+      })
+    );
+
+    const tree = await renderDetalle();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-oferta-of-norte' }).props.onPress();
+    });
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
+    });
+
+    // Lo que entra al carrito es la oferta que el usuario tocó, no la más
+    // barata: el precio de la línea sale de la cafetería elegida.
+    expect(leerCarrito(tree).items).toEqual([
+      {
+        ofertaId: 'of-norte',
+        productoId: 'prod-1',
+        productoNombre: 'Café Americano 12oz',
+        precioUnitario: 2100,
+        cafeteriaId: 'cafe-central',
+        cafeteriaNombre: 'Cafetería Norte',
+        cantidad: 1,
+        stock: 4,
+      },
+    ]);
+    expect(leerCarrito(tree).total).toBe(2100);
+    expect(mockRouter.push).not.toHaveBeenCalled();
+  });
+
+  it('agrega la cantidad que se está mirando, no siempre una', async () => {
+    const tree = await renderDetalle();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-mas' }).props.onPress();
+    });
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
+    });
+
+    expect(leerCarrito(tree).items[0].cantidad).toBe(2);
+    expect(leerCarrito(tree).unidades).toBe(2);
+    expect(leerCarrito(tree).total).toBe(3600);
+  });
+
+  it('suma en la misma línea si se agrega dos veces la misma cafetería', async () => {
     const tree = await renderDetalle();
 
     await act(async () => {
       tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
     });
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
+    });
 
-    expect(mockRouter.push).toHaveBeenCalledWith('/(cliente)/carrito');
+    expect(leerCarrito(tree).items).toHaveLength(1);
+    expect(leerCarrito(tree).items[0].cantidad).toBe(2);
+  });
+
+  it('no agrega nada si el botón está deshabilitado por estar agotado', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({ offers: [oferta({ stock: 0, disponible: false })] })
+    );
+
+    const tree = await renderDetalle();
+    const boton = tree.root.findByProps({ testID: 'producto-detalle-agregar' });
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+
+    expect(leerCarrito(tree).items).toEqual([]);
   });
 
   it('vuelve al catálogo con el botón volver', async () => {

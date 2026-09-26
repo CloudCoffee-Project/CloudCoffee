@@ -6,6 +6,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import BannerNotificacionPush from '../components/BannerNotificacionPush';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { CarritoProvider } from '../context/CarritoContext';
 import { useCafeteriaActual } from '../hooks/useCafeteriaActual';
 import { useNotificacionesPush } from '../hooks/useNotificacionesPush';
 import type { NotificacionRecibida } from '../hooks/useNotificacionesPush';
@@ -143,7 +144,11 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <RootNavigator />
+        {/* El carrito va por dentro de AuthProvider porque se vacía solo al
+            cerrar sesión: necesita ver quién tiene la sesión abierta. */}
+        <CarritoProvider>
+          <RootNavigator />
+        </CarritoProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
