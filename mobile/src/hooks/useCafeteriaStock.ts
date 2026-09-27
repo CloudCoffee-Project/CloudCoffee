@@ -1,34 +1,26 @@
 // src/hooks/useCafeteriaStock.ts
 import { useEffect, useState } from 'react';
-import { subscribeToTopic } from '../services/websocket';
 
-interface StockActualizado {
-  ofertaId: string;
-  productoId: string;
-  cafeteriaId: string;
-  campusId: string;
-  stockActual: number;
-}
+import { subscribeToTopic, topicCafeteriaStock } from '../services/websocket';
+import type { StockCafeteriaEvento } from '../types/domain';
 
 // Se suscribe al stock en tiempo real de una cafetería y devuelve
 // un mapa { ofertaId: stockActual } que se actualiza solo.
-export function useCafeteriaStock(cafeteriaId: string) {
+export function useCafeteriaStock(cafeteriaId: string): Record<string, number> {
   const [stockPorOferta, setStockPorOferta] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!cafeteriaId) return;
 
-    const topic = `/topic/cafeteria/${cafeteriaId}/stock`;
-
-    const unsubscribe = subscribeToTopic(topic, (message) => {
+    const unsubscribe = subscribeToTopic(topicCafeteriaStock(cafeteriaId), (message) => {
       try {
-        const data: StockActualizado = JSON.parse(message.body);
+        const evento = JSON.parse(message.body) as StockCafeteriaEvento;
         setStockPorOferta((prev) => ({
           ...prev,
-          [data.ofertaId]: data.stockActual,
+          [evento.ofertaId]: evento.stockActual,
         }));
-      } catch (error) {
-        console.error('Error parseando mensaje de stock:', error);
+      } catch {
+        // Mensaje malformado: se ignora y se espera el siguiente evento.
       }
     });
 

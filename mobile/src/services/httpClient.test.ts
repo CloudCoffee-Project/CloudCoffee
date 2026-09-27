@@ -8,6 +8,7 @@ import {
   getRefreshToken,
   httpClient,
   isAccessTokenExpired,
+  onTokensCambiados,
   refreshAccessToken,
   setAccessToken,
   setRefreshToken,
@@ -218,5 +219,61 @@ describe('refreshAccessToken (INT4-17)', () => {
     const resultado = await refreshAccessToken();
     expect(resultado).toBeNull();
     expect(mockedRequestNewTokens).not.toHaveBeenCalled();
+  });
+});
+
+describe('onTokensCambiados (INT4-22)', () => {
+  afterEach(() => {
+    clearTokens();
+    onTokensCambiados(() => undefined);
+    jest.clearAllMocks();
+  });
+
+  it('notifica el par de tokens al hacer setTokens', () => {
+    const listener = jest.fn();
+    onTokensCambiados(listener);
+
+    setTokens({ accessToken: 'access-nuevo', refreshToken: 'refresh-nuevo' });
+
+    expect(listener).toHaveBeenCalledWith({
+      accessToken: 'access-nuevo',
+      refreshToken: 'refresh-nuevo',
+    });
+  });
+
+  it('notifica null al limpiar los tokens', () => {
+    const listener = jest.fn();
+    onTokensCambiados(listener);
+    setTokens({ accessToken: 'a', refreshToken: 'r' });
+    listener.mockClear();
+
+    clearTokens();
+
+    expect(listener).toHaveBeenCalledWith(null);
+  });
+
+  it('notifica los tokens renovados tras un refresh exitoso', async () => {
+    const listener = jest.fn();
+    onTokensCambiados(listener);
+    setTokens({ accessToken: 'access-viejo', refreshToken: 'refresh-viejo' });
+    listener.mockClear();
+
+    mockedRequestNewTokens.mockResolvedValue({
+      accessToken: 'access-nuevo',
+      refreshToken: 'refresh-nuevo',
+    });
+
+    const resultado = await refreshAccessToken();
+
+    expect(resultado).toBe('access-nuevo');
+    expect(listener).toHaveBeenCalledWith({
+      accessToken: 'access-nuevo',
+      refreshToken: 'refresh-nuevo',
+    });
+  });
+
+  it('no notifica cuando no hay listener registrado', () => {
+    setTokens({ accessToken: 'a', refreshToken: 'r' });
+    expect(() => clearTokens()).not.toThrow();
   });
 });

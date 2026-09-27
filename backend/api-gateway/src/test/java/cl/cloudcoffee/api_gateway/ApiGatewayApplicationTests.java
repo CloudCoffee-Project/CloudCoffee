@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = "CORS_ALLOWED_ORIGINS=")
 @AutoConfigureMockMvc
-class ApiGatewayApplicationTests {
+class ApiGatewayApplicationTests extends cl.cloudcoffee.security.testing.JwtTestSupport {
 
     @Autowired
     MockMvc mvc;

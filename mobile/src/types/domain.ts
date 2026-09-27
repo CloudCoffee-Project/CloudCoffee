@@ -10,10 +10,52 @@ export type Rol = 'cliente' | 'cajero' | 'admin_cafeteria' | 'super_admin';
 export type EstadoOrden =
   | 'reservando'
   | 'pagado'
+  | 'listo_para_retiro'
   | 'no_retirado_pendiente_revision'
   | 'entregado'
   | 'no_retirado_final'
   | 'cancelado';
+
+// Lista canónica de estados de orden: permite validar en runtime valores que
+// llegan desde el WebSocket (/topic/orden/{id}/estado) o desde los params de
+// navegación, para que ninguna pantalla invente un string de estado por su
+// cuenta (ver cabecera de este archivo).
+export const ESTADOS_ORDEN: readonly EstadoOrden[] = [
+  'reservando',
+  'pagado',
+  'listo_para_retiro',
+  'no_retirado_pendiente_revision',
+  'entregado',
+  'no_retirado_final',
+  'cancelado',
+];
+
+export function esEstadoOrden(valor: unknown): valor is EstadoOrden {
+  return typeof valor === 'string' && (ESTADOS_ORDEN as readonly string[]).includes(valor);
+}
+
+// Agrupaciones semánticas del union EstadoOrden para el listado del cajero
+// (INT4-7, filtros básicos de pedidos activos / no retirados). Se centralizan
+// aquí para que ninguna pantalla invente su propia lógica de categoría: los
+// filtros se derivan del union, nunca de strings planos.
+export const ESTADOS_ORDEN_ACTIVOS: readonly EstadoOrden[] = [
+  'reservando',
+  'pagado',
+  'listo_para_retiro',
+];
+
+export const ESTADOS_ORDEN_NO_RETIRADOS: readonly EstadoOrden[] = [
+  'no_retirado_pendiente_revision',
+  'no_retirado_final',
+];
+
+export function esEstadoOrdenActivo(estado: EstadoOrden): boolean {
+  return ESTADOS_ORDEN_ACTIVOS.includes(estado);
+}
+
+export function esEstadoOrdenNoRetirado(estado: EstadoOrden): boolean {
+  return ESTADOS_ORDEN_NO_RETIRADOS.includes(estado);
+}
 
 export type EstadoCompra =
   'reservando' | 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
@@ -56,6 +98,29 @@ export interface RegistroClienteResponse {
   verificado: boolean;
 }
 
+// Perfil del usuario autenticado. Reutiliza la forma del RegistroClienteResponse
+// del backend (el auth-service no expone hoy un endpoint de perfil; cuando lo
+// haga devolverá la misma entidad Usuario). Definir estos tipos acá evita que la
+// pantalla invente sus propios campos (ver cabecera de este archivo).
+export interface PerfilUsuario {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  rol: string;
+  verificado: boolean;
+}
+
+// Body de edición de perfil: solo los campos editables (INT4-23). El backend
+// validará igual que en el registro: nombre/apellido max 100 y teléfono con el
+// formato ^[0-9+ ()-]{6,20}$.
+export interface ActualizarPerfilRequest {
+  nombre: string;
+  apellido: string;
+  telefono: string;
+}
+
 export interface VerificarCorreoResponse {
   email: string;
   verificado: boolean;
@@ -70,10 +135,32 @@ export interface RestablecerPasswordRequest {
   nuevaPassword: string;
 }
 
+// Body de cambio de contraseña estando autenticado (INT4-24). El backend
+// validará la contraseña actual y aplicará las mismas reglas que en el
+// registro (mínimo 8 caracteres).
+export interface CambiarContrasenaRequest {
+  passwordActual: string;
+  nuevaPassword: string;
+}
+
+// Cafeteria de retiro dentro de un campus. El modelo del backend es 1:N
+// (Campus.caferias es un @OneToMany), asi que un campus puede tener varias y
+// cada una tiene su propio precio y stock para un mismo producto.
+export interface Cafeteria {
+  id: string;
+  nombre: string;
+}
+
 export interface Campus {
   id: string;
   nombre: string;
   direccion: string;
+  // Cafeterias del campus. Opcional a proposito: la app no la necesita para
+  // leer precios (eso sale de Producto.offers, que el endpoint de productos
+  // devuelve filtrado por campus), solo para no ofrecer el retiro en una sede
+  // ajena. Mientras el backend no la mande, la app muestra las ofertas que
+  // recibe y no inventa ninguna.
+  cafeterias?: Cafeteria[];
 }
 
 export interface Categoria {
@@ -81,6 +168,10 @@ export interface Categoria {
   nombre: string;
 }
 
+// Oferta de un producto en una cafeteria concreta. Un mismo producto puede
+// tener varias ofertas, una por cafeteria del campus, con precio y stock
+// propios: por eso la app lista todas las que le entrega el endpoint de
+// productos y no elige una sola.
 export interface Oferta {
   ofertaId: string;
   cafeteriaId: string;
@@ -95,6 +186,9 @@ export interface Producto {
   nombre: string;
   descripcion: string;
   categoriaId: string;
+  // Ofertas del producto en las cafeterias del campus consultado. El backend
+  // las agrupa desde Offer (que tiene la FK product_id) y acota el resultado al
+  // campus del parametro: lo que llega aca pertenece a la sede activa.
   offers?: Oferta[];
 }
 
@@ -114,6 +208,30 @@ export interface Orden {
   estado: EstadoOrden;
   montoTotal: number;
   items: OrdenItem[];
+}
+
+// Eventos STOMP de tiempo real (contrato a fijar con el backend cuando
+// exista el endpoint). Se tipan acá para que los hooks/servicios no definan
+// DTOs propios: los estados usan el union EstadoOrden, nunca string plano.
+export interface OrdenEstadoEvento {
+  ordenId: string;
+  estado: EstadoOrden;
+}
+
+export interface StockCafeteriaEvento {
+  ofertaId: string;
+  productoId: string;
+  cafeteriaId: string;
+  campusId: string;
+  stockActual: number;
+}
+
+// Payload que codifica el QR de retiro: lo escanea el cajero en el punto de
+// retiro para validar el pedido. El estado siempre es un valor del union
+// EstadoOrden (nunca un string inventado en la pantalla).
+export interface QrRetiro {
+  pedido: string;
+  estado: EstadoOrden;
 }
 
 export interface Compra {

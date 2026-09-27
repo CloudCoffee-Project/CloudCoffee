@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificación de Correo</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>¡Bienvenido a CloudCoffee!</h2>
+    <p>Gracias por registrarte. Para completar tu registro y activar tu cuenta, por favor verifica tu correo electrónico haciendo clic en el siguiente enlace:</p>
+    <p>
+        <a th:href="${verificacionUrl}" style="display: inline-block; padding: 10px 20px; color: #fff; background-color: #007bff; text-decoration: none; border-radius: 5px;">Verificar Correo</a>
+    </p>
+    <p>Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+    <p><a th:href="${verificacionUrl}" th:text="${verificacionUrl}"></a></p>
+    <p>Este enlace expirará en 24 horas.</p>
+    <p>Saludos,<br>El equipo de CloudCoffee</p>
+</body>
+</html>

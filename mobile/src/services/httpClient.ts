@@ -32,8 +32,33 @@ export interface ApiProblem {
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
 
+// Listener opcional que se invoca cada vez que cambian los tokens en memoria
+// (login, refresh automático o cierre de sesión). Lo registra el AuthContext
+// para persistir el par en SecureStore (INT4-22): así los tokens renovados por
+// el refresh también quedan guardados, no solo los del login.
+let tokensGuardados:
+  ((tokens: { accessToken: string; refreshToken: string } | null) => void) | null = null;
+
+export function onTokensCambiados(
+  listener: (tokens: { accessToken: string; refreshToken: string } | null) => void
+): void {
+  tokensGuardados = listener;
+}
+
+function notificarTokensCambiados(): void {
+  if (!tokensGuardados) {
+    return;
+  }
+  if (accessToken && refreshToken) {
+    tokensGuardados({ accessToken, refreshToken });
+  } else {
+    tokensGuardados(null);
+  }
+}
+
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+  notificarTokensCambiados();
 }
 
 export function getAccessToken(): string | null {
@@ -42,6 +67,7 @@ export function getAccessToken(): string | null {
 
 export function setRefreshToken(token: string | null): void {
   refreshToken = token;
+  notificarTokensCambiados();
 }
 
 export function getRefreshToken(): string | null {
@@ -54,11 +80,13 @@ export function setTokens(tokens: { accessToken: string; refreshToken?: string }
   if (tokens.refreshToken !== undefined) {
     refreshToken = tokens.refreshToken;
   }
+  notificarTokensCambiados();
 }
 
 export function clearTokens(): void {
   accessToken = null;
   refreshToken = null;
+  notificarTokensCambiados();
 }
 
 export const httpClient = create({
@@ -155,6 +183,7 @@ export async function refreshAccessToken(): Promise<string | null> {
         if (tokens.refreshToken) {
           refreshToken = tokens.refreshToken;
         }
+        notificarTokensCambiados();
         return accessToken;
       })
       .catch(() => {

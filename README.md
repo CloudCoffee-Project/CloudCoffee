@@ -30,6 +30,10 @@ cp .env.example .env
 
 Cada integrante puede modificar en su `.env` los puertos o credenciales locales sin afectar al resto del equipo.
 
+Antes del primer arranque, generar las llaves JWT siguiendo la sección
+[JWT RS256 del backend](backend/README.md#jwt-rs256-int2-14). Compose entrega la
+llave privada solo a Auth y la pública a los servicios que validan tokens.
+
 ### Iniciar el entorno
 
 ```bash

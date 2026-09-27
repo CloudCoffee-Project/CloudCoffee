@@ -5,8 +5,9 @@
 //   carrito               -> INT4-32 a INT4-37
 //   mis-compras            -> INT4-50
 //   perfil                 -> INT4-23, INT4-24
-// "seguimientos" y "notificaciones" quedan como rutas internas navegables
-// desde Perfil, no como tabs propias (evita saturar la barra inferior).
+// "seguimientos" (orden en vivo), "mis-seguimientos" (INT4-45) y
+// "notificaciones" quedan como rutas internas navegables desde Perfil, no como
+// tabs propias (evita saturar la barra inferior).
 
 import { Tabs } from 'expo-router';
 

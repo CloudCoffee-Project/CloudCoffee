@@ -9,6 +9,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>common-errors</module>
+        <module>common-security</module>
         <module>api-gateway</module>
         <module>auth-service</module>
         <module>catalog-service</module>

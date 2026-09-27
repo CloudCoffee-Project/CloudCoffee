@@ -1,88 +1,50 @@
-import React, { useState, useCallback, useMemo } from 'react';
+// src/app/(cliente)/index.tsx
+//
+// Catálogo del cliente (INT4-28 categorías y productos, INT4-29 búsqueda).
+// Lista los productos de la sede activa: las pills de categoría filtran y la
+// barra de búsqueda toleran errores de tipeo sobre esos mismos datos.
+//
+// Los datos salen de services/catalog.ts: categorías (GET /v1/catalog/categorias)
+// y productos (GET /v1/catalog/productos) del campus seleccionado. El backend
+// todavía no implementa los controllers: la pantalla consume el contrato real y
+// muestra el error normalizado (toApiError) con botón de reintento, sin
+// fallback a datos hardcodeados.
+//
+// Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de las
+// Ofertas del producto: Producto no tiene precio propio. Se listan todas, una
+// por cafetería del campus, porque el modelo es Campus 1:N Cafeteria y cada
+// punto de retiro cobra su propio precio. Tocar la tarjeta abre el detalle
+// (INT4-30), donde se elige en cuál retirar.
+//
+// Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
+// acentos amarillos y bordes cálidos) replicada del mockup web.
+
+import { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
-  Platform,
-  StatusBar,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AxiosError } from 'axios';
 
-import { httpClient } from '../../services/httpClient';
+import { leerCampusSeleccionado, listarCategorias, listarProductos } from '../../services/catalog';
+import { ApiProblem, toApiError } from '../../services/httpClient';
+import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
-export const CAMPUS_STORAGE_KEY = '@app_campus_seleccionado';
+// Filtro de "todas las categorías". No es un id del catálogo: es el valor del
+// estado local que significa "sin filtro", por eso vive acá y no en domain.ts.
+const TODAS_CATEGORIAS = 'todos';
 
-export interface CategoriaBackend {
-  id: string;
-  nombre: string;
-}
-
-export interface Producto {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  categoriaId: string;
-  icono: string;
-  campusDisponibles: string[];
-  localNombre: string;
-  localUbicacion: string;
-  precio: number;
-}
-
-const PRODUCTOS_MOCK: Producto[] = [
-  {
-    id: 'p-1',
-    nombre: 'Café Americano 12oz',
-    descripcion: 'Espresso doble con agua caliente, tostado medio local.',
-    categoriaId: 'cat-bebidas',
-    icono: '☕',
-    campusDisponibles: ['san-juan-pablo-ii', 'san-francisco'],
-    localNombre: 'Cafetería Central',
-    localUbicacion: 'Pabellón Central - Piso 1',
-    precio: 1800,
-  },
-  {
-    id: 'p-2',
-    nombre: 'Croissant Jamón y Queso',
-    descripcion: 'Hojaldre mantequilla horneado a diario con queso gouda.',
-    categoriaId: 'cat-pasteleria',
-    icono: '🥐',
-    campusDisponibles: ['san-francisco', 'norte'],
-    localNombre: 'Cafetería Central',
-    localUbicacion: 'Pabellón Central - Piso 1',
-    precio: 2500,
-  },
-  {
-    id: 'p-3',
-    nombre: 'Jugo Natural de Naranja',
-    descripcion: 'Jugo 100% natural recién exprimido 300ml.',
-    categoriaId: 'cat-bebidas',
-    icono: '🥤',
-    campusDisponibles: ['norte', 'menchaca-lira'],
-    localNombre: 'Casino Principal',
-    localUbicacion: 'Piso 1',
-    precio: 2000,
-  },
-  {
-    id: 'p-4',
-    nombre: 'Mix de Frutos Secos',
-    descripcion: 'Almendras, nueces, maní sin sal y pasas 100g.',
-    categoriaId: 'cat-snacks',
-    icono: '🥜',
-    campusDisponibles: ['san-juan-pablo-ii', 'san-francisco', 'norte', 'menchaca-lira'],
-    localNombre: 'Kiosko Central',
-    localUbicacion: 'Patio Central',
-    precio: 1500,
-  },
-];
-
-// Algoritmo nativo para tolerar errores ortográficos (typos)
+// Distancia de Levenshtein entre dos cadenas, para tolerar errores de tipeo en
+// la búsqueda. Se usa sobre los datos reales que devuelve el servicio, nunca
+// sobre una lista local.
 const levenshteinDistance = (a: string, b: string): number => {
   const matrix: number[][] = [];
   for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -104,123 +66,213 @@ const levenshteinDistance = (a: string, b: string): number => {
   return matrix[b.length][a.length];
 };
 
+// Coincidencia tolerante: primero por substring y después palabra por palabra
+// con distancia de Levenshtein acotada según el largo de la palabra buscada.
+function coincideConBusqueda(producto: Producto, query: string): boolean {
+  const nombre = producto.nombre.toLowerCase();
+  const descripcion = producto.descripcion.toLowerCase();
+
+  if (nombre.includes(query) || descripcion.includes(query)) {
+    return true;
+  }
+
+  const palabrasQuery = query.split(' ');
+  const palabrasTexto = `${nombre} ${descripcion}`.split(' ');
+
+  return palabrasQuery.some((pQuery) =>
+    palabrasTexto.some((pTexto) => {
+      if (Math.abs(pQuery.length - pTexto.length) > 2) return false;
+      const maxDist = pQuery.length > 4 ? 2 : 1;
+      return levenshteinDistance(pQuery, pTexto) <= maxDist;
+    })
+  );
+}
+
+function formatearPrecio(precio: number): string {
+  return `$${precio.toLocaleString('es-CL')}`;
+}
+
+// El ícono del mockup se elegía por nombre de categoría en español. Las
+// categorías reales llegan con id opaco, así que se usa un ícono neutro en vez
+// de inventar un mapeo que rompería con ids desconocidos.
+function formatearDisponibilidad(oferta: Oferta): string {
+  if (!oferta.disponible || oferta.stock <= 0) {
+    return 'Agotado';
+  }
+  return `${oferta.stock} disp.`;
+}
+
 export default function CatalogoProductosScreen() {
   const router = useRouter();
-  const [campusId, setCampusId] = useState<string>('san-juan-pablo-ii');
-  const [campusNombre, setCampusNombre] = useState<string>('Campus San Juan Pablo II');
+  const [categorias, setCategorias] = useState<Categoria[] | null>(null);
+  const [productos, setProductos] = useState<Producto[] | null>(null);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [campus, setCampus] = useState<Campus | null>(null);
+  const [categoriaId, setCategoriaId] = useState<string>(TODAS_CATEGORIAS);
   const [busqueda, setBusqueda] = useState('');
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('todos');
-  const [categorias, setCategorias] = useState<CategoriaBackend[]>([]);
-  const [cargando, setCargando] = useState(true);
 
-  const setCategoriasDefault = useCallback(() => {
-    setCategorias([
-      { id: 'cat-snacks', nombre: 'Snacks' },
-      { id: 'cat-bebidas', nombre: 'Bebidas' },
-      { id: 'cat-pasteleria', nombre: 'Pastelería' },
-    ]);
-  }, []);
-
-  const cargarCategorias = useCallback(async () => {
+  const cargar = useCallback(async (): Promise<void> => {
     try {
-      const response = await httpClient.get<CategoriaBackend[]>('/v1/catalog/categorias', {
-        timeout: 3000,
-      });
+      const campusSeleccionado = await leerCampusSeleccionado();
+      setCampus(campusSeleccionado);
 
-      const data = response.data;
-      if (Array.isArray(data) && data.length > 0) {
-        setCategorias(data);
-        return;
-      }
-      setCategoriasDefault();
-    } catch {
-      setCategoriasDefault();
-    }
-  }, [setCategoriasDefault]);
+      const listaCategorias = await listarCategorias();
+      setCategorias(listaCategorias);
+      setErrorCarga(null);
 
-  const cargarDatos = useCallback(async () => {
-    try {
-      setCargando(true);
-      const campusGuardadoStr = await AsyncStorage.getItem(CAMPUS_STORAGE_KEY);
-      if (campusGuardadoStr) {
-        const campusObj = JSON.parse(campusGuardadoStr);
-        if (campusObj?.id && campusObj?.nombre) {
-          setCampusId(campusObj.id);
-          setCampusNombre(campusObj.nombre);
-        }
+      if (campusSeleccionado) {
+        const listaProductos = await listarProductos(
+          campusSeleccionado.id,
+          categoriaId === TODAS_CATEGORIAS ? undefined : categoriaId
+        );
+        setProductos(listaProductos);
+      } else {
+        setProductos([]);
       }
-      await cargarCategorias();
-    } catch {
-      setCategoriasDefault();
-    } finally {
-      setCargando(false);
+    } catch (error) {
+      const apiError = toApiError(error as AxiosError<ApiProblem>);
+      setCategorias(null);
+      setProductos(null);
+      setErrorCarga(apiError.message);
     }
-  }, [cargarCategorias, setCategoriasDefault]);
+  }, [categoriaId]);
 
   useFocusEffect(
     useCallback(() => {
-      cargarDatos();
-    }, [cargarDatos])
+      void cargar();
+    }, [cargar])
   );
 
-  // Filtrado base por campus y categoría seleccionada
-  const productosBase = useMemo(() => {
-    return PRODUCTOS_MOCK.filter((prod) => {
-      const cumpleCampus = !campusId || prod.campusDisponibles.includes(campusId);
-      const cumpleCategoria =
-        categoriaSeleccionada === 'todos' || prod.categoriaId === categoriaSeleccionada;
-      return cumpleCampus && cumpleCategoria;
-    });
-  }, [campusId, categoriaSeleccionada]);
-
-  // Búsqueda difusa optimizada sin módulos externos
-  const productosFiltrados = useMemo(() => {
+  // La búsqueda es local sobre los datos ya traídos del servicio: no cambia la
+  // petición, solo acota lo que se muestra.
+  const productosVisibles = useMemo(() => {
     const query = busqueda.trim().toLowerCase();
-    if (!query) return productosBase;
+    if (!productos || query.length === 0) {
+      return productos;
+    }
+    return productos.filter((producto) => coincideConBusqueda(producto, query));
+  }, [productos, busqueda]);
 
-    return productosBase.filter((prod) => {
-      const nombre = prod.nombre.toLowerCase();
-      const descripcion = prod.descripcion.toLowerCase();
+  let contenido;
 
-      // Coincidencia exacta/parcial directa
-      if (nombre.includes(query) || descripcion.includes(query)) {
-        return true;
-      }
+  if (errorCarga !== null) {
+    contenido = (
+      <View style={styles.tarjetaError} testID="catalogo-error">
+        <Text style={styles.errorIcono}>☕</Text>
+        <Text style={styles.errorTitulo}>No pudimos cargar el catálogo</Text>
+        <Text style={styles.errorMensaje}>{errorCarga}</Text>
+        <Pressable
+          style={({ pressed }) => [styles.btnReintentar, pressed && styles.btnPresionado]}
+          onPress={() => void cargar()}
+          testID="catalogo-reintentar"
+        >
+          <Text style={styles.btnReintentarTexto}>Reintentar</Text>
+        </Pressable>
+      </View>
+    );
+  } else if (productos === null) {
+    contenido = (
+      <View style={styles.centrado} testID="catalogo-cargando">
+        <ActivityIndicator size="large" color="#0052CC" />
+      </View>
+    );
+  } else {
+    contenido = (
+      <FlatList
+        data={productosVisibles}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listaContent}
+        showsVerticalScrollIndicator={false}
+        testID="catalogo-lista"
+        ListEmptyComponent={
+          <View style={styles.tarjetaVacio} testID="catalogo-vacio">
+            <Text style={styles.vacioIcono}>🔍</Text>
+            <Text style={styles.vacioTitulo}>Sin resultados</Text>
+            <Text style={styles.vacioTexto}>
+              {busqueda.trim().length > 0
+                ? 'No encontramos productos que coincidan con tu búsqueda.'
+                : 'No hay productos disponibles en esta categoría.'}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const ofertas = item.offers ?? [];
 
-      // Tolerancia a fallos tipográficos
-      const palabrasQuery = query.split(' ');
-      const palabrasTexto = `${nombre} ${descripcion}`.split(' ');
+          return (
+            <Pressable
+              style={({ pressed }) => [styles.productCard, pressed && styles.btnPresionado]}
+              onPress={() =>
+                router.push({ pathname: '/(cliente)/producto/[id]', params: { id: item.id } })
+              }
+              testID={`catalogo-producto-${item.id}`}
+            >
+              <View style={styles.productHeader}>
+                <View style={styles.productIconContainer}>
+                  <Text style={styles.productIconText}>🍴</Text>
+                </View>
+                <View style={styles.productDetails}>
+                  <Text style={styles.productTitle}>{item.nombre}</Text>
+                  <Text style={styles.productDescription}>{item.descripcion}</Text>
+                </View>
+              </View>
 
-      return palabrasQuery.some((pQuery) =>
-        palabrasTexto.some((pTexto) => {
-          if (Math.abs(pQuery.length - pTexto.length) > 2) return false;
-          const dist = levenshteinDistance(pQuery, pTexto);
-          const maxDist = pQuery.length > 4 ? 2 : 1;
-          return dist <= maxDist;
-        })
-      );
-    });
-  }, [busqueda, productosBase]);
+              <View style={styles.offerList}>
+                {ofertas.length > 0 ? (
+                  ofertas.map((oferta) => (
+                    <View
+                      key={oferta.ofertaId}
+                      style={styles.offerRow}
+                      testID={`catalogo-oferta-${oferta.ofertaId}`}
+                    >
+                      <View style={styles.offerInfo}>
+                        <Text style={styles.offerCafeName}>{oferta.cafeteriaNombre}</Text>
+                        <Text style={styles.offerPrecio}>{formatearPrecio(oferta.precio)}</Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.offerStock,
+                          !oferta.disponible || oferta.stock <= 0
+                            ? styles.offerStockAgotado
+                            : styles.offerStockDisponible,
+                        ]}
+                      >
+                        {formatearDisponibilidad(oferta)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noOfertas} testID={`catalogo-sin-oferta-${item.id}`}>
+                    Sin ofertas disponibles en este campus.
+                  </Text>
+                )}
+              </View>
+            </Pressable>
+          );
+        }}
+      />
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.pinContainer}>
-            <Text style={{ fontSize: 16 }}>📍</Text>
+    <SafeAreaView style={styles.pantalla} edges={['top']}>
+      {/* Sede activa */}
+      <View style={styles.topBar}>
+        <View style={styles.campusBox}>
+          <View style={styles.campusIconMini}>
+            <Text style={styles.campusIconText}>📍</Text>
           </View>
-          <View style={styles.campusInfoContainer}>
+          <View style={styles.campusTextInfo}>
             <Text style={styles.campusLabel}>CAMPUS ACTUAL</Text>
             <Text style={styles.campusName} numberOfLines={1}>
-              {campusNombre}
+              {campus?.nombre ?? 'Sin campus seleccionado'}
             </Text>
-            <TouchableOpacity
+            <Pressable
+              style={({ pressed }) => pressed && styles.btnPresionado}
               onPress={() => router.push('/(cliente)/campus')}
-              style={styles.changeBtnContainer}
+              testID="catalogo-cambiar-campus"
             >
-              <Text style={styles.changeLink}>Cambiar</Text>
-            </TouchableOpacity>
+              <Text style={styles.campusLink}>Cambiar</Text>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -230,258 +282,333 @@ export default function CatalogoProductosScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Buscar café, sándwich, snacks..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#6B7280"
           value={busqueda}
           onChangeText={setBusqueda}
           autoCorrect={false}
+          testID="catalogo-buscar"
         />
         {busqueda.length > 0 && (
-          <TouchableOpacity onPress={() => setBusqueda('')} style={styles.clearButton}>
+          <Pressable
+            style={styles.clearButton}
+            onPress={() => setBusqueda('')}
+            testID="catalogo-limpiar-busqueda"
+          >
             <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
 
-      {/* Filtro de Categorías */}
-      <View style={styles.categoriesContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
-            style={[styles.pill, categoriaSeleccionada === 'todos' && styles.pillActive]}
-            onPress={() => setCategoriaSeleccionada('todos')}
-          >
-            <Text
-              style={[styles.pillText, categoriaSeleccionada === 'todos' && styles.pillTextActive]}
-            >
-              TODOS
-            </Text>
-          </TouchableOpacity>
-
-          {categorias.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              style={[styles.pill, categoriaSeleccionada === cat.id && styles.pillActive]}
-              onPress={() => setCategoriaSeleccionada(cat.id)}
+      {/* Filtro por categorías */}
+      {categorias !== null && categorias.length > 0 && (
+        <View style={styles.categoriesContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.chip,
+                categoriaId === TODAS_CATEGORIAS && styles.chipActivo,
+                pressed && styles.btnPresionado,
+              ]}
+              onPress={() => setCategoriaId(TODAS_CATEGORIAS)}
+              testID="catalogo-chip-todos"
             >
               <Text
-                style={[styles.pillText, categoriaSeleccionada === cat.id && styles.pillTextActive]}
+                style={[styles.chipText, categoriaId === TODAS_CATEGORIAS && styles.chipTextActivo]}
               >
-                {cat.nombre}
+                TODOS
               </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+            </Pressable>
 
-      {/* Lista de Productos */}
-      {cargando ? (
-        <ActivityIndicator size="large" color="#0052CC" style={{ marginTop: 20 }} />
-      ) : (
-        <FlatList
-          data={productosFiltrados}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <Text style={styles.vacioText}>
-              No hay productos disponibles para este campus en esta categoría.
-            </Text>
-          }
-          renderItem={({ item }) => (
-            <View style={styles.productCard}>
-              <View style={styles.productHeader}>
-                <View style={styles.productIconContainer}>
-                  <Text style={{ fontSize: 20 }}>{item.icono}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.productTitle}>{item.nombre}</Text>
-                  <Text style={styles.productDescription}>{item.descripcion}</Text>
-                </View>
-              </View>
-
-              <View style={styles.puntoVentaRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.localTitle}>{item.localNombre}</Text>
-                  <Text style={styles.localUbicacion}>{item.localUbicacion}</Text>
-                  <Text style={styles.localPrecio}>${item.precio.toLocaleString('es-CL')}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-        />
+            {categorias.map((cat) => (
+              <Pressable
+                key={cat.id}
+                style={({ pressed }) => [
+                  styles.chip,
+                  categoriaId === cat.id && styles.chipActivo,
+                  pressed && styles.btnPresionado,
+                ]}
+                onPress={() => setCategoriaId(cat.id)}
+                testID={`catalogo-chip-${cat.id}`}
+              >
+                <Text style={[styles.chipText, categoriaId === cat.id && styles.chipTextActivo]}>
+                  {cat.nombre}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
       )}
-    </View>
+
+      <View style={styles.lista}>{contenido}</View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  pantalla: {
     flex: 1,
-    backgroundColor: '#F9F6F0',
+    backgroundColor: '#FAF7F2',
+  },
+  topBar: {
+    margin: 16,
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE9DE',
+    borderRadius: 18,
     paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  header: {
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 12 : 44,
-    marginBottom: 12,
-  },
-  headerLeft: {
+  campusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EFECE6',
-    alignSelf: 'flex-start',
+    gap: 10,
   },
-  pinContainer: {
+  campusIconMini: {
     width: 38,
     height: 38,
+    backgroundColor: '#FFF8DF',
+    borderWidth: 1,
+    borderColor: '#F3DC87',
     borderRadius: 10,
-    backgroundColor: '#FEF3C7',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
   },
-  campusInfoContainer: {
-    justifyContent: 'center',
+  campusIconText: {
+    fontSize: 17,
+  },
+  campusTextInfo: {
+    flex: 1,
   },
   campusLabel: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#9CA3AF',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.3,
   },
   campusName: {
-    fontSize: 13,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#0052CC',
-    marginBottom: 6,
   },
-  changeBtnContainer: {
-    alignSelf: 'flex-start',
-  },
-  changeLink: {
-    fontSize: 11,
+  campusLink: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#0052CC',
     textDecorationLine: 'underline',
-    fontWeight: '600',
   },
   searchContainer: {
+    marginHorizontal: 16,
     marginBottom: 10,
-    position: 'relative',
-    justifyContent: 'center',
   },
   searchInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    paddingRight: 36,
-    fontSize: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    color: '#1F2937',
+    borderWidth: 1.5,
+    borderColor: '#EFE9DE',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingRight: 40,
+    fontSize: 14,
+    color: '#1D2433',
   },
   clearButton: {
     position: 'absolute',
-    right: 12,
+    right: 14,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   clearButtonText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '700',
   },
   categoriesContainer: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  pill: {
+  chip: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#EFE9DE',
+    borderRadius: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginLeft: 16,
   },
-  pillActive: {
+  chipActivo: {
     backgroundColor: '#0052CC',
     borderColor: '#0052CC',
   },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '700',
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#4B5563',
   },
-  pillTextActive: {
+  chipTextActivo: {
     color: '#FFFFFF',
   },
-  listContent: {
-    paddingBottom: 20,
+  lista: {
+    flex: 1,
+  },
+  listaContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 14,
   },
   productCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#EFE9DE',
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
   },
   productHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
+    gap: 10,
   },
   productIconContainer: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    backgroundColor: '#FFF8DF',
+    borderWidth: 1,
+    borderColor: '#F3DC87',
     borderRadius: 10,
-    backgroundColor: '#FEF3C7',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+  },
+  productIconText: {
+    fontSize: 18,
+  },
+  productDetails: {
+    flex: 1,
   },
   productTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#0052CC',
   },
   productDescription: {
-    fontSize: 10,
-    color: '#6B7280',
-    marginTop: 1,
+    fontSize: 12,
+    color: '#4B5563',
+    lineHeight: 16,
+    marginTop: 2,
   },
-  puntoVentaRow: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  offerList: {
+    borderTopWidth: 1,
+    borderTopColor: '#EFE9DE',
+    paddingTop: 10,
+    gap: 8,
+  },
+  offerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#F3F0E9',
+    backgroundColor: '#FAF7F2',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
   },
-  localTitle: {
+  offerInfo: {
+    flex: 1,
+  },
+  offerCafeName: {
     fontSize: 12,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontWeight: '700',
+    color: '#1D2433',
   },
-  localUbicacion: {
-    fontSize: 10,
-    color: '#9CA3AF',
-  },
-  localPrecio: {
-    fontSize: 12,
-    fontWeight: 'bold',
+  offerPrecio: {
+    fontSize: 13,
+    fontWeight: '800',
     color: '#0052CC',
     marginTop: 2,
   },
-  vacioText: {
-    textAlign: 'center',
-    color: '#9CA3AF',
-    marginTop: 20,
+  offerStock: {
     fontSize: 12,
+    fontWeight: '700',
+  },
+  offerStockDisponible: {
+    color: '#15803D',
+  },
+  offerStockAgotado: {
+    color: '#B42318',
+  },
+  noOfertas: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  centrado: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  tarjetaError: {
+    marginHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE9DE',
+    borderRadius: 18,
+    padding: 22,
+    alignItems: 'center',
+    gap: 8,
+  },
+  errorIcono: {
+    fontSize: 30,
+  },
+  errorTitulo: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1D2433',
+  },
+  errorMensaje: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  btnReintentar: {
+    marginTop: 8,
+    backgroundColor: '#0052CC',
+    paddingVertical: 11,
+    paddingHorizontal: 26,
+    borderRadius: 12,
+  },
+  btnReintentarTexto: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  btnPresionado: {
+    opacity: 0.85,
+  },
+  tarjetaVacio: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#EFE9DE',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    gap: 8,
+  },
+  vacioIcono: {
+    fontSize: 28,
+  },
+  vacioTitulo: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1D2433',
+  },
+  vacioTexto: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 19,
   },
 });

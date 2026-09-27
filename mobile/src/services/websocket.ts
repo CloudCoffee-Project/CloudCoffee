@@ -2,58 +2,76 @@
 import { Client, IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
-const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'http://localhost:8081/ws';
+import { WS_BASE_URL } from '../config/api';
+
+// Topics STOMP del dominio de pedidos y stock. El backend todavía no expone
+// un endpoint STOMP; se centralizan acá para fijar el contrato en un solo
+// lugar cuando exista (ver config/api.ts → WS_BASE_URL).
+export const topicOrdenEstado = (ordenId: string): string => `/topic/orden/${ordenId}/estado`;
+
+export const topicCafeteriaStock = (cafeteriaId: string): string =>
+  `/topic/cafeteria/${cafeteriaId}/stock`;
+
+// Estado de la conexión expuesto vía callback. La librería no imprime nada
+// por consola: quien la consuma decide cómo reflejar conectado/error.
+export interface EstadoWebSocket {
+  conectado: boolean;
+  error?: string;
+}
 
 let stompClient: Client | null = null;
-let pendingSubscriptions: Array<{ topic: string; callback: (message: IMessage) => void }> = [];
+let pendingSubscriptions: { topic: string; callback: (message: IMessage) => void }[] = [];
 
-export function connectWebSocket(accessToken: string, onConnected?: () => void) {
+export function connectWebSocket(
+  accessToken: string,
+  onEstado?: (estado: EstadoWebSocket) => void
+): void {
   stompClient = new Client({
-    webSocketFactory: () => new SockJS(WS_URL) as any,
+    webSocketFactory: () => new SockJS(WS_BASE_URL),
     connectHeaders: {
       Authorization: `Bearer ${accessToken}`,
     },
     reconnectDelay: 5000,
     heartbeatIncoming: 4000,
     heartbeatOutgoing: 4000,
-    debug: (msg) => console.log('[STOMP]', msg),
   });
 
   stompClient.onConnect = () => {
-    console.log('WebSocket conectado');
-    // Aplica las suscripciones que quedaron pendientes antes de conectar
+    // Aplica las suscripciones que quedaron pendientes antes de conectar.
     pendingSubscriptions.forEach(({ topic, callback }) => {
       stompClient?.subscribe(topic, callback);
     });
-    onConnected?.();
+    onEstado?.({ conectado: true });
   };
 
   stompClient.onStompError = (frame) => {
-    console.error('Error STOMP:', frame.headers['message'], frame.body);
+    onEstado?.({
+      conectado: false,
+      error: frame.headers['message'] ?? frame.body,
+    });
   };
 
   stompClient.onWebSocketClose = () => {
-    console.log('WebSocket desconectado, reintentando...');
+    onEstado?.({ conectado: false });
   };
 
   stompClient.activate();
 }
 
-export function disconnectWebSocket() {
+export function disconnectWebSocket(): void {
   stompClient?.deactivate();
   stompClient = null;
   pendingSubscriptions = [];
 }
 
-// Se suscribe a un topic. Si aún no hay conexión, la guarda y la aplica sola al conectar.
-// Devuelve una función de limpieza que puedes llamar en el cleanup de tu useEffect.
+// Se suscribe a un topic. Si aún no hay conexión, la guarda y la aplica sola
+// al conectar. Devuelve una función de limpieza para el cleanup del useEffect.
 export function subscribeToTopic(topic: string, callback: (message: IMessage) => void): () => void {
   if (stompClient?.connected) {
     const subscription = stompClient.subscribe(topic, callback);
     return () => subscription.unsubscribe();
   }
 
-  console.warn(`No conectado aún, "${topic}" se suscribirá automáticamente al conectar`);
   const entry = { topic, callback };
   pendingSubscriptions.push(entry);
   return () => {

@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -22,6 +23,7 @@ public class GatewaySecurityConfig {
     @Bean
     SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
             CorsConfigurationSource corsConfigurationSource,
+            JwtAuthenticationConverter jwtAuthenticationConverter,
             ObjectProvider<AuthenticationEntryPoint> entryPoints,
             ObjectProvider<AccessDeniedHandler> accessDeniedHandlers) throws Exception {
         return http
@@ -35,6 +37,11 @@ public class GatewaySecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
                         // Usar adaptadores comunes si existen, sin depender del modulo de INT2-12.
+                        .authenticationEntryPoint(entryPoints.getIfAvailable(
+                                () -> new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                        .accessDeniedHandler(accessDeniedHandlers.getIfAvailable(AccessDeniedHandlerImpl::new)))
+                .oauth2ResourceServer(resource -> resource
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
                         .authenticationEntryPoint(entryPoints.getIfAvailable(
                                 () -> new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                         .accessDeniedHandler(accessDeniedHandlers.getIfAvailable(AccessDeniedHandlerImpl::new)))
@@ -54,8 +61,7 @@ public class GatewaySecurityConfig {
                                 "/v1/catalog/campus", "/v1/catalog/categorias").permitAll()
                         .requestMatchers(HttpMethod.HEAD,
                                 "/v1/catalog/campus", "/v1/catalog/categorias").permitAll()
-                        // INT2-14 conectara aqui la validacion JWT. Un header Bearer
-                        // por si solo no autentica: estas rutas quedan cerradas mientras tanto.
+                        // Solo un JWT validado con la llave publica autentica estas rutas.
                         .requestMatchers("/v1/**").authenticated()
                         // No hay rutas de proxy fuera de /v1; conservar sus errores 404.
                         .anyRequest().permitAll())

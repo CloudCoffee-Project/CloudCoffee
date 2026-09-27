@@ -75,4 +75,21 @@ public class AuthEventPublisher {
 
         return event;
     }
+        public CloudCoffeeEvent publishSolicitudRecuperacionPassword(
+            String userId, 
+            String email, 
+            String token, 
+            Instant expiresAt, 
+            String traceId) {
+            
+        CloudCoffeeEvent event = new CloudCoffeeEvent(
+                UUID.randomUUID(), 
+                Instant.now(), traceId,
+                "auth.recuperacion.solicitud-password.v1",
+                Map.of("userId", userId, "email", email, "token", token, "expiresAt", expiresAt.toString())
+        );
+
+        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EVENTS_EXCHANGE, "auth.recuperacion.solicitud-password.v1", event);
+        return event;
+    }
 }

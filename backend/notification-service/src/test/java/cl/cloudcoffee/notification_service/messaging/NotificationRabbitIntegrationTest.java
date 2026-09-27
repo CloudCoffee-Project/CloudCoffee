@@ -56,7 +56,7 @@ class NotificationRabbitIntegrationTest {
             recorded = jdbcTemplate.queryForObject("""
                     SELECT count(*) FROM notification_history
                     WHERE tracking_id LIKE ? AND event_type = ?
-                      AND status = 'RECEIVED' AND payload ->> 'email' = ?
+                      AND status = 'SUCCESS' AND payload ->> 'email' = ?
                     """, Integer.class, tracePrefix + "%", eventType, email);
             if (recorded == eventCount) {
                 break;
