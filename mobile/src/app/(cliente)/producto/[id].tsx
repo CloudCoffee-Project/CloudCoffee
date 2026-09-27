@@ -80,7 +80,7 @@ export default function DetalleProductoScreen() {
   const [ofertaElegida, setOfertaElegida] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
 
-  const { agregar: agregarItem } = useCarrito();
+  const { agregar: agregarItem, quitar } = useCarrito();
 
   // Confirmación de que el producto entró al carrito. Vive en la pantalla y no
   // en CarritoContext a propósito: el carrito global guarda lo que se compró,
@@ -347,6 +347,19 @@ export default function DetalleProductoScreen() {
               >
                 <Text style={styles.stepperBotonTexto}>+</Text>
               </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.trashBtn, pressed && styles.btnPresionado]}
+                onPress={() => {
+                  setCantidad(1);
+                  if (activa) {
+                    quitar(activa.ofertaId);
+                  }
+                }}
+                testID="producto-detalle-basurero"
+                accessibilityLabel={`Eliminar ${producto?.nombre} del carrito`}
+              >
+                <Text style={styles.trashBtnText}>🗑️</Text>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -580,6 +593,20 @@ const styles = StyleSheet.create({
     color: '#1D2433',
     minWidth: 20,
     textAlign: 'center',
+  },
+  trashBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EFE9DE',
+    backgroundColor: '#FAF7F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  trashBtnText: {
+    fontSize: 14,
   },
   footer: {
     paddingHorizontal: 16,

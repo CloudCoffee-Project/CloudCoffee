@@ -1,6 +1,7 @@
 // src/__tests__/cliente-catalogo.test.tsx
 // Cubre el catálogo del cliente (INT4-28 categorías y productos, INT4-29
-// búsqueda): carga desde el servicio, precio tomado de la Oferta de la
+// búsqueda, INT4-31 comparación de precios, INT4-34 agregar/quitar desde la
+// tarjeta): carga desde el servicio, precio tomado de la Oferta de la
 // cafetería del campus, estado de stock, filtrado por categoría, búsqueda
 // tolerante a typos y error normalizado con reintento.
 import { act, create } from 'react-test-renderer';
@@ -10,7 +11,22 @@ import CatalogoProductosScreen from '../app/(cliente)/index';
 import { leerCampusSeleccionado, listarCategorias, listarProductos } from '../services/catalog';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { CarritoProvider } from '../context/CarritoContext';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
+
+// Desde INT4-34 la tarjeta escribe en el carrito global, así que el catálogo
+// necesita el provider real: los tests de agregar y quitar tienen que ver el
+// mismo estado que la pantalla del carrito, no una lista armada a mano.
+// AuthContext se mockea porque el provider solo necesita saber quién tiene la
+// sesión abierta.
+jest.mock('../context/AuthContext', () => ({
+  useAuth: jest.fn(() => ({
+    sesion: { userId: 'user-1', rol: 'cliente', cafeteriaId: null, exp: 0 },
+    bootstrapping: false,
+    iniciarSesion: jest.fn(),
+    cerrarSesion: jest.fn(),
+  })),
+}));
 
 jest.mock('../services/catalog', () => ({
   // requireActual para conservar las funciones puras (ordenarOfertasPorPrecio) y
@@ -98,7 +114,11 @@ let arbolActual: ReactTestRenderer | null = null;
 async function renderCatalogo(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
   await act(async () => {
-    tree = create(<CatalogoProductosScreen />);
+    tree = create(
+      <CarritoProvider>
+        <CatalogoProductosScreen />
+      </CarritoProvider>
+    );
   });
   arbolActual = tree;
 

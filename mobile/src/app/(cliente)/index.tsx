@@ -1,10 +1,10 @@
 // src/app/(cliente)/index.tsx
 //
 // Catálogo del cliente (INT4-28 categorías y productos, INT4-29 búsqueda,
-// INT4-31 comparación de precios). Lista los productos de la sede activa: las
-// pills de categoría filtran, la barra de búsqueda toleran errores de tipeo
-// sobre esos mismos datos, y las cafeterías de cada producto salen de menor a
-// mayor precio.
+// INT4-31 comparación de precios).
+// Lista los productos de la sede activa: las pills de categoría filtran, la
+// barra de búsqueda toleran errores de tipeo sobre esos mismos datos, y las
+// cafeterías de cada producto salen de menor a mayor precio.
 //
 // Los datos salen de services/catalog.ts: categorías (GET /v1/catalog/categorias)
 // y productos (GET /v1/catalog/productos) del campus seleccionado. El backend
@@ -16,7 +16,7 @@
 // Ofertas del producto: Producto no tiene precio propio. Se listan todas, una
 // por cafetería del campus, porque el modelo es Campus 1:N Cafeteria y cada
 // punto de retiro cobra su propio precio. Tocar la tarjeta abre el detalle
-// (INT4-30), donde se elige en cuál retirar.
+// (INT4-30), donde se elige en cuál retirar y cuántas unidades.
 //
 // INT4-31: las ofertas de cada tarjeta se ordenan de menor a mayor precio con el
 // mismo criterio que el detalle, para que comparar no cambie de significado
