@@ -29,6 +29,22 @@ spring:
           initial-interval: 1000ms
           multiplier: 2
           max-interval: 5000ms
+  
+    mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+app:
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:8081}
 
 server:
   port: ${SERVER_PORT:8084}
