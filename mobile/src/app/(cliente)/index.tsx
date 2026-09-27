@@ -6,11 +6,15 @@
 // barra de búsqueda toleran errores de tipeo sobre esos mismos datos, y las
 // cafeterías de cada producto salen de menor a mayor precio.
 //
-// Los datos salen de services/catalog.ts: categorías (GET /v1/catalog/categorias)
-// y productos (GET /v1/catalog/productos) del campus seleccionado. El backend
-// todavía no implementa los controllers: la pantalla consume el contrato real y
-// muestra el error normalizado (toApiError) con botón de reintento, sin
-// fallback a datos hardcodeados.
+// Los datos salen de services/catalogoLocal.ts, que lee el snapshot de
+// src/datos-locales: mismas firmas que services/catalog.ts, que es la ruta real
+// contra el gateway (categorías GET /v1/catalog/categorias y productos
+// GET /v1/catalog/productos del campus seleccionado).
+//
+// Se usa el snapshot porque el catalog-service todavia no implementa los
+// controllers: no hay GET /v1/catalog/campus ni GET /v1/catalog/productos, y las
+// tablas estan vacias. El contrato que se consume es el real, asi que el cambio
+// al backend es cambiar un import. Ver src/datos-locales/README.md.
 //
 // Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de las
 // Ofertas del producto: Producto no tiene precio propio. Se listan todas, una
@@ -40,12 +44,21 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
+// De donde vienen los datos: del snapshot local de src/datos-locales, a traves
+// de services/catalogoLocal.ts. No es una pantalla especial: pide las mismas
+// tres funciones que pediria al backend y no sabe de donde salen. En el sprint
+// de la conexion directa a la base, este import vuelve a ser
+// '../../services/catalog' y no hay que tocar nada mas de este archivo.
+//
+// ordenarOfertasPorPrecio sigue viniendo del servicio real a proposito: es una
+// funcion pura que no depende del origen de los datos, y asi el snapshot y el
+// gateway ordenan las ofertas exactamente igual.
 import {
   leerCampusSeleccionado,
   listarCategorias,
   listarProductos,
-  ordenarOfertasPorPrecio,
-} from '../../services/catalog';
+} from '../../services/catalogoLocal';
+import { ordenarOfertasPorPrecio } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
