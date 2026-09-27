@@ -62,33 +62,33 @@ public class NotificationEventConsumer {
             LOGGER.error("Error al procesar evento {}: {}", event.eventType(), e.getMessage(), e);
             historyService.registerFailure(event, e.getMessage() != null ? e.getMessage() : e.toString());
             // El mensaje se volverá a encolar según la configuración de reintentos
-            throw e; 
+            throw e;
         }
     }
 
     private void procesarVerificacionCorreo(CloudCoffeeEvent event) {
         String email = (String) event.payload().get("email");
         String token = (String) event.payload().get("token");
-        
+
         LOGGER.info("-> Enviando correo de VERIFICACIÓN a {}. Token: {}", email, token);
-        
+
         Context context = new Context();
         String verificacionUrl = frontendUrl + "/verificar-correo?token=" + token;
         context.setVariable("verificacionUrl", verificacionUrl);
-        
+
         emailService.enviarCorreo(email, "Verifica tu cuenta en CloudCoffee", "verificacion", context);
     }
 
     private void procesarRecuperacionPassword(CloudCoffeeEvent event) {
         String email = (String) event.payload().get("email");
         String token = (String) event.payload().get("token");
-        
+
         LOGGER.info("-> Enviando correo de RECUPERACIÓN a {}. Token: {}", email, token);
-        
+
         Context context = new Context();
         String recuperacionUrl = frontendUrl + "/restaurar-contrasena?token=" + token;
         context.setVariable("recuperacionUrl", recuperacionUrl);
-        
+
         emailService.enviarCorreo(email, "Recuperación de contraseña - CloudCoffee", "recuperacion", context);
     }
 

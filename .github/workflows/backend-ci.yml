@@ -1,0 +1,181 @@
+name: Backend CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Test and build backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            backend/pom.xml
+            backend/*/pom.xml
+      - name: Test and build
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress clean verify
+
+  postgres:
+    name: PostgreSQL migrations (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - auth-service
+          - catalog-service
+          - order-service
+          - notification-service
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cloudcoffee_test
+          POSTGRES_USER: cloudcoffee
+          POSTGRES_PASSWORD: cloudcoffee_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U cloudcoffee -d cloudcoffee_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            backend/pom.xml
+            backend/*/pom.xml
+      - name: Test service against PostgreSQL
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_test
+          SPRING_DATASOURCE_USERNAME: cloudcoffee
+          SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl "${{ matrix.module }}" -am clean verify
+      - name: Check applied migrations
+        env:
+          MODULE: ${{ matrix.module }}
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          expected=$(find "$MODULE/src/main/resources/db/migration" -maxdepth 1 -type f \( -name 'V*__*.sql' -o -name 'R__*.sql' \) | wc -l | tr -d '[:space:]')
+          actual=$(docker exec -e PGPASSWORD=cloudcoffee_test "$POSTGRES_CONTAINER" \
+            psql -h 127.0.0.1 -U cloudcoffee -d cloudcoffee_test -tAc \
+            'SELECT count(*) FROM flyway_schema_history WHERE success = true')
+          echo "Applied migrations: $actual/$expected"
+          test "$expected" -gt 0
+          test "$actual" -eq "$expected"
+
+  rabbitmq:
+    name: RabbitMQ event flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cloudcoffee_test
+          POSTGRES_USER: cloudcoffee
+          POSTGRES_PASSWORD: cloudcoffee_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U cloudcoffee -d cloudcoffee_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      rabbitmq:
+        image: rabbitmq:3.13-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: cloudcoffee
+          RABBITMQ_DEFAULT_PASS: cloudcoffee_test
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+          --health-start-period 20s
+    env:
+      RABBIT_INTEGRATION_TEST: 'true'
+      SPRING_RABBITMQ_HOST: localhost
+      SPRING_RABBITMQ_PORT: '5672'
+      SPRING_RABBITMQ_USERNAME: cloudcoffee
+      SPRING_RABBITMQ_PASSWORD: cloudcoffee_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            backend/pom.xml
+            backend/*/pom.xml
+      - name: Test auth publisher with RabbitMQ
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl auth-service -am clean verify
+      - name: Test notification consumer with RabbitMQ and PostgreSQL
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_test
+          SPRING_DATASOURCE_USERNAME: cloudcoffee
+          SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl notification-service -am clean verify
+
+  docker:
+    name: Docker image (${{ matrix.service }})
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - auth-service
+          - catalog-service
+          - order-service
+          - notification-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Build image
+        env:
+          SERVICE_NAME: ${{ matrix.service }}
+        run: docker build --file backend/Dockerfile --build-arg SERVICE_NAME="$SERVICE_NAME" --tag "cloudcoffee-${SERVICE_NAME}:ci" backend
