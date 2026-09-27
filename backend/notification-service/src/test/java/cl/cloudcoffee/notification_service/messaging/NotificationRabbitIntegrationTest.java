@@ -1,5 +1,6 @@
 package cl.cloudcoffee.notification_service.messaging;
 
+import cl.cloudcoffee.security.testing.JwtTestSupport;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @EnabledIfEnvironmentVariable(named = "RABBIT_INTEGRATION_TEST", matches = "true")
 @SpringBootTest
-class NotificationRabbitIntegrationTest {
+class NotificationRabbitIntegrationTest extends JwtTestSupport {
 
     @Autowired
     private RabbitTemplate rabbitTemplate;

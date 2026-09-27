@@ -1,5 +1,6 @@
 package cl.cloudcoffee.auth_service.messaging;
 
+import cl.cloudcoffee.security.testing.JwtTestSupport;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
@@ -13,12 +14,19 @@ import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @EnabledIfEnvironmentVariable(named = "RABBIT_INTEGRATION_TEST", matches = "true")
 @SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
-class AuthRabbitIntegrationTest {
+class AuthRabbitIntegrationTest extends JwtTestSupport {
+
+    @DynamicPropertySource
+    static void privateKey(DynamicPropertyRegistry registry) {
+        registry.add("JWT_PRIVATE_KEY_LOCATION", () -> PRIVATE_KEY_LOCATION);
+    }
 
     @Autowired
     private AuthEventPublisher publisher;
