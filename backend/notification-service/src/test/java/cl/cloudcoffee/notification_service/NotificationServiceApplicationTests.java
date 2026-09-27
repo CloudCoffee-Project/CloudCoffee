@@ -13,7 +13,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {"spring.rabbitmq.listener.simple.auto-startup=false",
-        "management.health.rabbit.enabled=false"})
+        "management.health.rabbit.enabled=false",
+        "management.health.mail.enabled=false"})
 @AutoConfigureMockMvc
 class NotificationServiceApplicationTests extends ServiceJwtTests {
 
