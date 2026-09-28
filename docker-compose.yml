@@ -145,6 +145,7 @@ services:
         environment:
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             SERVER_PORT: 8080
+            SERVER_SSL_ENABLED: "false"
             CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
             AUTH_SERVICE_URL: http://auth-service:8081
             CATALOG_SERVICE_URL: http://catalog-service:8082
