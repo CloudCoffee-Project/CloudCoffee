@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router';
 import { CatalogPage } from './pages/CatalogPage';
 import { HomePage } from './pages/HomePage';
 import { MainLayout } from './components/layout/MainLayout';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
   return (
@@ -12,6 +13,9 @@ export function App() {
         {/* Rutas específicas */}
         <Route path="/" element={<HomePage />} />
         <Route path="/catalogo" element={<CatalogPage />} />
+
+        {/* Pagina 404 para rutas inexistentes */}
+        <Route path="*" element={<NotFoundPage />} />
 
       </Route>
     </Routes>
