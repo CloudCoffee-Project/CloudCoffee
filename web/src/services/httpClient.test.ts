@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createHttpClient } from './httpClient';
+import { ApiRequestError, createHttpClient } from './httpClient';
 
 describe('cliente HTTP del API Gateway', () => {
   it('usa el origen configurado y conserva la ruta, query y headers', async () => {
@@ -52,5 +52,75 @@ describe('cliente HTTP del API Gateway', () => {
     'http://gateway.local/v1', 'http://gateway.local?token=secreto',
     'http://usuario:clave@gateway.local'])('rechaza el origen inválido %s', (baseUrl) => {
     expect(() => createHttpClient(baseUrl)).toThrow(/VITE_API_BASE_URL/);
+  });
+
+  it('convierte Problem Details y conserva los errores de validación', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        type: 'https://cloudcoffee.example/problems/validation',
+        title: 'Datos inválidos',
+        status: 400,
+        detail: 'Revisa el formulario.',
+        instance: '/v1/auth/login',
+        errors: [{ field: 'email', message: 'Debe ser válido.' }],
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/problem+json; charset=utf-8' },
+      }),
+    );
+
+    await expect(createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/auth/login', { method: 'POST' }))
+      .rejects.toMatchObject({
+        name: 'ApiRequestError',
+        status: 400,
+        type: 'https://cloudcoffee.example/problems/validation',
+        title: 'Datos inválidos',
+        detail: 'Revisa el formulario.',
+        instance: '/v1/auth/login',
+        errors: [{ field: 'email', message: 'Debe ser válido.' }],
+      });
+  });
+
+  it.each([
+    ['text/html', '<h1>detalle privado</h1>'],
+    ['application/problem+json', '{json inválido'],
+    ['application/problem+json', JSON.stringify({ detail: 123, errors: ['no válido'] })],
+  ])('usa un error seguro ante una respuesta %s inesperada', async (contentType, body) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(body, { status: 502, headers: { 'Content-Type': contentType } }),
+    );
+
+    await expect(createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/catalog/campus')).rejects.toMatchObject({
+        status: 502,
+        title: 'Error HTTP',
+        detail: 'La solicitud falló con estado HTTP 502.',
+        errors: [],
+      });
+  });
+
+  it('normaliza fallos de red sin mostrar detalles internos', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error('host interno:8082'));
+
+    await expect(createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/catalog/campus')).rejects.toEqual(
+        new ApiRequestError(null, 'Error de conexión', 'No se pudo conectar con el API Gateway.'),
+      );
+  });
+
+  it('permite distinguir la cancelación de un fallo de red', async () => {
+    const abort = new DOMException('Cancelada', 'AbortError');
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(abort);
+
+    await expect(createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/catalog/campus')).rejects.toBe(abort);
+  });
+
+  it.each([204, 205])('devuelve undefined si la respuesta %i no tiene contenido', async (status) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status }));
+
+    await expect(createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/auth/login')).resolves.toBeUndefined();
   });
 });

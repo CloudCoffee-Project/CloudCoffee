@@ -1,5 +1,72 @@
 import { env } from '../config/env';
 
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export class ApiRequestError extends Error {
+  constructor(
+    readonly status: number | null,
+    readonly title: string,
+    readonly detail: string,
+    readonly type: string | null = null,
+    readonly instance: string | null = null,
+    readonly errors: ValidationError[] = [],
+  ) {
+    super(detail);
+    this.name = 'ApiRequestError';
+  }
+}
+
+function isValidationError(value: unknown): value is ValidationError {
+  return typeof value === 'object' && value !== null &&
+    'field' in value && typeof value.field === 'string' &&
+    'message' in value && typeof value.message === 'string';
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+async function responseError(response: Response): Promise<ApiRequestError> {
+  const fallback = new ApiRequestError(
+    response.status,
+    'Error HTTP',
+    `La solicitud falló con estado HTTP ${response.status}.`,
+  );
+
+  const contentType = response.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase();
+  if (contentType !== 'application/problem+json') {
+    return fallback;
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return fallback;
+  }
+
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return fallback;
+  }
+
+  const problem = body as Record<string, unknown>;
+  const errors = Array.isArray(problem.errors)
+    ? problem.errors.filter(isValidationError)
+    : [];
+
+  return new ApiRequestError(
+    response.status,
+    stringOrNull(problem.title) ?? fallback.title,
+    stringOrNull(problem.detail) ?? fallback.detail,
+    stringOrNull(problem.type),
+    stringOrNull(problem.instance),
+    errors,
+  );
+}
+
 function gatewayOrigin(baseUrl: string): string {
   if (!baseUrl.trim()) {
     throw new Error('Configura VITE_API_BASE_URL con el origen del API Gateway.');
@@ -50,9 +117,21 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
         headers.set('Accept', 'application/json');
       }
 
-      const response = await fetcher(url, { ...options, headers });
+      let response: Response;
+      try {
+        response = await fetcher(url, { ...options, headers });
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw error;
+        }
+        throw new ApiRequestError(
+          null,
+          'Error de conexión',
+          'No se pudo conectar con el API Gateway.',
+        );
+      }
       if (!response.ok) {
-        throw new Error(`Error HTTP ${response.status}`);
+        throw await responseError(response);
       }
 
       if (response.status === 204 || response.status === 205) {
