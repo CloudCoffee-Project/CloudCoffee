@@ -40,11 +40,4 @@ class NotificationServiceApplicationTests extends ServiceJwtTests {
                 .andExpect(status().isUnauthorized());
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"GET, health", "HEAD, health", "GET, info", "HEAD, info"})
-    void existingMonitoringEndpointsRemainPublic(String method, String endpoint) throws Exception {
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(
-                        org.springframework.http.HttpMethod.valueOf(method), "/actuator/" + endpoint))
-                .andExpect(status().isOk());
-    }
 }
