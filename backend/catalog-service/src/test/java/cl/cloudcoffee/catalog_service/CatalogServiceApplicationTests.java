@@ -44,9 +44,8 @@ class CatalogServiceApplicationTests extends ServiceJwtTests {
     @ParameterizedTest
     @CsvSource({"GET, campus", "HEAD, campus", "GET, categorias", "HEAD, categorias"})
     void publicCatalogQueriesReachMvcWithoutJwt(String method, String endpoint) throws Exception {
-        // Aun no hay controlador de catalogo: 404 prueba que seguridad deja pasar.
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(
                         HttpMethod.valueOf(method), "/catalog/" + endpoint))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
 }
