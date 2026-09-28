@@ -1,5 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 :root {
   --color-bg-light: #FFFCF9;
   --color-text-main: #2A1F1D;
@@ -38,19 +44,20 @@ button {
 }
 
 .btn-primary {
-  background-color: var(--color-primary);
-  color: var(--color-bg-dark);
-  padding: 0.5rem 1.5rem;
+  background-color: var(--color-btn-dark);
+  color: #FFFFFF;
+  padding: 0.6rem 1.8rem;
   border-radius: 9999px;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
+
 .btn-primary:hover {
-  background-color: var(--color-primary-hover);
+  background-color: var(--color-btn-dark-hover);
   transform: translateY(-2px);
 }
 
-.navar {
+.navbar {
     position: fixed;
     top: 0;
     left: 0;
@@ -102,7 +109,7 @@ button {
     width: 100%;
     padding: 2rem;
     margin-top: auto;
-    background-color: var(--color-bg-dark);
+    background-color: var(--color-bg-light);
     border-top: 1px solid var(--color-border);
     display: flex;
     justify-content: space-between;
