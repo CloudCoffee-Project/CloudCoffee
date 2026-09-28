@@ -1,6 +1,13 @@
 package cl.cloudcoffee.catalog_service.repository;
-import cl.cloudcoffee.catalog_service.model.entity.*;
-import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
 import java.util.UUID;
 
-public interface CategoryRepository extends JpaRepository<Category, UUID> {}
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import cl.cloudcoffee.catalog_service.model.entity.Category;
+
+public interface CategoryRepository extends JpaRepository<Category, UUID> {
+
+    List<Category> findAllByOrderByNameAsc();
+}
