@@ -1,19 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
 :root {
-  font-family: system-ui, sans-serif;
-  color: #25221f;
-  background: #faf8f5;
+  --color-bg-light: #FFFCF9;
+  --color-text-main: #2A1F1D;
+  --color-text-muted: #7A6964;
+
+  --color-primary: #D18D58;
+  --color-primary-hover: #B87644;
+
+  --color-btn-dark: #3E312B;
+  --color-btn-dark-hover: #2B211C;
+
+  --color-border: #EFE9E4;
+
+  --nav-height: 80px;
+  --transition-fast: 0.2s ease;
 }
 
 body {
-  margin: 0;
-}
-
-main {
-  max-width: 48rem;
-  margin: 4rem auto;
-  padding: 0 1.5rem;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-bg-light);
+  color: var(--color-text-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: #654025;
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-fast);
 }
+button {
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-bg-dark);
+  padding: 0.5rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+  transform: translateY(-2px);
