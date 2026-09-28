@@ -48,3 +48,52 @@ button {
 .btn-primary:hover {
   background-color: var(--color-primary-hover);
   transform: translateY(-2px);
+}
+
+.navar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--nav-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    background-color: rgba(255, 252, 249, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border);
+    z-index: 1000;
+}
+
+.navbar-brand a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-text-main);
+}
+
+.navbar-brand svg {
+    color: var(--color-primary);
+}
+
+.navbar-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+
+.nav-link {
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+}
+
+.nav-link:hover, .nav-link.active {
+  color: var(--color-primary);
+}
+.navbar-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
