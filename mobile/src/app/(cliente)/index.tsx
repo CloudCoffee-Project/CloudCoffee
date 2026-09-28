@@ -1,20 +1,30 @@
 // src/app/(cliente)/index.tsx
 //
-// Catálogo del cliente (INT4-28 categorías y productos, INT4-29 búsqueda).
-// Lista los productos de la sede activa: las pills de categoría filtran y la
-// barra de búsqueda toleran errores de tipeo sobre esos mismos datos.
+// Catálogo del cliente (INT4-28 categorías y productos, INT4-29 búsqueda,
+// INT4-31 comparación de precios).
+// Lista los productos de la sede activa: las pills de categoría filtran, la
+// barra de búsqueda toleran errores de tipeo sobre esos mismos datos, y las
+// cafeterías de cada producto salen de menor a mayor precio.
 //
-// Los datos salen de services/catalog.ts: categorías (GET /v1/catalog/categorias)
-// y productos (GET /v1/catalog/productos) del campus seleccionado. El backend
-// todavía no implementa los controllers: la pantalla consume el contrato real y
-// muestra el error normalizado (toApiError) con botón de reintento, sin
-// fallback a datos hardcodeados.
+// Los datos salen de services/catalogoLocal.ts, que lee el snapshot de
+// src/datos-locales: mismas firmas que services/catalog.ts, que es la ruta real
+// contra el gateway (categorías GET /v1/catalog/categorias y productos
+// GET /v1/catalog/productos del campus seleccionado).
+//
+// Se usa el snapshot porque el catalog-service todavia no implementa los
+// controllers: no hay GET /v1/catalog/campus ni GET /v1/catalog/productos, y las
+// tablas estan vacias. El contrato que se consume es el real, asi que el cambio
+// al backend es cambiar un import. Ver src/datos-locales/README.md.
 //
 // Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de las
 // Ofertas del producto: Producto no tiene precio propio. Se listan todas, una
 // por cafetería del campus, porque el modelo es Campus 1:N Cafeteria y cada
 // punto de retiro cobra su propio precio. Tocar la tarjeta abre el detalle
-// (INT4-30), donde se elige en cuál retirar.
+// (INT4-30), donde se elige en cuál retirar y cuántas unidades.
+//
+// INT4-31: las ofertas de cada tarjeta se ordenan de menor a mayor precio con el
+// mismo criterio que el detalle, para que comparar no cambie de significado
+// según la pantalla.
 //
 // Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
 // acentos amarillos y bordes cálidos) replicada del mockup web.
@@ -34,7 +44,21 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
-import { leerCampusSeleccionado, listarCategorias, listarProductos } from '../../services/catalog';
+// De donde vienen los datos: del snapshot local de src/datos-locales, a traves
+// de services/catalogoLocal.ts. No es una pantalla especial: pide las mismas
+// tres funciones que pediria al backend y no sabe de donde salen. En el sprint
+// de la conexion directa a la base, este import vuelve a ser
+// '../../services/catalog' y no hay que tocar nada mas de este archivo.
+//
+// ordenarOfertasPorPrecio sigue viniendo del servicio real a proposito: es una
+// funcion pura que no depende del origen de los datos, y asi el snapshot y el
+// gateway ordenan las ofertas exactamente igual.
+import {
+  leerCampusSeleccionado,
+  listarCategorias,
+  listarProductos,
+} from '../../services/catalogoLocal';
+import { ordenarOfertasPorPrecio } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
@@ -153,6 +177,20 @@ export default function CatalogoProductosScreen() {
     return productos.filter((producto) => coincideConBusqueda(producto, query));
   }, [productos, busqueda]);
 
+  // INT4-31: las cafeterías de cada tarjeta se ordenan de menor a mayor precio
+  // con el mismo criterio que el detalle. Se resuelve una vez por cambio de
+  // búsqueda, en vez de ordenar dentro de renderItem, que se volvería a ejecutar
+  // en cada render de la lista (por ejemplo, al escribir en el buscador).
+  const productosOrdenados = useMemo(() => {
+    if (!productosVisibles) {
+      return productosVisibles;
+    }
+    return productosVisibles.map((producto) => ({
+      ...producto,
+      offers: ordenarOfertasPorPrecio(producto.offers ?? []),
+    }));
+  }, [productosVisibles]);
+
   let contenido;
 
   if (errorCarga !== null) {
@@ -179,7 +217,7 @@ export default function CatalogoProductosScreen() {
   } else {
     contenido = (
       <FlatList
-        data={productosVisibles}
+        data={productosOrdenados}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listaContent}
         showsVerticalScrollIndicator={false}

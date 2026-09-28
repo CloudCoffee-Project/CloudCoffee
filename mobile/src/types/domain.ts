@@ -250,12 +250,31 @@ export interface Seguimiento {
   cafeteriaNombre?: string;
 }
 
+// Una linea del carrito en memoria (INT4-32): un producto comprado en una
+// cafeteria concreta, o sea una Oferta del catalogo. La identidad de la linea es
+// la oferta: volver a agregar el mismo producto en la misma cafeteria suma
+// cantidad a la misma linea en vez de abrir otra. Es el criterio del mockup y el
+// que espera POST /v1/compras, que manda un item por ofertaId.
+//
+// Los nombres de campo siguen a OrdenItem (productoNombre, precioUnitario), no
+// a la version en ingles que habia antes en este archivo.
+//
+// Ojo con el nombre: services/pagos.ts declara su propio ItemCarrito, que es el
+// payload de POST /v1/compras (solo ofertaId y cantidad) y no esta linea.
 export interface ItemCarrito {
   ofertaId: string;
   productoId: string;
-  name: string;
-  price: number;
+  productoNombre: string;
+  precioUnitario: number;
   cafeteriaId: string;
-  cafeName: string;
-  quantity: number;
+  cafeteriaNombre: string;
+  cantidad: number;
+  // Stock de la oferta tal como estaba al agregar. Es una foto, no el stock en
+  // vivo: el carrito vive en memoria y no vuelve a preguntar al catalogo, asi
+  // que la disponibilidad real la revalida el backend al crear la orden.
+  stock: number;
 }
+
+// Lo que hay que entregar para agregar al carrito: la linea sin cantidad, que la
+// elige quien agrega (el stepper del detalle de producto).
+export type NuevoItemCarrito = Omit<ItemCarrito, 'cantidad'>;

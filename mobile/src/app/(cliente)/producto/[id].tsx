@@ -4,6 +4,17 @@
 // todas sus ofertas (una por cafetería de esa sede), deja elegir dónde retirar
 // y con qué cantidad, y muestra el total real de esa oferta.
 //
+// INT4-31: las cafeterías se comparan por precio, así que la lista va siempre de
+// menor a mayor, sin control de orden en pantalla.
+//
+// INT4-32: el botón de agregar ya no navega al carrito, lo que hace es sumar la
+// oferta elegida al carrito global (context/CarritoContext).
+// Al agregar se muestra un aviso con el producto y la cantidad que entraron, y se
+// va solo a los dos segundos. El mockup no tiene nada de esto, pero el botón ya
+// no salta de pantalla: sin una confirmación, no hay forma de saber que el
+// traslado al carrito ocurrió. El carrito (INT4-33) sigue siendo donde el usuario
+// revisa y cambia lo que compró.
+//
 // Los datos salen de services/catalog.ts:
 //   - GET /v1/catalog/productos/{id}?campusId= → el producto con sus ofertas.
 //   - GET /v1/catalog/categorias                 → para poner el nombre de la
@@ -20,8 +31,16 @@
 // Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
 // acentos amarillos y bordes cálidos) replicada del mockup web.
 
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -30,8 +49,10 @@ import {
   leerCampusSeleccionado,
   listarCategorias,
   obtenerProducto,
+  ordenarOfertasPorPrecio,
 } from '../../../services/catalog';
 import { ApiProblem, toApiError } from '../../../services/httpClient';
+import { useCarrito } from '../../../context/CarritoContext';
 import type { Campus, Categoria, Oferta, Producto } from '../../../types/domain';
 
 function formatearPrecio(precio: number): string {
@@ -44,6 +65,9 @@ function estaAgotada(oferta: Oferta | null): boolean {
   return !oferta || !oferta.disponible || oferta.stock <= 0;
 }
 
+// Cuánto queda en pantalla el aviso de "agregado al carrito" antes de irse solo.
+const AVISO_MS = 2000;
+
 export default function DetalleProductoScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -55,6 +79,49 @@ export default function DetalleProductoScreen() {
   const [cargando, setCargando] = useState(true);
   const [ofertaElegida, setOfertaElegida] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
+
+  const { agregar: agregarItem, quitar } = useCarrito();
+
+  // Confirmación de que el producto entró al carrito. Vive en la pantalla y no
+  // en CarritoContext a propósito: el carrito global guarda lo que se compró,
+  // esto solo avisa que la acción pasó. Se va solo con la animación, sin
+  // setTimeout y sin que el usuario tenga que tocar nada.
+  const [aviso, setAviso] = useState<string | null>(null);
+  // El Animated.Value va en useState y no en un ref porque el render lo lee
+  // para la opacidad, y el compilador de React no deja tocar un ref durante el
+  // render. El inicializador perezoso lo crea una sola vez, igual que un ref.
+  const [opacidadAviso] = useState(() => new Animated.Value(0));
+  const animacionAviso = useRef<Animated.CompositeAnimation | null>(null);
+
+  const mostrarAviso = useCallback(
+    (texto: string) => {
+      // Agregar dos veces seguidas reinicia la cuenta del aviso en vez de dejar
+      // el anterior a medio camino.
+      animacionAviso.current?.stop();
+      setAviso(texto);
+      opacidadAviso.setValue(0);
+      animacionAviso.current = Animated.sequence([
+        Animated.timing(opacidadAviso, { toValue: 1, duration: 160, useNativeDriver: true }),
+        Animated.delay(AVISO_MS),
+        Animated.timing(opacidadAviso, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]);
+      animacionAviso.current.start(({ finished }) => {
+        // finished=false si el aviso se reinició o si la pantalla se cerró: en
+        // ese caso corre su propia cuenta y este callback no debe borrarlo.
+        if (finished) setAviso(null);
+      });
+    },
+    [opacidadAviso]
+  );
+
+  // La animación se frena al desmontar: si no, el callback de cierre intentaría
+  // setAviso sobre un componente que ya no existe.
+  useEffect(
+    () => () => {
+      animacionAviso.current?.stop();
+    },
+    []
+  );
 
   const cargar = useCallback(async (): Promise<void> => {
     if (!id) {
@@ -103,13 +170,17 @@ export default function DetalleProductoScreen() {
     }, [cargar])
   );
 
-  const ofertas = producto?.offers ?? [];
+  // INT4-31: las cafeterías se comparan por precio, así que la lista va de menor
+  // a mayor y las agotadas quedan en su lugar en la escalera, no al final. Se
+  // ordena sobre una copia: `producto.offers` es la respuesta del servicio y no
+  // debe reordenarse en el sitio.
+  const ofertas = useMemo(() => ordenarOfertasPorPrecio(producto?.offers ?? []), [producto]);
   const disponibles = ofertas.filter((oferta) => !estaAgotada(oferta));
   const elegida = ofertas.find((oferta) => oferta.ofertaId === ofertaElegida) ?? null;
 
   // Oferta con la que se está trabajando: la elegida si sigue disponible, o la
-  // primera disponible mientras el usuario no elija. Así el stepper y el total
-  // funcionan desde el inicio sobre la oferta que se ve destacada.
+  // más barata disponible mientras el usuario no elija. Así el stepper y el total
+  // funcionan desde el inicio sobre la oferta que se ve destacada arriba.
   const activa = estaAgotada(elegida) ? (disponibles[0] ?? null) : elegida;
 
   const nombreCategoria = categorias.find((c) => c.id === producto?.categoriaId)?.nombre;
@@ -276,6 +347,19 @@ export default function DetalleProductoScreen() {
               >
                 <Text style={styles.stepperBotonTexto}>+</Text>
               </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.trashBtn, pressed && styles.btnPresionado]}
+                onPress={() => {
+                  setCantidad(1);
+                  if (activa) {
+                    quitar(activa.ofertaId);
+                  }
+                }}
+                testID="producto-detalle-basurero"
+                accessibilityLabel={`Eliminar ${producto?.nombre} del carrito`}
+              >
+                <Text style={styles.trashBtnText}>🗑️</Text>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -284,11 +368,20 @@ export default function DetalleProductoScreen() {
   }
 
   const agregarAlCarrito = () => {
-    // TODO(INT4-32..37): el carrito todavía no existe como estado real — la
-    // pantalla carrito.tsx lo declara como otra tarea. Cuando exista, acá se
-    // agrega (producto, ofertaElegida, cantidad) al store del carrito en vez de
-    // navegar. Por ahora lleva al carrito para no perder el contexto.
-    router.push('/(cliente)/carrito');
+    if (!activa || !producto) return;
+    agregarItem(
+      {
+        ofertaId: activa.ofertaId,
+        productoId: producto.id,
+        productoNombre: producto.nombre,
+        precioUnitario: activa.precio,
+        cafeteriaId: activa.cafeteriaId,
+        cafeteriaNombre: activa.cafeteriaNombre,
+        stock: activa.stock,
+      },
+      cantidad
+    );
+    mostrarAviso(`Agregado al carrito · ${cantidad} × ${producto.nombre}`);
   };
 
   const botonAgregarDisabled = !activa;
@@ -304,6 +397,21 @@ export default function DetalleProductoScreen() {
       </Pressable>
 
       <View style={styles.cuerpo}>{contenido}</View>
+
+      {/* El aviso de "agregado al carrito" flota sobre el pie y no lo tapa: el
+          botón queda al alcance para sumar otra unidad sin esperar a que se
+          vaya. pointerEvents="none" para que nunca se coma un toque. */}
+      {aviso !== null ? (
+        <Animated.View
+          style={[styles.avisoAgregado, { opacity: opacidadAviso }]}
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          testID="producto-detalle-aviso"
+        >
+          <Text style={styles.avisoAgregadoIcono}>✅</Text>
+          <Text style={styles.avisoAgregadoTexto}>{aviso}</Text>
+        </Animated.View>
+      ) : null}
 
       {/* El pie acompaña al detalle: si el producto se cargó, el botón siempre
           está, deshabilitado y diciendo "Agotado" cuando no hay nada comprable. */}
@@ -486,6 +594,20 @@ const styles = StyleSheet.create({
     minWidth: 20,
     textAlign: 'center',
   },
+  trashBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EFE9DE',
+    backgroundColor: '#FAF7F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  trashBtnText: {
+    fontSize: 14,
+  },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 10,
@@ -493,6 +615,34 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#EFE9DE',
     backgroundColor: '#FAF7F2',
+  },
+  // Tinta oscura sobre el fondo crema, al revés que las tarjetas claras del
+  // resto de la pantalla, para que se lea como algo flotando y no como parte
+  // del contenido. elevation solo aplica en Android: es la sombra de Material.
+  avisoAgregado: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    // Por encima del pie, cuyo alto lo determinan styles.footer y
+    // styles.btnAgregar. Si se toca uno de los dos, hay que ajustar este número.
+    bottom: 88,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1D2433',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    elevation: 3,
+  },
+  avisoAgregadoIcono: {
+    fontSize: 15,
+  },
+  avisoAgregadoTexto: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   btnAgregar: {
     backgroundColor: '#0052CC',

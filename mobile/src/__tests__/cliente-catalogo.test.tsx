@@ -1,18 +1,45 @@
 // src/__tests__/cliente-catalogo.test.tsx
 // Cubre el catálogo del cliente (INT4-28 categorías y productos, INT4-29
-// búsqueda): carga desde el servicio, precio tomado de la Oferta de la
+// búsqueda, INT4-31 comparación de precios, INT4-34 agregar/quitar desde la
+// tarjeta): carga desde el servicio, precio tomado de la Oferta de la
 // cafetería del campus, estado de stock, filtrado por categoría, búsqueda
 // tolerante a typos y error normalizado con reintento.
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 import CatalogoProductosScreen from '../app/(cliente)/index';
-import { leerCampusSeleccionado, listarCategorias, listarProductos } from '../services/catalog';
+// La pantalla saca los datos de services/catalogoLocal (el snapshot local), no
+// de services/catalog. Ver src/datos-clocales/README.md: el swap al backend es
+// cambiar ese import, y este test acompanha el cambio.
+import {
+  leerCampusSeleccionado,
+  listarCategorias,
+  listarProductos,
+} from '../services/catalogoLocal';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { CarritoProvider } from '../context/CarritoContext';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
-jest.mock('../services/catalog', () => ({
+// Desde INT4-34 la tarjeta escribe en el carrito global, así que el catálogo
+// necesita el provider real: los tests de agregar y quitar tienen que ver el
+// mismo estado que la pantalla del carrito, no una lista armada a mano.
+// AuthContext se mockea porque el provider solo necesita saber quién tiene la
+// sesión abierta.
+jest.mock('../context/AuthContext', () => ({
+  useAuth: jest.fn(() => ({
+    sesion: { userId: 'user-1', rol: 'cliente', cafeteriaId: null, exp: 0 },
+    bootstrapping: false,
+    iniciarSesion: jest.fn(),
+    cerrarSesion: jest.fn(),
+  })),
+}));
+
+// La pantalla pide los datos a catalogoLocal, asi que el mock va ahi. Lo que
+// ordena las ofertas (ordenarOfertasPorPrecio) sigue viniendo de
+// services/catalog, que no se mockea: es una funcion pura y probarla de verdad
+// cubre que la escalera de precios funcione sobre estos datos.
+jest.mock('../services/catalogoLocal', () => ({
   leerCampusSeleccionado: jest.fn(),
   listarCategorias: jest.fn(),
   listarProductos: jest.fn(),
@@ -95,7 +122,11 @@ let arbolActual: ReactTestRenderer | null = null;
 async function renderCatalogo(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
   await act(async () => {
-    tree = create(<CatalogoProductosScreen />);
+    tree = create(
+      <CarritoProvider>
+        <CatalogoProductosScreen />
+      </CarritoProvider>
+    );
   });
   arbolActual = tree;
 
@@ -335,5 +366,105 @@ describe('Catálogo del cliente', () => {
     });
 
     expect(mockListarCategorias.mock.calls.length).toBe(llamadasAntes + 1);
+  });
+});
+
+// Orden de las cafeterías por precio dentro de cada tarjeta (INT4-31). Mismo
+// criterio que el detalle: el servicio no garantiza el orden de las ofertas, así
+// que los datos entran desordenados a propósito.
+describe('comparación de precios entre cafeterías (INT4-31)', () => {
+  const PREFIJO = 'catalogo-oferta-';
+
+  // Solo las ofertas del producto p-1, para no mezclar las de las otras tarjetas.
+  function idsOfertasDeP1(tree: ReactTestRenderer): string[] {
+    const ids = tree.root
+      .findAll(
+        (nodo) => typeof nodo.props?.testID === 'string' && nodo.props.testID.startsWith(PREFIJO)
+      )
+      .map((nodo) => (nodo.props.testID as string).slice(PREFIJO.length))
+      .filter((id) => id.startsWith('of-p1-'));
+
+    return ids.filter((id, i) => ids.indexOf(id) === i);
+  }
+
+  function catalogoConTresCafeterias(): Producto[] {
+    return [
+      producto('p-1', {
+        nombre: 'Café Americano 12oz',
+        offers: [
+          oferta({
+            ofertaId: 'of-p1-sur',
+            cafeteriaNombre: 'Cafetería Sur',
+            precio: 2100,
+            stock: 2,
+          }),
+          oferta({
+            ofertaId: 'of-p1-central',
+            cafeteriaNombre: 'Cafetería Central',
+            precio: 1500,
+            stock: 4,
+          }),
+          oferta({
+            ofertaId: 'of-p1-norte',
+            cafeteriaNombre: 'Cafetería Norte',
+            precio: 1800,
+            stock: 3,
+          }),
+        ],
+      }),
+      producto('p-2', { nombre: 'Croissant Jamón y Queso' }),
+    ];
+  }
+
+  beforeEach(() => {
+    mockListarProductos.mockResolvedValue(catalogoConTresCafeterias());
+  });
+
+  it('ordena las cafeterías de la tarjeta de menor a mayor', async () => {
+    const tree = await renderCatalogo();
+
+    expect(idsOfertasDeP1(tree)).toEqual(['of-p1-central', 'of-p1-norte', 'of-p1-sur']);
+  });
+
+  it('deja las agotadas en la escalera de precios, no al final', async () => {
+    mockListarProductos.mockResolvedValue([
+      producto('p-1', {
+        offers: [
+          oferta({
+            ofertaId: 'of-p1-agotada',
+            cafeteriaNombre: 'Cafetería Agotada',
+            precio: 1200,
+            stock: 0,
+            disponible: false,
+          }),
+          oferta({
+            ofertaId: 'of-p1-norte',
+            cafeteriaNombre: 'Cafetería Norte',
+            precio: 1800,
+            stock: 3,
+          }),
+        ],
+      }),
+    ]);
+
+    const tree = await renderCatalogo();
+
+    expect(idsOfertasDeP1(tree)).toEqual(['of-p1-agotada', 'of-p1-norte']);
+  });
+
+  it('mantiene el orden al cambiar la búsqueda', async () => {
+    const tree = await renderCatalogo();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'catalogo-buscar' }).props.onChangeText('Café');
+    });
+
+    expect(idsOfertasDeP1(tree)).toEqual(['of-p1-central', 'of-p1-norte', 'of-p1-sur']);
+  });
+
+  it('no ofrece control de orden: la lista no se puede invertir', async () => {
+    const tree = await renderCatalogo();
+
+    expect(tree.root.findAll((nodo) => nodo.props?.testID === 'catalogo-orden')).toHaveLength(0);
   });
 });

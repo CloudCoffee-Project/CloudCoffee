@@ -1,9 +1,9 @@
 // src/services/catalog.ts
 //
-// Catálogo del cliente (INT4-27/28/29, INT4-30 detalle): campus, categorías,
-// productos y el detalle de un producto. Es la única fuente de datos del
-// catálogo para la app móvil: las pantallas nunca pegan httpClient ni definen
-// sus propios tipos.
+// Catálogo del cliente (INT4-27/28/29, INT4-30 detalle, INT4-31 comparación de
+// precios): campus, categorías, productos, el detalle de un producto y el orden
+// por precio de sus ofertas. Es la única fuente de datos del catálogo para la app
+// móvil: las pantallas nunca pegan httpClient ni definen sus propios tipos.
 //
 // Contrato (doc del equipo, app móvil):
 //   - GET /v1/catalog/campus             → campus disponibles.
@@ -39,7 +39,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { httpClient } from './httpClient';
 import { CAMPUS_STORAGE_KEY } from './campus';
-import type { Campus, Categoria, Producto } from '../types/domain';
+import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 // Rutas del dominio de catálogo dentro del gateway.
 export const CAMPUS_ENDPOINT = '/v1/catalog/campus';
@@ -84,6 +84,44 @@ export async function obtenerProducto(productoId: string, campusId: string): Pro
   });
 
   return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// Comparación de precios entre cafeterías (INT4-31).
+//
+// Un producto puede tener una oferta por cafetería del campus, cada una con su
+// precio. Para comparar hay que ordenarlas, y ese orden NO viene del endpoint:
+// el backend devuelve las ofertas en el orden que le sale de la consulta, que
+// no es un contrato. Ordenar acá sobre los datos ya traídos deja el resultado
+// igual en el detalle y en el catálogo, y no depende de que el backend devuelva
+// casualmente un orden útil.
+//
+// El criterio es fijo: de menor a mayor precio. Es el que hace comparable la
+// lista sin que la persona tenga que tocar nada, y el mismo en el detalle y en
+// el catálogo. No hay control de orden en pantalla.
+//
+// Las ofertas agotadas se ordenan con las disponibles y no se van al final: la
+// lista es la escalera de precios del campus, y la tarjeta agotada ya se dibuja
+// deshabilitada y con su "Agotado". Sacarlas al final haría que la más barata
+// dejara de estar arriba, que es justo lo que se viene a ver.
+// ---------------------------------------------------------------------------
+
+/**
+ * Ordena las ofertas de un producto de menor a mayor precio.
+ *
+ * No muta el array recibido: devuelve una copia, porque `ofertas` viene de la
+ * respuesta del servicio y las pantallas la reutilizan para el total, el stock y
+ * la selección. A igual precio desempata por nombre de cafetería para que el
+ * orden sea estable y no cambie entre renders cuando dos puntos de retiro
+ * cobran lo mismo.
+ */
+export function ordenarOfertasPorPrecio(ofertas: Oferta[]): Oferta[] {
+  return [...ofertas].sort((a, b) => {
+    if (a.precio !== b.precio) {
+      return a.precio - b.precio;
+    }
+    return a.cafeteriaNombre.localeCompare(b.cafeteriaNombre, 'es');
+  });
 }
 
 // ---------------------------------------------------------------------------
