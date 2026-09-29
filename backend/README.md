@@ -162,9 +162,10 @@ Se mantienen públicos estos métodos y rutas (anteponer `/v1` al usar Gateway):
 | POST | `/auth/password/recovery`, `/auth/password/reset` |
 | GET, HEAD | `/catalog/campus`, `/catalog/categorias` |
 
-Los endpoints de monitoreo ya expuestos por Notification (`GET`/`HEAD`
-`/actuator/health` y `/actuator/info`) también conservan su acceso público directo;
-no se agrega una ruta de Gateway para ellos.
+Los endpoints de monitoreo de todos los servicios (`GET`/`HEAD`
+`/actuator/health` y `/actuator/info`) conservan su acceso público directo. Solo
+se expone el estado general, sin detalles de componentes internos; no se agrega
+una ruta de Gateway para inspeccionar los Actuator de otros servicios.
 
 La lista mantiene el contrato previo del Gateway; no crea endpoints que todavía
 no estén implementados. Todas las demás rutas de los microservicios requieren JWT,

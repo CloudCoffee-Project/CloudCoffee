@@ -24,6 +24,22 @@ public abstract class ServiceJwtTests extends JwtTestSupport {
     MockMvc securityMvc;
 
     @Test
+    protected void healthEndpointIsPublicAndDoesNotExposeComponents() throws Exception {
+        securityMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
+    protected void infoEndpointIsPublicAndUseful() throws Exception {
+        securityMvc.perform(get("/actuator/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.app.name").isNotEmpty())
+                .andExpect(jsonPath("$.app.description").isNotEmpty());
+    }
+
+    @Test
     protected void directServiceAccessRequiresJwt() throws Exception {
         securityMvc.perform(get("/jwt-test/identity").header("X-User-Role", "SUPER_ADMIN"))
                 .andExpect(status().isUnauthorized())

@@ -19,6 +19,22 @@ class ApiGatewayApplicationTests extends cl.cloudcoffee.security.testing.JwtTest
     MockMvc mvc;
 
     @Test
+    void healthEndpointIsPublicAndDoesNotExposeComponents() throws Exception {
+        mvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
+    void infoEndpointIsPublicAndUseful() throws Exception {
+        mvc.perform(get("/actuator/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.app.name").isNotEmpty())
+                .andExpect(jsonPath("$.app.description").isNotEmpty());
+    }
+
+    @Test
     void emptyOriginsDoNotAuthorizeCrossOriginRequests() throws Exception {
         mvc.perform(get("/v1/catalog/campus").header(HttpHeaders.ORIGIN, "http://localhost:3000"))
                 .andExpect(status().isForbidden())
