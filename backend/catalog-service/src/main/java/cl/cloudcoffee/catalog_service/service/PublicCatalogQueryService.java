@@ -16,13 +16,16 @@ public class PublicCatalogQueryService {
 
     private final CampusRepository campusRepository;
     private final CategoryRepository categoryRepository;
+    private final cl.cloudcoffee.catalog_service.repository.ProductRepository productRepository;
 
     public PublicCatalogQueryService(
             CampusRepository campusRepository,
-            CategoryRepository categoryRepository
+            CategoryRepository categoryRepository,
+            cl.cloudcoffee.catalog_service.repository.ProductRepository productRepository
     ) {
         this.campusRepository = campusRepository;
         this.categoryRepository = categoryRepository;
+        this.productRepository = productRepository;
     }
 
     public List<CampusResponse> findAllCampus() {
@@ -35,5 +38,15 @@ public class PublicCatalogQueryService {
         return categoryRepository.findAllByOrderByNameAsc().stream()
                 .map(CategoryResponse::from)
                 .toList();
+    }
+
+    public org.springframework.data.domain.Page<cl.cloudcoffee.catalog_service.dto.ProductResponse> findProducts(
+            java.util.UUID campusId,
+            java.util.UUID categoryId,
+            String q,
+            org.springframework.data.domain.Pageable pageable
+    ) {
+        return productRepository.findAvailableProducts(campusId, categoryId, q, pageable)
+                .map(cl.cloudcoffee.catalog_service.dto.ProductResponse::from);
     }
 }

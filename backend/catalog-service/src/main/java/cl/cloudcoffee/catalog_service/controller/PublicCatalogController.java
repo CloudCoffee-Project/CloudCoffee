@@ -29,4 +29,14 @@ public class PublicCatalogController {
     public List<CategoryResponse> findAllCategories() {
         return queryService.findAllCategories();
     }
+
+    @GetMapping("/productos")
+    public org.springframework.data.domain.Page<cl.cloudcoffee.catalog_service.dto.ProductResponse> findProducts(
+            @org.springframework.web.bind.annotation.RequestParam java.util.UUID campusId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) java.util.UUID categoriaId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String q,
+            org.springframework.data.domain.Pageable pageable
+    ) {
+        return queryService.findProducts(campusId, categoriaId, q, pageable);
+    }
 }
