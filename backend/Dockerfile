@@ -30,7 +30,8 @@ FROM runtime AS auth-runtime
 
 USER root
 RUN apk add --no-cache su-exec
-COPY --chmod=0555 docker/auth-entrypoint.sh /usr/local/bin/auth-entrypoint.sh
+COPY docker/auth-entrypoint.sh /usr/local/bin/auth-entrypoint.sh
+RUN chmod 0555 /usr/local/bin/auth-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/auth-entrypoint.sh"]
 CMD ["java", "-jar", "/app/application.jar"]
