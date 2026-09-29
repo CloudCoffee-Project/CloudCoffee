@@ -46,6 +46,21 @@ docker compose up --build -d
 docker compose ps
 ```
 
+Los cinco procesos Spring Boot se consideran listos únicamente cuando su endpoint
+`/actuator/health` responde correctamente. El API Gateway espera a que Auth,
+Catalog, Order y Notification estén saludables antes de iniciar.
+
+Para consultar manualmente salud e información no sensible, sustituir el puerto
+por el del servicio correspondiente:
+
+```bash
+curl http://localhost:18081/actuator/health
+curl http://localhost:18081/actuator/info
+```
+
+Solo se exponen `health` e `info`. La respuesta de salud pública muestra el estado
+general, pero no los componentes internos ni credenciales.
+
 ### Ver los logs
 
 Todos los servicios:

@@ -14,7 +14,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class GatewayCorsConfig {
 
     @Bean
-    UrlBasedCorsConfigurationSource corsConfigurationSource(
+    public UrlBasedCorsConfigurationSource corsConfigurationSource(
             @Value("${cloudcoffee.cors.allowed-origins}") String allowedOrigins) {
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
@@ -23,7 +23,6 @@ public class GatewayCorsConfig {
         if (origins.stream().anyMatch(origin -> origin.contains("*"))) {
             throw new IllegalArgumentException("CORS_ALLOWED_ORIGINS debe contener origenes exactos, sin comodines");
         }
-
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
@@ -32,7 +31,7 @@ public class GatewayCorsConfig {
         configuration.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/v1/**", configuration);
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }

@@ -12,3 +12,21 @@ spring:
     out-of-order: false
     clean-disabled: true
     baseline-on-migrate: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Servicio de pedidos de CloudCoffee

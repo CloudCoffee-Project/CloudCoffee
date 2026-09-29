@@ -42,6 +42,12 @@ services:
             - no-new-privileges:true
         ports:
             - "${AUTH_SERVICE_PORT}:8081"
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:8081/actuator/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
         depends_on:
             auth-db:
                 condition: service_healthy
@@ -69,6 +75,12 @@ services:
             - jwt_public_key
         ports:
             - "${CATALOG_SERVICE_PORT}:8082"
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:8082/actuator/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
         depends_on:
             catalog-db:
                 condition: service_healthy
@@ -94,6 +106,12 @@ services:
             - jwt_public_key
         ports:
             - "${ORDER_SERVICE_PORT}:8083"
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:8083/actuator/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
         depends_on:
             order-db:
                 condition: service_healthy
@@ -125,10 +143,17 @@ services:
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
             SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
+            MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
         secrets:
             - jwt_public_key
         ports:
             - "${NOTIFICATION_SERVICE_PORT}:8084"
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:8084/actuator/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
         depends_on:
             notification-db:
                 condition: service_healthy
@@ -157,11 +182,21 @@ services:
             - jwt_public_key
         ports:
             - "${API_GATEWAY_PORT}:8080"
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:8080/actuator/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
         depends_on:
-            - auth-service
-            - catalog-service
-            - order-service
-            - notification-service
+            auth-service:
+                condition: service_healthy
+            catalog-service:
+                condition: service_healthy
+            order-service:
+                condition: service_healthy
+            notification-service:
+                condition: service_healthy
         networks:
             - backend
 
