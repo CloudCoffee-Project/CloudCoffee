@@ -60,6 +60,41 @@ export function esEstadoOrdenNoRetirado(estado: EstadoOrden): boolean {
 export type EstadoCompra =
   'reservando' | 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
 
+// Estados en los que el cliente todavía puede actuar sobre su compra (INT4-37):
+// una compra confirmada ('pagado') o ya cancelada no se toca, y una compra en
+// revisión solo se puede cancelar (confirmarla mientras se revisa no tiene
+// sentido). Igual que el resto de estados, se derivan del union EstadoCompra
+// acá y no como strings sueltos en la pantalla.
+export const ESTADOS_COMPRA_CONFIRMABLES: readonly EstadoCompra[] = ['reservando'];
+export const ESTADOS_COMPRA_CANCELABLES: readonly EstadoCompra[] = [
+  'reservando',
+  'revision_requerida',
+  'pendiente_pago',
+];
+
+export function puedeConfirmarCompra(estado: EstadoCompra): boolean {
+  return ESTADOS_COMPRA_CONFIRMABLES.includes(estado);
+}
+
+export function puedeCancelarCompra(estado: EstadoCompra): boolean {
+  return ESTADOS_COMPRA_CANCELABLES.includes(estado);
+}
+
+// Estados en los que el cliente todavía puede actuar sobre UNA orden puntual de
+// su compra (INT4-37). La orden solo es cancelable mientras está reservando: en
+// cuanto el pago entró ('pagado' en adelante) la cafetería ya la está
+// preparando y cancelar ya no corresponde al cliente.
+export const ESTADOS_ORDEN_CONFIRMABLES: readonly EstadoOrden[] = ['reservando'];
+export const ESTADOS_ORDEN_CANCELABLES: readonly EstadoOrden[] = ['reservando'];
+
+export function puedeConfirmarOrden(estado: EstadoOrden): boolean {
+  return ESTADOS_ORDEN_CONFIRMABLES.includes(estado);
+}
+
+export function puedeCancelarOrden(estado: EstadoOrden): boolean {
+  return ESTADOS_ORDEN_CANCELABLES.includes(estado);
+}
+
 export type AccionNoRetirado = 'reingresar' | 'descartar';
 
 export interface SesionDecodificada {

@@ -1,6 +1,8 @@
 // src/services/ordenes.test.ts
 import { httpClient } from './httpClient';
 import {
+  cancelarOrden,
+  confirmarOrden,
   fetchPedidosEntrantes,
   marcarOrdenEntregada,
   ORDENES_ENDPOINT,
@@ -76,6 +78,39 @@ describe('marcarOrdenEntregada', () => {
       headers: { Authorization: 'Bearer token-real' },
     });
     expect(resultado).toEqual(ordenesMock[0]);
+  });
+});
+
+// INT4-37: acciones del cliente sobre una orden puntual de su compra.
+describe('confirmarOrden y cancelarOrden', () => {
+  afterEach(() => {
+    mockedPost.mockReset();
+  });
+
+  it('confirma la orden en su propio endpoint, sin enviar token a mano', async () => {
+    const confirmada = { ...ordenesMock[0], estado: 'pagado' as const };
+    mockedPost.mockResolvedValue({ data: confirmada });
+
+    const resultado = await confirmarOrden('o-1');
+
+    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/confirmar`);
+    expect(resultado).toEqual(confirmada);
+  });
+
+  it('cancela la orden en su propio endpoint', async () => {
+    const cancelada = { ...ordenesMock[0], estado: 'cancelado' as const };
+    mockedPost.mockResolvedValue({ data: cancelada });
+
+    const resultado = await cancelarOrden('o-1');
+
+    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/cancelar`);
+    expect(resultado).toEqual(cancelada);
+  });
+
+  it('propaga el error si el gateway rechaza la acción', async () => {
+    mockedPost.mockRejectedValue(new Error('La orden ya fue pagada'));
+
+    await expect(confirmarOrden('o-1')).rejects.toThrow('La orden ya fue pagada');
   });
 });
 

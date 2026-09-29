@@ -5,11 +5,21 @@
 // órdenes que agrupa; desde una compra pagada se puede abrir la boleta en PDF
 // de cada orden (INT4-48, pantalla (cliente)/orden/[id]).
 //
+// INT4-37: la pantalla es también donde el cliente confirma o cancela, tanto la
+// compra completa como una orden puntual. Las acciones aparecen solo en los
+// estados que lo permiten (puedeConfirmarCompra/puedeCancelarCompra y
+// puedeConfirmarOrden/puedeCancelarOrden, en types/domain.ts): una compra
+// pagada o cancelada no ofrece nada, y una orden ya pagada tampoco, porque
+// cancelar ahí ya no corresponde al cliente. Cancelar pide confirmación en
+// pantalla antes de llamar al backend, y mientras la llamada viaja el botón
+// queda deshabilitado para no repetir la acción.
+//
 // El listado sale de GET /v1/compras (services/compras.ts). El backend aún no
 // implementa el controller: la pantalla consume el contrato real y muestra el
 // error normalizado (toApiError) si el gateway responde con problem+json, con
-// botón de reintento. Se recarga al ganar foco para reflejar compras creadas
-// en el flujo de pago (carrito → resultado-pago → Mis Compras).
+// botón de reintento. Se recarga al ganar foco y después de cada acción, para
+// reflejar compras creadas en el flujo de pago (carrito → checkout → Mis
+// Compras) y el estado que el backend devuelve tras confirmar o cancelar.
 
 import { useCallback, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,9 +27,18 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
-import { listarCompras } from '../../services/compras';
+import { cancelarCompra, confirmarCompra, listarCompras } from '../../services/compras';
+import { cancelarOrden, confirmarOrden } from '../../services/ordenes';
 import { ApiProblem, toApiError } from '../../services/httpClient';
-import type { Compra, EstadoCompra, Orden } from '../../types/domain';
+import {
+  puedeCancelarCompra,
+  puedeCancelarOrden,
+  puedeConfirmarCompra,
+  puedeConfirmarOrden,
+  type Compra,
+  type EstadoCompra,
+  type Orden,
+} from '../../types/domain';
 
 // Etiquetas e identidad de la pill por estado de compra, análogas a las del
 // union EstadoOrden (qr-retiro/seguimientos) pero para EstadoCompra. Nunca un
@@ -62,11 +81,31 @@ function puedeVerBoleta(compra: Compra): boolean {
   return compra.estado === 'pagado';
 }
 
+// INT4-37: qué botón se está ejecutando. Se guarda el id también para poder
+// mostrar el spinner solo en el botón pulsado y no en los demás de la lista.
+type AccionEnCurso = {
+  ambito: 'compra' | 'orden';
+  tipo: 'confirmar' | 'cancelar';
+  id: string;
+};
+
+function claveAccion(ambito: AccionEnCurso['ambito'], id: string): string {
+  return `${ambito}:${id}`;
+}
+
 export default function MisComprasScreen() {
   const router = useRouter();
   // null = aún cargando el listado inicial.
   const [compras, setCompras] = useState<Compra[] | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
+
+  // Estado de las acciones del cliente (INT4-37).
+  const [accion, setAccion] = useState<AccionEnCurso | null>(null);
+  // Clave de la cancelación que espera confirmación en pantalla ("compra:<id>"
+  // u "orden:<id>"); null = no hay ninguna esperando.
+  const [cancelacionPorConfirmar, setCancelacionPorConfirmar] = useState<string | null>(null);
+  const [mensajeAccion, setMensajeAccion] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
 
   const recargar = useCallback(async (): Promise<void> => {
     try {
@@ -91,12 +130,73 @@ export default function MisComprasScreen() {
     void recargar();
   };
 
-  const abrirBoleta = (orden: Orden): void => {
-    router.push({
-      pathname: '/(cliente)/orden/[id]',
-      params: { id: orden.ordenId, estado: orden.estado },
-    });
-  };
+  // Ejecuta la acción contra el backend y recarga el historial para mostrar el
+  // estado que devuelve. Con una acción en vuelo se ignoran los toques: evita
+  // confirmar dos veces o cancelar una compra que ya quedó cancelada.
+  const ejecutarAccion = useCallback(
+    async (
+      ambito: AccionEnCurso['ambito'],
+      tipo: AccionEnCurso['tipo'],
+      id: string
+    ): Promise<void> => {
+      if (accion) {
+        return;
+      }
+
+      setAccion({ ambito, tipo, id });
+      setMensajeAccion(null);
+      setErrorAccion(null);
+      setCancelacionPorConfirmar(null);
+
+      const esCompra = ambito === 'compra';
+      const etiqueta = esCompra ? 'la compra' : 'el pedido';
+
+      try {
+        if (tipo === 'confirmar') {
+          if (esCompra) {
+            await confirmarCompra(id);
+          } else {
+            await confirmarOrden(id);
+          }
+        } else if (esCompra) {
+          await cancelarCompra(id);
+        } else {
+          await cancelarOrden(id);
+        }
+
+        setMensajeAccion(
+          tipo === 'confirmar'
+            ? `Confirmaste ${etiqueta}. Te avisaremos cuando cambie el estado.`
+            : `Cancelaste ${etiqueta}. No se cobró nada por esta acción.`
+        );
+        await recargar();
+      } catch (error) {
+        const apiError = toApiError(error as AxiosError<ApiProblem>);
+        setErrorAccion(apiError.message);
+      } finally {
+        setAccion(null);
+      }
+    },
+    [accion, recargar]
+  );
+
+  // Cancelar pide confirmación en pantalla antes de tocar el backend: es una
+  // acción que el usuario no puede deshacer desde la app.
+  const pedirCancelacion = useCallback((ambito: AccionEnCurso['ambito'], id: string): void => {
+    setMensajeAccion(null);
+    setErrorAccion(null);
+    setCancelacionPorConfirmar(claveAccion(ambito, id));
+  }, []);
+
+  const abrirBoleta = useCallback(
+    (orden: Orden): void => {
+      router.push({
+        pathname: '/(cliente)/orden/[id]',
+        params: { id: orden.ordenId, estado: orden.estado },
+      });
+    },
+    [router]
+  );
 
   let contenido: ReactNode;
   if (errorCarga !== null) {
@@ -136,8 +236,24 @@ export default function MisComprasScreen() {
         showsVerticalScrollIndicator={false}
         testID="lista-compras"
       >
+        {mensajeAccion ? (
+          <View style={styles.bannerExito} testID="compras-accion-mensaje">
+            <Text style={styles.bannerExitoTexto}>{mensajeAccion}</Text>
+          </View>
+        ) : null}
+
+        {errorAccion ? (
+          <View style={styles.bannerError} testID="compras-accion-error">
+            <Text style={styles.bannerErrorTitulo}>No pudimos completar la acción</Text>
+            <Text style={styles.bannerErrorTexto}>{errorAccion}</Text>
+          </View>
+        ) : null}
+
         {compras.map((compra) => {
           const conBoleta = puedeVerBoleta(compra);
+          const puedeConfirmar = puedeConfirmarCompra(compra.estado);
+          const puedeCancelar = puedeCancelarCompra(compra.estado);
+          const hayAcciones = puedeConfirmar || puedeCancelar;
           return (
             <View
               key={compra.compraId}
@@ -169,30 +285,225 @@ export default function MisComprasScreen() {
 
               <View style={styles.ordenes}>
                 {compra.ordenes.map((orden, i) => (
-                  <View
-                    key={orden.ordenId}
-                    style={[styles.ordenFila, i > 0 && styles.ordenFilaBorde]}
-                  >
-                    <View style={styles.ordenInfo}>
-                      <Text style={styles.ordenEtiqueta}>PEDIDO</Text>
-                      <Text style={styles.ordenCodigo} numberOfLines={1}>
-                        #{orden.codigoOrden}
-                      </Text>
+                  <View key={orden.ordenId}>
+                    <View style={[styles.ordenFila, i > 0 && styles.ordenFilaBorde]}>
+                      <View style={styles.ordenInfo}>
+                        <Text style={styles.ordenEtiqueta}>PEDIDO</Text>
+                        <Text style={styles.ordenCodigo} numberOfLines={1}>
+                          #{orden.codigoOrden}
+                        </Text>
+                      </View>
+                      {conBoleta ? (
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.btnBoleta,
+                            pressed && styles.btnPresionado,
+                          ]}
+                          onPress={() => abrirBoleta(orden)}
+                          testID={`boleta-orden-${orden.ordenId}`}
+                        >
+                          <Text style={styles.btnBoletaTexto}>📄 Boleta</Text>
+                        </Pressable>
+                      ) : (
+                        <Text style={styles.ordenMonto}>{formatoMonto(orden.montoTotal)}</Text>
+                      )}
                     </View>
-                    {conBoleta ? (
-                      <Pressable
-                        style={({ pressed }) => [styles.btnBoleta, pressed && styles.btnPresionado]}
-                        onPress={() => abrirBoleta(orden)}
-                        testID={`boleta-orden-${orden.ordenId}`}
-                      >
-                        <Text style={styles.btnBoletaTexto}>📄 Boleta</Text>
-                      </Pressable>
-                    ) : (
-                      <Text style={styles.ordenMonto}>{formatoMonto(orden.montoTotal)}</Text>
+
+                    {/* INT4-37: acciones sobre ESTA orden. Una orden pagada o ya
+                        entregada no ofrece nada: la cafetería ya la preparó y no
+                        le corresponde cancelar al cliente. */}
+                    {(puedeConfirmarOrden(orden.estado) || puedeCancelarOrden(orden.estado)) && (
+                      <View style={styles.acciones} testID={`orden-acciones-${orden.ordenId}`}>
+                        {puedeConfirmarOrden(orden.estado) ? (
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.btnAccion,
+                              styles.btnAccionPrimario,
+                              accion !== null && styles.btnAccionDeshabilitado,
+                              pressed && styles.btnPresionado,
+                            ]}
+                            onPress={() => void ejecutarAccion('orden', 'confirmar', orden.ordenId)}
+                            disabled={accion !== null}
+                            testID={`orden-confirmar-${orden.ordenId}`}
+                          >
+                            {accion?.ambito === 'orden' &&
+                            accion.id === orden.ordenId &&
+                            accion.tipo === 'confirmar' ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                                testID={`orden-confirmar-cargando-${orden.ordenId}`}
+                              />
+                            ) : (
+                              <Text style={styles.btnAccionPrimarioTexto}>✓ Confirmar pedido</Text>
+                            )}
+                          </Pressable>
+                        ) : null}
+
+                        {puedeCancelarOrden(orden.estado) &&
+                          (cancelacionPorConfirmar === claveAccion('orden', orden.ordenId) ? (
+                            <View
+                              style={styles.confirmacion}
+                              testID={`orden-confirmacion-cancelar-${orden.ordenId}`}
+                            >
+                              <Text style={styles.confirmacionTexto}>
+                                ¿Cancelar el pedido #{orden.codigoOrden}?
+                              </Text>
+                              <View style={styles.confirmacionBotones}>
+                                <Pressable
+                                  style={({ pressed }) => [
+                                    styles.btnAccion,
+                                    styles.btnAccionPeligro,
+                                    accion !== null && styles.btnAccionDeshabilitado,
+                                    pressed && styles.btnPresionado,
+                                  ]}
+                                  onPress={() =>
+                                    void ejecutarAccion('orden', 'cancelar', orden.ordenId)
+                                  }
+                                  disabled={accion !== null}
+                                  testID={`orden-confirmar-cancelacion-${orden.ordenId}`}
+                                >
+                                  {accion?.ambito === 'orden' &&
+                                  accion.id === orden.ordenId &&
+                                  accion.tipo === 'cancelar' ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#FFFFFF"
+                                      testID={`orden-cancelar-cargando-${orden.ordenId}`}
+                                    />
+                                  ) : (
+                                    <Text style={styles.btnAccionPeligroTexto}>Sí, cancelar</Text>
+                                  )}
+                                </Pressable>
+                                <Pressable
+                                  style={({ pressed }) => [
+                                    styles.btnAccion,
+                                    pressed && styles.btnPresionado,
+                                  ]}
+                                  onPress={() => setCancelacionPorConfirmar(null)}
+                                  testID={`orden-mantener-${orden.ordenId}`}
+                                >
+                                  <Text style={styles.btnAccionTexto}>No, mantener</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          ) : (
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.btnAccion,
+                                styles.btnAccionPeligro,
+                                accion !== null && styles.btnAccionDeshabilitado,
+                                pressed && styles.btnPresionado,
+                              ]}
+                              onPress={() => pedirCancelacion('orden', orden.ordenId)}
+                              disabled={accion !== null}
+                              testID={`orden-cancelar-${orden.ordenId}`}
+                            >
+                              <Text style={styles.btnAccionPeligroTexto}>Cancelar pedido</Text>
+                            </Pressable>
+                          ))}
+                      </View>
                     )}
                   </View>
                 ))}
               </View>
+
+              {/* INT4-37: acciones sobre la COMPRA COMPLETA (sus pedidos
+                  incluidos). Solo aparecen mientras la compra lo permita: si ya
+                  está pagada o cancelada, la tarjeta queda como histórico. */}
+              {hayAcciones ? (
+                <View style={styles.acciones} testID={`compra-acciones-${compra.compraId}`}>
+                  {puedeConfirmar ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.btnAccion,
+                        styles.btnAccionPrimario,
+                        accion !== null && styles.btnAccionDeshabilitado,
+                        pressed && styles.btnPresionado,
+                      ]}
+                      onPress={() => void ejecutarAccion('compra', 'confirmar', compra.compraId)}
+                      disabled={accion !== null}
+                      testID={`compra-confirmar-${compra.compraId}`}
+                    >
+                      {accion?.ambito === 'compra' &&
+                      accion.id === compra.compraId &&
+                      accion.tipo === 'confirmar' ? (
+                        <ActivityIndicator
+                          size="small"
+                          color="#FFFFFF"
+                          testID={`compra-confirmar-cargando-${compra.compraId}`}
+                        />
+                      ) : (
+                        <Text style={styles.btnAccionPrimarioTexto}>✓ Confirmar compra</Text>
+                      )}
+                    </Pressable>
+                  ) : null}
+
+                  {puedeCancelar ? (
+                    cancelacionPorConfirmar === claveAccion('compra', compra.compraId) ? (
+                      <View
+                        style={styles.confirmacion}
+                        testID={`compra-confirmar-cancelacion-${compra.compraId}`}
+                      >
+                        <Text style={styles.confirmacionTexto}>
+                          ¿Cancelar la compra completa y todos sus pedidos?
+                        </Text>
+                        <View style={styles.confirmacionBotones}>
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.btnAccion,
+                              styles.btnAccionPeligro,
+                              accion !== null && styles.btnAccionDeshabilitado,
+                              pressed && styles.btnPresionado,
+                            ]}
+                            onPress={() =>
+                              void ejecutarAccion('compra', 'cancelar', compra.compraId)
+                            }
+                            disabled={accion !== null}
+                            testID={`compra-cancelar-confirmado-${compra.compraId}`}
+                          >
+                            {accion?.ambito === 'compra' &&
+                            accion.id === compra.compraId &&
+                            accion.tipo === 'cancelar' ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                                testID={`compra-cancelar-cargando-${compra.compraId}`}
+                              />
+                            ) : (
+                              <Text style={styles.btnAccionPeligroTexto}>Sí, cancelar</Text>
+                            )}
+                          </Pressable>
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.btnAccion,
+                              pressed && styles.btnPresionado,
+                            ]}
+                            onPress={() => setCancelacionPorConfirmar(null)}
+                            testID={`compra-mantener-${compra.compraId}`}
+                          >
+                            <Text style={styles.btnAccionTexto}>No, mantener</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.btnAccion,
+                          styles.btnAccionPeligro,
+                          accion !== null && styles.btnAccionDeshabilitado,
+                          pressed && styles.btnPresionado,
+                        ]}
+                        onPress={() => pedirCancelacion('compra', compra.compraId)}
+                        disabled={accion !== null}
+                        testID={`compra-cancelar-${compra.compraId}`}
+                      >
+                        <Text style={styles.btnAccionPeligroTexto}>✕ Cancelar compra</Text>
+                      </Pressable>
+                    )
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           );
         })}
@@ -441,5 +752,100 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
+  },
+
+  // INT4-37: acciones de confirmar/cancelar (compra completa u orden puntual).
+  acciones: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EFE9DE',
+    paddingTop: 12,
+    marginTop: 2,
+  },
+  confirmacion: {
+    flex: 1,
+    gap: 8,
+  },
+  confirmacionTexto: {
+    color: '#6B7280',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  confirmacionBotones: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  btnAccion: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#DBEAFE',
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    minWidth: 96,
+  },
+  btnAccionPrimario: {
+    backgroundColor: '#0052CC',
+    borderColor: '#0052CC',
+  },
+  btnAccionPrimarioTexto: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  btnAccionPeligro: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  btnAccionPeligroTexto: {
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  btnAccionTexto: {
+    color: '#1E40AF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  btnAccionDeshabilitado: {
+    opacity: 0.6,
+  },
+
+  // Avisos del resultado de la acción (éxito o error del backend).
+  bannerExito: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  bannerExitoTexto: {
+    color: '#065F46',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  bannerError: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+  },
+  bannerErrorTitulo: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  bannerErrorTexto: {
+    color: '#991B1B',
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
