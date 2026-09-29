@@ -13,6 +13,9 @@
     </p>
     <p>Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
     <p><a th:href="${recuperacionUrl}" th:text="${recuperacionUrl}"></a></p>
+    <p>Si tu correo no abre la aplicación, copia este token en la pantalla de restablecimiento:</p>
+    <p><strong th:text="${token}"></strong></p>
+    <p>El enlace y el token expiran en una hora.</p>
     <p>Si no solicitaste este cambio, puedes ignorar este correo de forma segura.</p>
     <p>Saludos,<br>El equipo de CloudCoffee</p>
 </body>

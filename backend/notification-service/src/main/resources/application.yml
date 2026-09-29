@@ -37,11 +37,15 @@ spring:
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${SMTP_AUTH:true}
           starttls:
-            enable: true
+            enable: ${SMTP_STARTTLS:true}
 
 app:
+  mail:
+    from: ${SMTP_FROM:noreply@cloudcoffee.cl}
+  password-reset:
+    url: ${RESET_PASSWORD_URL:mobile://restaurar-contrasena}
   frontend:
     url: ${FRONTEND_URL:http://localhost:8081}
 

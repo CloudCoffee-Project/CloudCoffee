@@ -18,7 +18,7 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
 
-    @Value("${spring.mail.username:noreply@cloudcoffee.cl}")
+    @Value("${app.mail.from:noreply@cloudcoffee.cl}")
     private String fromEmail;
 
     public EmailService(JavaMailSender mailSender, TemplateEngine templateEngine) {
@@ -40,10 +40,10 @@ public class EmailService {
             mailSender.send(message);
             LOGGER.info("Correo enviado exitosamente a {}", to);
         } catch (MessagingException e) {
-            LOGGER.error("Error enviando correo a {}: {}", to, e.getMessage(), e);
+            LOGGER.error("Error enviando correo a {}", to);
             throw new RuntimeException("Error al enviar el correo", e);
         } catch (Exception e) {
-            LOGGER.error("Fallo inesperado al enviar correo a {}: {}", to, e.getMessage(), e);
+            LOGGER.error("Fallo inesperado al enviar correo a {}", to);
             throw new RuntimeException("Fallo inesperado al enviar el correo", e);
         }
     }

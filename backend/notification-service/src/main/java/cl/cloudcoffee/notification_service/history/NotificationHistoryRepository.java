@@ -9,7 +9,9 @@ import java.util.UUID;
 public interface NotificationHistoryRepository
         extends JpaRepository<NotificationHistory, UUID> {
 
-    boolean existsByEventId(UUID eventId);
+    boolean existsByEventIdAndStatus(UUID eventId, String status);
+
+    java.util.Optional<NotificationHistory> findByEventId(UUID eventId);
 
     Page<NotificationHistory> findAllByOrderByProcessedAtDesc(Pageable pageable);
 }
