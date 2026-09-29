@@ -3,6 +3,7 @@ import { CatalogPage } from './pages/CatalogPage';
 import { HomePage } from './pages/HomePage';
 import { MainLayout } from './components/layout/MainLayout';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { RegisterPage } from './pages/RegisterPage';
 
 export function App() {
   return (
@@ -16,6 +17,8 @@ export function App() {
 
         {/* Pagina 404 para rutas inexistentes */}
         <Route path="*" element={<NotFoundPage />} />
+
+        <Route path="/registro" element={<RegisterPage />} />
 
       </Route>
     </Routes>

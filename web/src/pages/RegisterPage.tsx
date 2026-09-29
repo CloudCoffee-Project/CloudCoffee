@@ -35,7 +35,13 @@ export function RegisterPage() {
       await request('/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          nombre: formData.firstName,
+          apellido: formData.lastName,
+          email: formData.email,
+          telefono: formData.phone,
+          password: formData.password
+        })
       });
 
       setSuccessMsg('Cuenta creada exitosamente! Por favor revisa tu bandeja de entrada para verificar tu correo antes de iniciar sesion.');
@@ -100,7 +106,7 @@ export function RegisterPage() {
 
           <div>
             <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Contraseña *</label>
-            <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} required minLength={6} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', outline: 'none' }} />
+            <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} required minLength={8} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--color-border)', outline: 'none' }} />
           </div>
 
           <button type="submit" className="btn-primary" disabled={isLoading} style={{ marginTop: '1rem', opacity: isLoading ? 0.7 : 1, display: 'flex', justifyContent: 'center' }}>
