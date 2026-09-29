@@ -73,6 +73,10 @@ public class Usuario {
 
     public void verificar() { this.verificado = true; this.updatedAt = Instant.now(); }
     public void desactivar() { this.activo = false; this.updatedAt = Instant.now(); }
+    public void actualizarPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.updatedAt = Instant.now();
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -84,4 +88,3 @@ public class Usuario {
     @Override
     public int hashCode() { return getClass().hashCode(); }
 }
-
