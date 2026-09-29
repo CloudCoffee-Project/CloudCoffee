@@ -266,3 +266,60 @@ describe('Carrito global (INT4-32)', () => {
     errorDeConsola.mockRestore();
   });
 });
+
+describe('Agrupado por cafetería (lo consume el carrito y el checkout)', () => {
+  it('sin líneas no hay grupos', () => {
+    montar();
+
+    expect(carrito().grupos).toEqual([]);
+  });
+
+  it('arma un grupo por cafetería con líneas, subtotal y unidades acumuladas', () => {
+    montar();
+
+    agregar(nuevo({ ofertaId: 'of-central-1', productoNombre: 'Café Americano' }), 2);
+    agregar(
+      nuevo({ ofertaId: 'of-central-2', productoNombre: 'Té Chai', precioUnitario: 1500 }),
+      1
+    );
+
+    expect(carrito().grupos).toHaveLength(1);
+    const grupo = carrito().grupos[0];
+
+    expect(grupo.cafeteriaId).toBe('cafe-central');
+    expect(grupo.cafeteriaNombre).toBe('Cafetería Central');
+    expect(grupo.items).toHaveLength(2);
+    // 2 x 1.800 + 1 x 1.500
+    expect(grupo.subtotal).toBe(5100);
+    expect(grupo.unidades).toBe(3);
+  });
+
+  it('abre un grupo por punto de retiro y mantiene el orden de la primera vez', () => {
+    montar();
+
+    agregar(
+      nuevo({
+        ofertaId: 'of-norte',
+        cafeteriaId: 'cafe-norte',
+        cafeteriaNombre: 'Cafetería Norte',
+        precioUnitario: 2100,
+      }),
+      1
+    );
+    agregar(nuevo(), 1);
+
+    expect(carrito().grupos.map((g) => g.cafeteriaId)).toEqual(['cafe-norte', 'cafe-central']);
+    expect(carrito().grupos[0].subtotal).toBe(2100);
+    expect(carrito().grupos[1].subtotal).toBe(1800);
+  });
+
+  it('quitar la última línea de un grupo hace desaparecer el grupo', () => {
+    montar();
+
+    agregar(nuevo(), 1);
+    agregar(nuevo({ ofertaId: 'of-norte', cafeteriaId: 'cafe-norte' }), 1);
+    act(() => carrito().quitar('of-central'));
+
+    expect(carrito().grupos.map((g) => g.cafeteriaId)).toEqual(['cafe-norte']);
+  });
+});

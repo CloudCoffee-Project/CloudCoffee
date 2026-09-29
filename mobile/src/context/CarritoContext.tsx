@@ -24,6 +24,19 @@ import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import type { ItemCarrito, NuevoItemCarrito } from '../types/domain';
 
+// Un punto de retiro con todo lo que se compró ahí. El carrito se agrupa por
+// cafetería y no por producto porque la línea ya es una Oferta: el mismo café
+// comprado en dos cafeterías son dos líneas que se retiran en dos puntos
+// distintos. El orden de los grupos es el de la primera vez que se agregó cada
+// cafetería, que es el orden en que el usuario las fue viendo.
+export interface GrupoCafeteria {
+  cafeteriaId: string;
+  cafeteriaNombre: string;
+  items: ItemCarrito[];
+  subtotal: number;
+  unidades: number;
+}
+
 interface CarritoContextValue {
   items: ItemCarrito[];
   // Suma de precioUnitario * cantidad. Los precios son pesos enteros, así que
@@ -32,6 +45,10 @@ interface CarritoContextValue {
   // Unidades, no líneas: dos líneas de 1 dan 2. Es el número que va en cualquier
   // contador de "productos en tu carrito".
   unidades: number;
+  // Las mismas líneas de items, agrupadas por punto de retiro. Vive acá y no en
+  // cada pantalla porque el carrito (INT4-33) y el checkout (INT4-35) muestran
+  // el mismo desglose y duplicar el cálculo era pedir que se desincronizaran.
+  grupos: GrupoCafeteria[];
   agregar: (item: NuevoItemCarrito, cantidad: number) => void;
   cambiarCantidad: (ofertaId: string, cantidad: number) => void;
   quitar: (ofertaId: string) => void;
@@ -110,9 +127,37 @@ export function CarritoProvider({ children }: Props) {
   );
   const unidades = useMemo(() => items.reduce((suma, linea) => suma + linea.cantidad, 0), [items]);
 
+  // El subtotal y las unidades de cada grupo se acumulan línea por línea para no
+  // volver a recorrer items al pintar. El Map conserva el orden de inserción, así
+  // que no hace falta un sort aparte.
+  const grupos = useMemo<GrupoCafeteria[]>(() => {
+    const porCafeteria = new Map<string, GrupoCafeteria>();
+
+    for (const linea of items) {
+      const existente = porCafeteria.get(linea.cafeteriaId);
+
+      if (existente) {
+        existente.items.push(linea);
+        existente.subtotal += linea.precioUnitario * linea.cantidad;
+        existente.unidades += linea.cantidad;
+        continue;
+      }
+
+      porCafeteria.set(linea.cafeteriaId, {
+        cafeteriaId: linea.cafeteriaId,
+        cafeteriaNombre: linea.cafeteriaNombre,
+        items: [linea],
+        subtotal: linea.precioUnitario * linea.cantidad,
+        unidades: linea.cantidad,
+      });
+    }
+
+    return [...porCafeteria.values()];
+  }, [items]);
+
   const value = useMemo<CarritoContextValue>(
-    () => ({ items, total, unidades, agregar, cambiarCantidad, quitar, vaciar }),
-    [items, total, unidades, agregar, cambiarCantidad, quitar, vaciar]
+    () => ({ items, total, unidades, grupos, agregar, cambiarCantidad, quitar, vaciar }),
+    [items, total, unidades, grupos, agregar, cambiarCantidad, quitar, vaciar]
   );
 
   return <CarritoContext.Provider value={value}>{children}</CarritoContext.Provider>;

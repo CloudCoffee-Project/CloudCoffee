@@ -16,132 +16,34 @@
 // oferta cuando se agregó; el backend los revalida al crear la orden.
 //
 // Lo que NO se toca: el flujo de pago (INT4-38/39) vive en services/pagos.ts y
-// sigue siendo el de ese compañero, incluido su mock de desarrollo. Acá solo se
-// le da el lugar que le corresponde en la pantalla —método de pago, resumen y
-// botón— y se le pasa el total real. Vaciar el carrito al confirmar el pago es
-// INT4-34+, no se hace acá.
+// sigue siendo el de ese compañero. Acá solo se le da el lugar que le corresponde
+// en la pantalla —método de pago, resumen y botón—. El botón ya no abre el
+// checkout de Mercado Pago: navega a la pantalla de checkout (INT4-35), que
+// registra la compra con POST /v1/compras y recién ahí abre Mercado Pago. El
+// mock que antes vivía en este archivo (httpbin) se fue con esa pantalla.
 //
 // Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
 // acentos amarillos y bordes cálidos) replicada del mockup web, incluidos los
 // grupos por cafetería, el estado vacío y el resumen.
 
-import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCarrito } from '../../context/CarritoContext';
-import { abrirCheckoutMercadoPago, parsearRetornoPago } from '../../services/pagos';
-import type { ItemCarrito } from '../../types/domain';
 
 function formatearPrecio(precio: number): string {
   return `$${precio.toLocaleString('es-CL')}`;
 }
 
-// Un punto de retiro con todo lo que se compró ahí. El subtotal y las unidades se
-// acumulan línea por línea para no volver a recorrer los items al pintar.
-interface GrupoCafeteria {
-  cafeteriaId: string;
-  cafeteriaNombre: string;
-  items: ItemCarrito[];
-  subtotal: number;
-  unidades: number;
-}
-
 export default function CarritoScreen() {
-  const [procesando, setProcesando] = useState(false);
-  const { items, total, cambiarCantidad, quitar } = useCarrito();
+  const { total, grupos, cambiarCantidad, quitar } = useCarrito();
 
-  // Un grupo por cafetería, en el orden en que el usuario las fue agregando: es
-  // el orden en que las va a ver y en el que se las muestra el resumen. El Map
-  // conserva el orden de inserción, así que no hace falta un sort aparte.
-  const grupos = useMemo<GrupoCafeteria[]>(() => {
-    const porCafeteria = new Map<string, GrupoCafeteria>();
-
-    for (const linea of items) {
-      const existente = porCafeteria.get(linea.cafeteriaId);
-
-      if (existente) {
-        existente.items.push(linea);
-        existente.subtotal += linea.precioUnitario * linea.cantidad;
-        existente.unidades += linea.cantidad;
-        continue;
-      }
-
-      porCafeteria.set(linea.cafeteriaId, {
-        cafeteriaId: linea.cafeteriaId,
-        cafeteriaNombre: linea.cafeteriaNombre,
-        items: [linea],
-        subtotal: linea.precioUnitario * linea.cantidad,
-        unidades: linea.cantidad,
-      });
-    }
-
-    return [...porCafeteria.values()];
-  }, [items]);
-
-  const handlePagar = async () => {
-    setProcesando(true);
-    try {
-      // TODO(INT4-??): reemplazar por los items reales del carrito cuando se
-      // implemente el armado de carrito multi-cafetería (fuera del alcance de INT4-38).
-      //
-      // Flujo real, cuando el backend exista:
-      // const { initPoint } = await crearCompra(itemsDelCarrito, accessToken);
-      // await abrirCheckoutMercadoPago(initPoint);
-      //
-      // ⚠️⚠️ MOCK TEMPORAL — SOLO PARA DESARROLLO ⚠️⚠️
-      // El backend de Integración II (POST /compras) todavía no existe.
-      // Este bloque simula el retorno exitoso de Mercado Pago usando
-      // httpbin.org/redirect-to, para poder probar el deep link
-      // cloudcoffee://payment/retorno de punta a punta (INT4-38/39).
-      //
-      // El guard `if (!__DEV__)` evita que esto pueda ejecutarse jamás en
-      // un build de producción: si alguien olvida borrar este mock, la app
-      // falla explícitamente en vez de abrir httpbin.org a un usuario real.
-      // TODO(INT4-??): borrar este bloque completo cuando POST /compras exista.
-      if (!__DEV__) {
-        throw new Error(
-          'Mock de pago sin reemplazar por la llamada real a crearCompra(). ' +
-            'No se puede continuar en producción.'
-        );
-      }
-
-      const initPointDePrueba =
-        'https://httpbin.org/redirect-to?url=' +
-        encodeURIComponent(
-          'cloudcoffee://payment/retorno?status=approved&payment_id=123&external_reference=abc123'
-        );
-      // ⚠️⚠️ FIN DEL MOCK TEMPORAL ⚠️⚠️
-
-      const resultado = await abrirCheckoutMercadoPago(initPointDePrueba);
-
-      if (resultado.tipo === 'cerrado_sin_confirmar') {
-        // El usuario cerró el navegador embebido antes de completar el pago.
-        // No navegamos a ningún lado: se queda en el carrito para reintentar.
-        console.warn('[Carrito] El usuario cerró el checkout sin confirmar');
-        return;
-      }
-
-      // Camino A (INT4-39): Mercado Pago redirigió de vuelta con éxito.
-      // Parseamos la URL para extraer el estado visual y navegar al resultado.
-      const retorno = parsearRetornoPago(resultado.url);
-      console.warn('[Carrito] Retorno de pago parseado:', retorno);
-
-      router.replace({
-        pathname: '/resultado-pago',
-        params: {
-          estado: retorno.estado,
-          compraId: retorno.compraId ?? '',
-          paymentId: retorno.paymentId ?? '',
-        },
-      });
-    } catch (error) {
-      console.error('[Carrito] Error al abrir el checkout:', error);
-      Alert.alert('Error', 'No se pudo abrir el checkout de Mercado Pago.');
-    } finally {
-      setProcesando(false);
-    }
+  // Ir al checkout es todo lo que hace el botón: la compra se registra allá
+  // (INT4-35), no acá. El estado de "procesando" también vive allá, porque acá no
+  // hay nada asíncrono que esperar.
+  const handlePagar = (): void => {
+    router.push('/(cliente)/checkout');
   };
 
   // Una cafetería: se retira en ese punto. Varias: el pedido se coordina en
@@ -334,19 +236,12 @@ export default function CarritoScreen() {
               </View>
 
               <Pressable
-                style={({ pressed }) => [
-                  styles.btnPagar,
-                  procesando && styles.btnPagarDeshabilitado,
-                  pressed && !procesando && styles.btnPresionado,
-                ]}
-                onPress={() => void handlePagar()}
-                disabled={procesando}
+                style={({ pressed }) => [styles.btnPagar, pressed && styles.btnPresionado]}
+                onPress={handlePagar}
                 testID="carrito-pagar"
               >
                 <Text style={styles.btnPagarTexto}>
-                  {procesando
-                    ? 'Procesando pago...'
-                    : `Pagar con Mercado Pago ${formatearPrecio(total)}`}
+                  {`Pagar con Mercado Pago ${formatearPrecio(total)}`}
                 </Text>
               </Pressable>
             </View>
@@ -691,9 +586,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center',
-  },
-  btnPagarDeshabilitado: {
-    opacity: 0.6,
   },
   btnPagarTexto: {
     color: '#FFFFFF',
