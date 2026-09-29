@@ -34,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 // Estas pruebas de routing/JWT usan HTTP local; HTTPS permanece habilitado en la aplicacion.
@@ -333,6 +334,7 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                         if (!head) {
                             exchange.getResponseBody().write(response);
                         }
+                        exchange.getResponseBody().close();
                     }
                 });
                 server.start();
