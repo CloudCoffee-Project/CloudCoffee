@@ -29,3 +29,23 @@ export async function listarCompras(): Promise<Compra[]> {
 
   return response.data;
 }
+
+// INT4-37: confirmar o cancelar la compra COMPLETA (todas sus órdenes) desde
+// Mis Compras. Son dos endpoints distintos porque el backend tiene que decidir
+// qué pasa con las órdenes ya cobradas o entregadas: la app solo le pide la
+// acción y se recarga el historial para mostrar el estado que devuelva.
+//   - POST /v1/compras/{compraId}/confirmar → Compra
+//   - POST /v1/compras/{compraId}/cancelar  → Compra
+// Sin body: la acción se define por la ruta. Los errores llegan normalizados
+// (toApiError) para que la pantalla muestre el mensaje del backend.
+export async function confirmarCompra(compraId: string): Promise<Compra> {
+  const response = await httpClient.post<Compra>(`${COMPRAS_ENDPOINT}/${compraId}/confirmar`);
+
+  return response.data;
+}
+
+export async function cancelarCompra(compraId: string): Promise<Compra> {
+  const response = await httpClient.post<Compra>(`${COMPRAS_ENDPOINT}/${compraId}/cancelar`);
+
+  return response.data;
+}
