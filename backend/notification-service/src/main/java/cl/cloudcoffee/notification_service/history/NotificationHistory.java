@@ -8,6 +8,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -57,7 +58,7 @@ public class NotificationHistory {
         this.eventId = eventId;
         this.eventType = eventType;
         this.trackingId = trackingId;
-        this.payload = payload;
+        this.payload = sanitizedPayload(payload);
         this.status = status;
         this.errorDetail = errorDetail;
         this.processedAt = Instant.now();
@@ -83,4 +84,24 @@ public class NotificationHistory {
     public String getErrorDetail() { return errorDetail; }
     public Instant getProcessedAt() { return processedAt; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public void markSuccess() {
+        this.payload = sanitizedPayload(payload);
+        this.status = "SUCCESS";
+        this.errorDetail = null;
+        this.processedAt = Instant.now();
+    }
+
+    public void markFailure(String detail) {
+        this.payload = sanitizedPayload(payload);
+        this.status = "FAILED";
+        this.errorDetail = detail;
+        this.processedAt = Instant.now();
+    }
+
+    public static Map<String, Object> sanitizedPayload(Map<String, Object> payload) {
+        Map<String, Object> safe = new HashMap<>(payload);
+        safe.remove("token");
+        return safe;
+    }
 }

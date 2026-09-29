@@ -1,6 +1,5 @@
 package cl.cloudcoffee.notification_service.notifications;
 
-import cl.cloudcoffee.notification_service.history.NotificationHistory;
 import cl.cloudcoffee.notification_service.history.NotificationHistoryRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,10 +19,10 @@ public class NotificationController {
     }
 
     @GetMapping
-    public Page<NotificationHistory> findAll(
+    public Page<NotificationHistoryResponse> findAll(
             @PageableDefault(size = 20)
             Pageable pageable
     ) {
-        return repository.findAllByOrderByProcessedAtDesc(pageable);
+        return repository.findAllByOrderByProcessedAtDesc(pageable).map(NotificationHistoryResponse::from);
     }
 }

@@ -15,6 +15,8 @@ public class AuthEventPublisher {
 
     public static final String SOLICITUD_VERIFICACION_CORREO_EVENT =
             "auth.verificacion.solicitud-correo.v1";
+    public static final String SOLICITUD_RECUPERACION_PASSWORD_EVENT =
+            "auth.recuperacion.solicitud-password.v1";
 
     private final RabbitTemplate rabbitTemplate;
 
@@ -75,21 +77,22 @@ public class AuthEventPublisher {
 
         return event;
     }
-        public CloudCoffeeEvent publishSolicitudRecuperacionPassword(
-            String userId, 
-            String email, 
-            String token, 
-            Instant expiresAt, 
+    public CloudCoffeeEvent publishSolicitudRecuperacionPassword(
+            String userId,
+            String email,
+            String token,
+            Instant expiresAt,
             String traceId) {
-            
         CloudCoffeeEvent event = new CloudCoffeeEvent(
-                UUID.randomUUID(), 
-                Instant.now(), traceId,
-                "auth.recuperacion.solicitud-password.v1",
+                UUID.randomUUID(),
+                Instant.now(),
+                traceId,
+                SOLICITUD_RECUPERACION_PASSWORD_EVENT,
                 Map.of("userId", userId, "email", email, "token", token, "expiresAt", expiresAt.toString())
         );
 
-        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EVENTS_EXCHANGE, "auth.recuperacion.solicitud-password.v1", event);
+        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EVENTS_EXCHANGE,
+                SOLICITUD_RECUPERACION_PASSWORD_EVENT, event);
         return event;
     }
 }

@@ -14,6 +14,8 @@ import jakarta.validation.Valid;
 
 import cl.cloudcoffee.auth_service.dto.LoginRequest;
 import cl.cloudcoffee.auth_service.dto.LoginResponse;
+import cl.cloudcoffee.auth_service.dto.PasswordRecoveryRequest;
+import cl.cloudcoffee.auth_service.dto.PasswordResetRequest;
 import cl.cloudcoffee.auth_service.dto.ReenviarVerificacionRequest;
 import cl.cloudcoffee.auth_service.dto.RefreshTokenRequest;
 import cl.cloudcoffee.auth_service.dto.RegistroClienteRequest;
@@ -21,6 +23,7 @@ import cl.cloudcoffee.auth_service.dto.RegistroClienteResponse;
 import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
 import cl.cloudcoffee.auth_service.dto.VerificarCorreoRequest;
 import cl.cloudcoffee.auth_service.service.LoginService;
+import cl.cloudcoffee.auth_service.service.PasswordRecoveryService;
 import cl.cloudcoffee.auth_service.service.RefreshTokenService;
 import cl.cloudcoffee.auth_service.service.RegistroService;
 import cl.cloudcoffee.auth_service.service.VerificacionService;
@@ -33,13 +36,16 @@ public class AuthController {
     private final VerificacionService verificacionService;
     private final LoginService loginService;
     private final RefreshTokenService refreshTokenService;
+    private final PasswordRecoveryService passwordRecoveryService;
 
     public AuthController(RegistroService registroService, VerificacionService verificacionService,
-            LoginService loginService, RefreshTokenService refreshTokenService) {
+            LoginService loginService, RefreshTokenService refreshTokenService,
+            PasswordRecoveryService passwordRecoveryService) {
         this.registroService = registroService;
         this.verificacionService = verificacionService;
         this.loginService = loginService;
         this.refreshTokenService = refreshTokenService;
+        this.passwordRecoveryService = passwordRecoveryService;
     }
 
     @PostMapping("/login")
@@ -69,6 +75,19 @@ public class AuthController {
     public void reenviarVerificacion(@Valid @RequestBody ReenviarVerificacionRequest request,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId) {
         verificacionService.reenviarVerificacion(request.email(), traceIdEfectivo(traceId));
+    }
+
+    @PostMapping("/password/recovery")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void recovery(@Valid @RequestBody PasswordRecoveryRequest request,
+            @RequestHeader(value = "X-Trace-Id", required = false) String traceId) {
+        passwordRecoveryService.solicitar(request.email(), traceIdEfectivo(traceId));
+    }
+
+    @PostMapping("/password/reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reset(@Valid @RequestBody PasswordResetRequest request) {
+        passwordRecoveryService.restablecer(request.token(), request.nuevaPassword());
     }
 
     private static String traceIdEfectivo(String traceId) {
