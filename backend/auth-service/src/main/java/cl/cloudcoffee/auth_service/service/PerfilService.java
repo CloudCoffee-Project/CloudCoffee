@@ -19,15 +19,15 @@ public class PerfilService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public PerfilResponse obtenerPerfilUsuario(String email) {
-        Usuario usuario = usuarioRepository.findByEmail(email)
+    public PerfilResponse obtenerPerfilUsuario(String idUsuario) {
+        Usuario usuario = usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         return mapToResponse(usuario);
     }
 
-    public PerfilResponse actualizarPerfilUsuario(String email, UpdatePerfilRequest request) {
-        Usuario usuario = usuarioRepository.findByEmail(email)
+    public PerfilResponse actualizarPerfilUsuario(String idUsuario, UpdatePerfilRequest request) {
+        Usuario usuario = usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         if (request.nombre() != null && !request.nombre().isBlank()) {
@@ -57,8 +57,8 @@ public class PerfilService {
                 usuario.getRol()
         );
     }
-    public void cambiarPassword(String email, ChangePasswordRequest request) {
-        Usuario usuario = usuarioRepository.findByEmail(email)
+    public void cambiarPassword(String idUsuario, ChangePasswordRequest request) {
+        Usuario usuario = usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         if (!passwordEncoder.matches(request.passwordActual(), usuario.getPasswordHash())) {

@@ -6,6 +6,7 @@ import cl.cloudcoffee.auth_service.service.PerfilService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import cl.cloudcoffee.auth_service.dto.ChangePasswordRequest;
 
 import java.security.Principal;
 
@@ -37,4 +38,12 @@ public class UserController {
         PerfilResponse perfilActualizado = perfilService.actualizarPerfilUsuario(email, request);
         return ResponseEntity.ok(perfilActualizado);
     }
+    @PatchMapping("/me/password")
+    public ResponseEntity<Void> cambiarPassword(
+        Principal principal,
+        @Valid @RequestBody ChangePasswordRequest request) {
+            String email = principal.getName();
+            perfilService.cambiarPassword(email, request);
+            return ResponseEntity.ok().build();
+        }
 }
