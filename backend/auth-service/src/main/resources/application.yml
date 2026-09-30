@@ -12,8 +12,20 @@ spring:
     out-of-order: false
     clean-disabled: true
     baseline-on-migrate: false
+  rabbitmq:
+    listener:
+      simple:
+        observation-enabled: true
+    template:
+      observation-enabled: true
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      zipkin:
+        endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
   endpoints:
     web:
       exposure:
