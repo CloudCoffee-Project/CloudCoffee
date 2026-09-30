@@ -71,6 +71,149 @@ cd auth-service
 ./mvnw spring-boot:run
 ```
 
+## OpenAPI y Swagger · API Sprint 1 (INT2-31)
+
+El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
+lo genera desde los controladores y DTO de Auth y Catalog; Swagger UI se sirve
+solo desde API Gateway, con las definiciones **Auth** y **Catálogo**.
+No se necesita modificar las aplicaciones cliente para consultar la documentación.
+
+### Habilitar en desarrollo
+
+La documentación está desactivada por defecto. En el `.env` local, configurar:
+
+```dotenv
+OPENAPI_ENABLED=true
+```
+
+Desde la raíz del repositorio, reconstruir y recrear los tres procesos:
+
+```bash
+docker compose up --build -d auth-service catalog-service api-gateway
+```
+
+Compose propaga la variable a los tres servicios. No modificar las llaves JWT ni
+borrar volúmenes. Para deshabilitarla, establecer `OPENAPI_ENABLED=false` y recrear
+los mismos servicios. Los contratos, las rutas `/openapi/*` y Swagger dejan de
+estar disponibles. Order y Notification no incorporan documentación en esta issue.
+
+Al ejecutar sin Docker, definir `OPENAPI_ENABLED=true` en el entorno de **cada**
+proceso (Gateway, Auth y Catalog), además de las variables JWT y de infraestructura
+habituales. Activarla únicamente en Gateway no habilita los contratos de los servicios.
+
+| Ejecución | Swagger UI (puerto predeterminado del host) |
+| --- | --- |
+| Docker Compose: Gateway tiene `SERVER_SSL_ENABLED=false` | http://localhost:18080/swagger-ui.html |
+| Gateway ejecutado directamente: HTTPS habilitado por defecto | https://localhost:18080/swagger-ui.html |
+
+Si se cambia el puerto publicado o el protocolo, usar el mismo origen del Gateway.
+El servidor OpenAPI es relativo (`/v1`): “Try it out” usa automáticamente ese
+protocolo, host y puerto, sin enviar solicitudes a los puertos internos.
+
+### Consultar y probar
+
+1. Abrir Swagger y elegir **Auth** o **Catálogo** en “Select a definition”.
+2. Expandir una operación para consultar parámetros, ejemplos, validaciones,
+   respuestas y códigos de error. Todos los ejemplos son ficticios.
+3. Para operaciones protegidas, iniciar sesión con una cuenta local verificada,
+   copiar `accessToken` y pulsar **Authorize** en la definición elegida. Pegar solo
+   el token, sin el prefijo `Bearer`; Swagger genera el encabezado.
+4. Pulsar **Try it out** y **Execute**. Estas solicitudes ejecutan operaciones
+   reales en el backend de desarrollo y consumen las cuotas del Gateway.
+
+Los contratos JSON también se pueden consultar sin JWT cuando están habilitados:
+
+| Definición | Ruta en Gateway |
+| --- | --- |
+| Auth | `/openapi/auth` |
+| Catálogo | `/openapi/catalog` |
+
+Para guardarlos desde el entorno Compose:
+
+```bash
+curl --fail http://localhost:18080/openapi/auth -o auth-openapi.json
+curl --fail http://localhost:18080/openapi/catalog -o catalog-openapi.json
+```
+
+Estas rutas admiten únicamente `GET` y `HEAD`. Auth y Catalog también generan
+`/v3/api-docs` y `/v3/api-docs.yaml` directamente, pero los contratos usan `/v1` y
+sus solicitudes de prueba deben ejecutarse desde el Gateway. Actuator y los
+endpoints internos de mensajería quedan fuera de los contratos.
+
+### Endpoints cubiertos
+
+Todas las rutas siguientes incluyen el prefijo público `/v1` al usar Gateway.
+
+| Método y ruta interna | Éxito | JWT requerido |
+| --- | --- | --- |
+| `POST /auth/register` | `201`, cliente registrado | No |
+| `POST /auth/verificacion` | `200`, correo verificado | No |
+| `POST /auth/verificacion/reenviar` | `202`, sin cuerpo | No |
+| `POST /auth/login` | `200`, access token y refresh token | No |
+| `POST /auth/refresh` | `200`, nuevo par de tokens | No |
+| `POST /auth/logout` | `204`, sin cuerpo | Sí |
+| `GET /auth/users/me` | `200`, perfil propio | Sí |
+| `PATCH /auth/users/me` | `200`, perfil actualizado | Sí |
+| `PATCH /auth/users/me/password` | `200`, sin cuerpo | Sí |
+| `POST /auth/password/recovery` | `202`, sin cuerpo | No |
+| `POST /auth/password/reset` | `204`, sin cuerpo | No |
+| `GET /catalog/campus` | `200`, lista con cafeterías | No |
+| `GET /catalog/categorias` | `200`, lista de categorías | No |
+| `GET /catalog/productos` | `200`, página de productos | Sí |
+| `GET /catalog/productos/{id}/ofertas` | `200`, lista por precio ascendente | Sí |
+
+Logout (INT2-23), perfil (INT2-24) y cambio de contraseña (INT2-25) ya están
+integrados en la base actual; no quedan endpoints pendientes de la lista mínima
+de INT2-31. El mapping interno de perfil es `/auth/users`, porque Gateway elimina
+`/v1` antes de reenviar. Esta documentación conserva las reglas actuales de JWT,
+aunque el controlador de catálogo se denomine “PublicCatalogController”.
+
+Productos requiere `campusId` y admite `categoriaId`, `q`, `page`, `size` y `sort`.
+`q` busca en nombre y descripción sin distinguir mayúsculas. La página empieza
+en cero, usa 20 elementos por defecto y admite hasta 2000. Se conserva la
+serialización actual de `Page`, incluidos `content`, `pageable`, `sort`, `number`,
+`size`, `totalElements`, `totalPages`, `first`, `last`, `numberOfElements` y `empty`.
+Las búsquedas y ofertas sin coincidencias devuelven una página/lista vacía.
+
+### Errores y particularidades del contrato actual
+
+Los errores usan `application/problem+json` (RFC 9457), con `type`, `title`,
+`status`, `detail`, `instance` y `timestamp`. Los errores de validación de campos
+incluyen `errors`, una lista de `{field, message}` sin valores rechazados.
+`instance` corresponde al proceso que genera el error: los errores reenviados de
+Auth/Catalog conservan la ruta interna, y el rate limit del Gateway usa `/v1`.
+
+Swagger documenta los errores principales de cada operación: validación `400`,
+credenciales/JWT/refresh inválidos `401`, cuenta sin verificar `403`, cuenta
+inexistente en reenvío `404`, conflictos `409`, formato de entrada `415` y errores
+internos `500`. En las rutas públicas no se necesita JWT; enviar un Bearer inválido
+sigue produciendo `401`.
+
+Login, recuperación y reenvío incluyen `429` y el encabezado **Retry-After**
+(segundos), producidos exclusivamente por el Gateway. Véase la sección de rate
+limiting para las cuotas y su configuración.
+
+La documentación refleja estas diferencias ya existentes: cambio de contraseña
+exige un mínimo de 6 caracteres, mientras registro y reset exigen 8; una contraseña
+actual incorrecta o un usuario no encontrado en perfil produce `500` en la
+implementación actual. No se promete un `400`/`404` que el servicio aún no devuelve.
+Logout revoca solo el refresh token del dispositivo; los access tokens existentes
+siguen vigentes hasta expirar. Refresh rota su token y reset revoca todos los
+refresh tokens del usuario. El cambio de contraseña de perfil no revoca tokens.
+
+### Verificación
+
+Desde `backend`, ejecutar:
+
+```bash
+./auth-service/mvnw -f pom.xml clean verify
+```
+
+Las pruebas comprueban documentación habilitada/deshabilitada, campos y schemas,
+respuestas vacías, restricciones JWT, paginación real, rutas de proxy, UI/configuración
+de Swagger y errores del servicio remoto. Se mantienen las pruebas de CORS,
+rate limiting y los flujos previos.
+
 ## JWT RS256 (INT2-14)
 
 Antes de iniciar, generar un par RSA local desde la raíz del repositorio con OpenSSL:
@@ -142,9 +285,9 @@ Auth también falla si falta la privada o no corresponde al mismo par.
 rol real del usuario (`role`: `CLIENTE`, `CAJERO`, `ADMIN_CAFETERIA`, `SUPER_ADMIN`),
 con fecha de emisión (`iat`) y vencimiento (`exp`). La duración predeterminada es
 15 minutos, configurable mediante `cloudcoffee.jwt.access-token-ttl` (por ejemplo
-`PT15M`). Este componente es para el futuro flujo de login de INT2-21: **no se
-agrega un endpoint de login ni se implementan refresh, revocación o permisos por rol**.
-El consumidor debe autenticar y comprobar el estado del usuario antes de emitir.
+`PT15M`). `LoginService` autentica y comprueba la verificación del correo antes
+de emitir el JWT; `RefreshTokenService` lo renueva al rotar un refresh token vigente.
+Los contratos de login, refresh y logout se detallan en la sección OpenAPI.
 
 `common-security` valida la firma RS256, el vencimiento sin tolerancia posterior a
 `exp`, `nbf` cuando existe, `sub` no vacío y un `role` reconocido. Convierte el rol
