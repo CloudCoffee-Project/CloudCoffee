@@ -19,6 +19,14 @@ class ApiGatewayApplicationTests extends cl.cloudcoffee.security.testing.JwtTest
     MockMvc mvc;
 
     @Test
+    void swaggerAndContractsAreDisabledByDefault() throws Exception {
+        for (String path : new String[]{"/swagger-ui.html", "/swagger-ui/index.html",
+                "/v3/api-docs", "/v3/api-docs/swagger-config", "/openapi/auth", "/openapi/catalog"}) {
+            mvc.perform(get(path)).andExpect(status().isNotFound());
+        }
+    }
+
+    @Test
     void healthEndpointIsPublicAndDoesNotExposeComponents() throws Exception {
         mvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
