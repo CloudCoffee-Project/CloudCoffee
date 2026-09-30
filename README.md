@@ -75,6 +75,32 @@ Un servicio específico:
 docker compose logs -f auth-service
 ```
 
+### Trazabilidad distribuida con Zipkin
+
+Micrometer genera y propaga trazas automáticamente en las solicitudes HTTP. Auth y
+Notification también propagan el contexto al publicar y consumir mensajes RabbitMQ.
+Los logs incluyen el identificador de traza y de span para correlacionarlos con Zipkin.
+
+En el entorno local se exporta el 100 % de las trazas. La proporción puede ajustarse
+entre 0.0 y 1.0 en `.env`:
+
+```dotenv
+TRACING_SAMPLING_PROBABILITY=1.0
+```
+
+Para comprobar la integración:
+
+1. Iniciar el backend con `docker compose up --build -d`.
+2. Generar tráfico, por ejemplo con
+   `curl http://localhost:18080/v1/catalog/campus`.
+3. Abrir [Zipkin](http://localhost:9411), seleccionar un servicio y ejecutar
+   **Run Query**. Una petición al catálogo a través del Gateway debe mostrar spans
+   de `api-gateway` y `catalog-service` dentro de la misma traza.
+
+Dentro de Docker los servicios exportan a `http://zipkin:9411/api/v2/spans`.
+Al ejecutarlos sin Docker se usa `http://localhost:9411/api/v2/spans`, configurable
+mediante `ZIPKIN_ENDPOINT`.
+
 ### Detener el entorno
 
 Conservar los datos locales:
