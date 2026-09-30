@@ -2,6 +2,7 @@ package cl.cloudcoffee.api_gateway;
 
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -10,24 +11,31 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.web.cors.CorsConfigurationSource;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(AuthRateLimitProperties.class)
 public class GatewaySecurityConfig {
 
     @Bean
     SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
             CorsConfigurationSource corsConfigurationSource,
+            AuthRateLimitProperties rateLimitProperties, JsonMapper jsonMapper,
             JwtAuthenticationConverter jwtAuthenticationConverter,
             ObjectProvider<AuthenticationEntryPoint> entryPoints,
             ObjectProvider<AccessDeniedHandler> accessDeniedHandlers) throws Exception {
         return http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                // Se ejecuta tras CORS y antes de JWT; no se registra como filtro servlet adicional.
+                .addFilterBefore(new AuthRateLimitFilter(rateLimitProperties, jsonMapper),
+                        BearerTokenAuthenticationFilter.class)
                 // API sin autenticacion por cookies ni sesiones de navegador.
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
