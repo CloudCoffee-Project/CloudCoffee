@@ -11,3 +11,12 @@
 /secrets/
 **/*.pem
 **/*.key
+
+# Archivos de compilación de Java / Maven (evita subir carpetas target)
+target/
+*.class
+*.jar
+*.war
+.idea/
+*.iml
+.vscode/
