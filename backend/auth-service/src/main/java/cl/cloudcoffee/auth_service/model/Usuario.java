@@ -87,4 +87,16 @@ public class Usuario {
 
     @Override
     public int hashCode() { return getClass().hashCode(); }
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+        this.updatedAt = Instant.now();
+    }
+    public void setApellido(String apellido) {
+        this.apellido = apellido;
+        this.updatedAt = Instant.now();
+    }
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+        this.updatedAt = Instant.now();
+    }
 }

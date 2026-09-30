@@ -20,3 +20,7 @@ target/
 .idea/
 *.iml
 .vscode/
+
+.classpath
+.settings/
+bin/

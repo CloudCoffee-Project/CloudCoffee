@@ -1,9 +1,11 @@
 package cl.cloudcoffee.auth_service.dto;
 
+import java.util.UUID;
+
 import cl.cloudcoffee.auth_service.model.Rol;
 
-public record PerfilRespone(
-    Long id,
+public record PerfilResponse(
+    UUID id,
     String email,
     String nombre,
     String apellido,
