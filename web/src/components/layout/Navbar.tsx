@@ -25,7 +25,9 @@ export function Navbar() {
         <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
           Registrarse
         </Link>
-        <button className="btn-primary">Iniciar Sesión</button>
+        <Link to="/login" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+          Iniciar Sesión
+        </Link>
       </div>
     </nav>
   );
