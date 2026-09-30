@@ -200,6 +200,40 @@ microservicio. Permite los métodos `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELE
 y los encabezados `Authorization`, `Content-Type` y `Accept`. No habilita cookies entre
 orígenes y las rutas protegidas conservan su requisito de autenticación.
 
+## Rate limiting en API Gateway (INT2-16)
+
+Bucket4j limita únicamente estos `POST`, con una cuota independiente por IP y ruta:
+
+| Ruta pública | Capacidad inicial | Recarga completa | Variables de entorno |
+| --- | --- | --- | --- |
+| `/v1/auth/login` | 5 | 1 minuto | `RATE_LIMIT_LOGIN_CAPACITY`, `RATE_LIMIT_LOGIN_REFILL_PERIOD` |
+| `/v1/auth/password/recovery` | 3 | 15 minutos | `RATE_LIMIT_PASSWORD_RECOVERY_CAPACITY`, `RATE_LIMIT_PASSWORD_RECOVERY_REFILL_PERIOD` |
+| `/v1/auth/verificacion/reenviar` | 3 | 15 minutos | `RATE_LIMIT_VERIFICATION_RESEND_CAPACITY`, `RATE_LIMIT_VERIFICATION_RESEND_REFILL_PERIOD` |
+
+Configurar las variables en `.env` para Docker Compose o en el entorno del Gateway
+cuando se ejecuta por separado. Los periodos aceptan `Duration`, por ejemplo `PT1M`
+o `PT15M`. Las propiedades equivalentes son
+`cloudcoffee.rate-limit.<login|password-recovery|verification-resend>.capacity`
+y `.refill-period`. Capacidades y periodos deben ser positivos; una configuración
+inválida impide el arranque. Los cambios requieren reiniciar el Gateway.
+
+Cada intento consume un token antes de autenticar o reenviar, incluso si Auth
+rechaza el login o el cuerpo es inválido. Al agotarse la cuota, el Gateway devuelve
+**HTTP 429**, `application/problem+json` con el contrato RFC 9457 existente y
+`Retry-After` en segundos redondeados hacia arriba. La solicitud bloqueada no llega
+a Auth. La cuota vuelve a llenarse al terminar cada periodo desde su creación.
+Los demás endpoints, métodos y preflight CORS conservan su comportamiento.
+
+La IP se obtiene de `getRemoteAddr()`; el filtro no interpreta `X-Forwarded-For`
+ni `Forwarded`. Si se despliega detrás de un proxy, la infraestructura debe
+establecer la IP real exclusivamente desde proxies confiables antes del filtro.
+Sin esa configuración, los clientes detrás del proxy comparten su cuota.
+
+Los buckets viven en memoria en cada instancia del Gateway, se eliminan tras un
+periodo sin uso y se reinician con el proceso. No comparten cuotas entre réplicas.
+Esta protección se aplica al acceso a través del Gateway; los puertos internos de
+Auth deben quedar restringidos a la infraestructura del backend.
+
 ## Paquetes
 
 Los servicios utilizan la raíz:
