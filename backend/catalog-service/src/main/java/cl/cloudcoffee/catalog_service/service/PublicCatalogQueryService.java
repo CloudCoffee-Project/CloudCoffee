@@ -17,15 +17,18 @@ public class PublicCatalogQueryService {
     private final CampusRepository campusRepository;
     private final CategoryRepository categoryRepository;
     private final cl.cloudcoffee.catalog_service.repository.ProductRepository productRepository;
+    private final cl.cloudcoffee.catalog_service.repository.OfferRepository offerRepository;
 
     public PublicCatalogQueryService(
             CampusRepository campusRepository,
             CategoryRepository categoryRepository,
-            cl.cloudcoffee.catalog_service.repository.ProductRepository productRepository
+            cl.cloudcoffee.catalog_service.repository.ProductRepository productRepository,
+            cl.cloudcoffee.catalog_service.repository.OfferRepository offerRepository
     ) {
         this.campusRepository = campusRepository;
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
+        this.offerRepository = offerRepository;
     }
 
     public List<CampusResponse> findAllCampus() {
@@ -48,5 +51,11 @@ public class PublicCatalogQueryService {
     ) {
         return productRepository.findAvailableProducts(campusId, categoryId, q, pageable)
                 .map(cl.cloudcoffee.catalog_service.dto.ProductResponse::from);
+    }
+
+    public List<cl.cloudcoffee.catalog_service.dto.ProductOfferResponse> findProductOffers(java.util.UUID productId, java.util.UUID campusId) {
+        return offerRepository.findOffersByProductAndCampus(productId, campusId).stream()
+                .map(cl.cloudcoffee.catalog_service.dto.ProductOfferResponse::from)
+                .toList();
     }
 }

@@ -39,4 +39,12 @@ public class PublicCatalogController {
     ) {
         return queryService.findProducts(campusId, categoriaId, q, pageable);
     }
+
+    @GetMapping("/productos/{id}/ofertas")
+    public List<cl.cloudcoffee.catalog_service.dto.ProductOfferResponse> findProductOffers(
+            @org.springframework.web.bind.annotation.PathVariable java.util.UUID id,
+            @org.springframework.web.bind.annotation.RequestParam java.util.UUID campusId
+    ) {
+        return queryService.findProductOffers(id, campusId);
+    }
 }
