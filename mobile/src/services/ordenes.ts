@@ -2,9 +2,11 @@
 //
 // Órdenes del cajero: listado ("Pedidos Entrantes", INT4-7), confirmación de
 // entrega tras escanear el QR de retiro (INT4-8) y resolución de órdenes no
-// retiradas con decisión ítem por ítem (INT4-12). Todo el tráfico pasa por el
-// httpClient del API Gateway (config/api.ts): el interceptor inyecta el token
-// y los errores llegan normalizados como ApiError (toApiError).
+// retiradas con decisión ítem por ítem (INT4-12). Además, las acciones del
+// cliente sobre una orden puntual de su compra: confirmar o cancelar (INT4-37,
+// las dos últimas funciones del archivo). Todo el tráfico pasa por el httpClient
+// del API Gateway (config/api.ts): el interceptor inyecta el token y los errores
+// llegan normalizados como ApiError (toApiError).
 
 import { httpClient } from './httpClient';
 import type { AccionNoRetirado, Orden } from '../types/domain';
@@ -75,6 +77,26 @@ export async function resolverOrdenNoRetirada(
       },
     }
   );
+
+  return response.data;
+}
+
+// INT4-37: confirmar o cancelar UNA orden puntual de la compra del cliente (las
+// que agrupan una compra cuando el pedido es en varios puntos de retiro).
+// A diferencia de las funciones del cajero de arriba, estas no reciben el token
+// explícito: quien las llama es la pantalla de Mis Compras y el interceptor del
+// httpClient ya inyecta el JWT del cliente (mismo patrón que compras.ts).
+//   - POST /v1/orders/{ordenId}/confirmar → Orden
+//   - POST /v1/orders/{ordenId}/cancelar  → Orden
+// Sin body: la acción se define por la ruta.
+export async function confirmarOrden(ordenId: string): Promise<Orden> {
+  const response = await httpClient.post<Orden>(`${ORDENES_ENDPOINT}/${ordenId}/confirmar`);
+
+  return response.data;
+}
+
+export async function cancelarOrden(ordenId: string): Promise<Orden> {
+  const response = await httpClient.post<Orden>(`${ORDENES_ENDPOINT}/${ordenId}/cancelar`);
 
   return response.data;
 }
