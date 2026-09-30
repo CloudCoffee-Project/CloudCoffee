@@ -11,20 +11,50 @@ export interface ItemCarrito {
   cantidad: number;
 }
 
+// Datos de entrega y facturación que recopila el checkout (INT4-35) y que viajan
+// en el body de POST /v1/compras junto con los items. La dirección es requerida
+// cuando el método de entrega es envío a domicilio; con retiro en cafetería no
+// aplica. El backend lo reutilizará cuando implemente el controller; hoy acepta
+// el body de todos modos (la app no mockea).
+export interface DatosEntregaCompra {
+  nombre: string;
+  correo: string;
+  telefono: string;
+  direccion?: string;
+  metodoEntrega: 'retiro' | 'envio';
+}
+
+// Estado de la compra en la respuesta de POST /v1/compras. La compra siempre
+// queda registrada (compraId + montoTotal); el estado dice qué sigue:
+//   - 'pendiente de pago': registrada y falta el pago (la app abre Mercado
+//     Pago con el initPoint; sin initPoint se confirma en Mis Compras).
+//   - 'revisión requerida': registrada pero necesita revisión antes de
+//     confirmarse: no está pagada ni rechazada, y la app no debe volver a
+//     cobrar ni abrir un nuevo checkout (INT4-36).
+// El backend aún no implementa el endpoint; este es el contrato que la app usa.
+export type EstadoCompraCreada = 'pendiente de pago' | 'revisión requerida';
+
+// Constante del estado de revisión: ninguna pantalla inventa el string (ver la
+// política de estados de types/domain.ts); la pantalla compara contra esta.
+export const ESTADO_COMPRA_REVISION_REQUERIDA: EstadoCompraCreada = 'revisión requerida';
+
 export interface CompraCreada {
   compraId: string;
-  estado: 'pendiente de pago' | 'revisión requerida';
+  estado: EstadoCompraCreada;
   initPoint?: string;
   montoTotal: number;
 }
 
 export async function crearCompra(
   items: ItemCarrito[],
-  accessToken: string
+  accessToken: string,
+  datosEntrega?: DatosEntregaCompra
 ): Promise<CompraCreada> {
   const response = await httpClient.post<CompraCreada>(
     '/v1/compras',
-    { items },
+    // El precio no viaja (lo recalcula el backend contra el catálogo); sí viajan
+    // los datos del comprador para armar el pedido y la boleta.
+    { items, ...(datosEntrega ? { datosEntrega } : {}) },
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,

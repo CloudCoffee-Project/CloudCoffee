@@ -10,7 +10,6 @@ import { View } from 'react-native';
 
 import CarritoScreen from '../app/(cliente)/carrito';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
-import { abrirCheckoutMercadoPago, parsearRetornoPago } from '../services/pagos';
 import type { ItemCarrito, NuevoItemCarrito } from '../types/domain';
 
 // La pantalla no pide nada al backend: todo lo que muestra sale del carrito en
@@ -39,11 +38,6 @@ jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
 }));
 
-jest.mock('../services/pagos', () => ({
-  abrirCheckoutMercadoPago: jest.fn(async () => ({ tipo: 'cerrado_sin_confirmar' })),
-  parsearRetornoPago: jest.fn(() => ({ estado: 'exitoso', paymentId: 'pay-1', compraId: 'cmp-1' })),
-}));
-
 jest.mock('react-native-safe-area-context', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
@@ -52,9 +46,6 @@ jest.mock('react-native-safe-area-context', () => {
       React.createElement(View, props, props.children),
   };
 });
-
-const mockAbrirCheckout = abrirCheckoutMercadoPago as unknown as jest.Mock;
-const mockParsearRetorno = parsearRetornoPago as unknown as jest.Mock;
 
 function linea(over: Partial<NuevoItemCarrito> = {}): NuevoItemCarrito {
   return {
@@ -167,9 +158,6 @@ beforeEach(() => {
   mockRouter.push.mockClear();
   mockRouter.back.mockClear();
   mockRouter.replace.mockClear();
-  mockAbrirCheckout.mockClear();
-  mockAbrirCheckout.mockResolvedValue({ tipo: 'cerrado_sin_confirmar' });
-  mockParsearRetorno.mockClear();
   // El flujo de pago loguea a propósito; sin esto la salida de la suite se
   // llena de warnings que no dicen nada del comportamiento que se está probando.
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -393,7 +381,7 @@ describe('Carrito agrupado por cafetería (INT4-33)', () => {
   });
 });
 
-describe('El botón de pagar (flujo de INT4-38/39)', () => {
+describe('El botón de pagar (INT4-35: lleva al checkout)', () => {
   it('lleva el total general en la etiqueta', async () => {
     const tree = await renderCarrito();
     await agregar(tree, linea(), 2);
@@ -402,68 +390,17 @@ describe('El botón de pagar (flujo de INT4-38/39)', () => {
     expect(texto(tree, 'carrito-pagar')).toBe('Pagar con Mercado Pago $5.700');
   });
 
-  it('abre el checkout de Mercado Pago al pulsarlo', async () => {
+  it('navega a la pantalla de checkout, que es la que registra la compra', async () => {
     const tree = await renderCarrito();
     await agregar(tree, linea());
 
     await pulsar(tree, 'carrito-pagar');
 
-    expect(mockAbrirCheckout).toHaveBeenCalledTimes(1);
-  });
-
-  it('se queda en el carrito si el usuario cierra el checkout sin confirmar', async () => {
-    const tree = await renderCarrito();
-    await agregar(tree, linea());
-
-    await pulsar(tree, 'carrito-pagar');
-
+    // El carrito ya no habla con el backend ni abre Mercado Pago: registrar la
+    // orden (POST /v1/compras) y abrir el checkout vive en la pantalla de
+    // checkout (INT4-35). Acá solo se navega.
+    expect(mockRouter.push).toHaveBeenCalledWith('/(cliente)/checkout');
     expect(mockRouter.replace).not.toHaveBeenCalled();
-  });
-
-  it('se apaga mientras se está pagando, para que no se pulse dos veces', async () => {
-    // El checkout queda pendiente hasta que esta prueba lo suelta, así da para
-    // mirar el botón en pleno vuelo.
-    let soltarCheckout: (() => void) | undefined;
-    mockAbrirCheckout.mockReturnValue(
-      new Promise((resolve) => {
-        soltarCheckout = () => resolve({ tipo: 'cerrado_sin_confirmar' });
-      })
-    );
-    const tree = await renderCarrito();
-    await agregar(tree, linea());
-
-    await pulsar(tree, 'carrito-pagar');
-
-    const boton = tree.root.findByProps({ testID: 'carrito-pagar' });
-    expect(boton.props.disabled).toBe(true);
-    expect(textoDe(boton)).toBe('Procesando pago...');
-
-    await act(async () => {
-      soltarCheckout?.();
-    });
-
-    const despues = tree.root.findByProps({ testID: 'carrito-pagar' });
-    expect(despues.props.disabled).toBe(false);
-    expect(textoDe(despues)).toBe('Pagar con Mercado Pago $1.800');
-  });
-
-  it('lleva a la pantalla de resultado cuando el pago vuelve confirmado', async () => {
-    mockAbrirCheckout.mockResolvedValue({
-      tipo: 'retorno_recibido',
-      url: 'cloudcoffee://pago/retorno?status=approved&payment_id=pay-1&external_reference=cmp-1',
-    });
-    const tree = await renderCarrito();
-    await agregar(tree, linea());
-
-    await pulsar(tree, 'carrito-pagar');
-
-    expect(mockParsearRetorno).toHaveBeenCalledWith(
-      'cloudcoffee://pago/retorno?status=approved&payment_id=pay-1&external_reference=cmp-1'
-    );
-    expect(mockRouter.replace).toHaveBeenCalledWith({
-      pathname: '/resultado-pago',
-      params: { estado: 'exitoso', compraId: 'cmp-1', paymentId: 'pay-1' },
-    });
   });
 
   it('muestra Mercado Pago como único método, ya elegido', async () => {
