@@ -5,14 +5,18 @@ import cl.cloudcoffee.auth_service.dto.UpdatePerfilRequest;
 import cl.cloudcoffee.auth_service.model.Usuario;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import cl.cloudcoffee.auth_service.dto.ChangePasswordRequest;
 
 @Service
 public class PerfilService {
 
     private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public PerfilService(UsuarioRepository usuarioRepository) {
+    public PerfilService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public PerfilResponse obtenerPerfilUsuario(String email) {
@@ -52,5 +56,18 @@ public class PerfilService {
                 usuario.getTelefono(),
                 usuario.getRol()
         );
+    }
+    public void cambiarPassword(String email, ChangePasswordRequest request) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(request.passwordActual(), usuario.getPasswordHash())) {
+            throw new RuntimeException("La contraseña actual es incorrecta");
+        }
+
+        String nuevoHash = passwordEncoder.encode(request.passwordNueva());
+        usuario.actualizarPasswordHash(nuevoHash);
+
+        usuarioRepository.save(usuario);
     }
 }
