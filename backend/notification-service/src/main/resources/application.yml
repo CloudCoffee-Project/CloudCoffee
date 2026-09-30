@@ -22,6 +22,7 @@ spring:
     password: ${SPRING_RABBITMQ_PASSWORD:cloudcoffee_local}
     listener:
       simple:
+        observation-enabled: true
         default-requeue-rejected: false
         retry:
           enabled: true
@@ -29,6 +30,8 @@ spring:
           initial-interval: 1000ms
           multiplier: 2
           max-interval: 5000ms
+    template:
+      observation-enabled: true
   mail:
     host: ${SMTP_HOST:localhost}
     port: ${SMTP_PORT:587}
@@ -53,6 +56,12 @@ server:
   port: ${SERVER_PORT:8084}
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      zipkin:
+        endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
   endpoints:
     web:
       exposure:
