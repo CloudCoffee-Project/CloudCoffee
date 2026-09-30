@@ -33,7 +33,7 @@ public class RefreshTokenService {
     @Transactional
     public LoginResponse renovar(String refreshTokenPlano) {
         TokenAuth tokenActual = tokenAuthRepository
-                .findByTokenHashAndTipo(TokenHasher.hash(refreshTokenPlano), TipoToken.REFRESH)
+                .findForUpdate(TokenHasher.hash(refreshTokenPlano), TipoToken.REFRESH)
                 .filter(TokenAuth::estaVigente)
                 .orElseThrow(RefreshTokenService::refreshTokenInvalido);
 

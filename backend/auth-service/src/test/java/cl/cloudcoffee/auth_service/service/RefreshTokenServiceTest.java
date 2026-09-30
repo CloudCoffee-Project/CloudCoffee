@@ -64,7 +64,7 @@ class RefreshTokenServiceTest {
         Usuario usuario = usuarioDePrueba();
         String tokenPlano = TokenHasher.generarTokenPlano();
         TokenAuth tokenActual = tokenVigente(usuario, TokenHasher.hash(tokenPlano));
-        when(tokenAuthRepository.findByTokenHashAndTipo(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
+        when(tokenAuthRepository.findForUpdate(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
                 .thenReturn(Optional.of(tokenActual));
         when(jwtTokenService.emitir(usuario)).thenReturn("access-token-nuevo");
 
@@ -80,7 +80,7 @@ class RefreshTokenServiceTest {
         Usuario usuario = usuarioDePrueba();
         String tokenPlano = TokenHasher.generarTokenPlano();
         TokenAuth tokenActual = tokenVigente(usuario, TokenHasher.hash(tokenPlano));
-        when(tokenAuthRepository.findByTokenHashAndTipo(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
+        when(tokenAuthRepository.findForUpdate(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
                 .thenReturn(Optional.of(tokenActual));
         when(jwtTokenService.emitir(usuario)).thenReturn("access-token-nuevo");
 
@@ -101,7 +101,7 @@ class RefreshTokenServiceTest {
         String tokenPlano = TokenHasher.generarTokenPlano();
         TokenAuth tokenYaRevocado = tokenVigente(usuario, TokenHasher.hash(tokenPlano));
         tokenYaRevocado.revocar();
-        when(tokenAuthRepository.findByTokenHashAndTipo(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
+        when(tokenAuthRepository.findForUpdate(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
                 .thenReturn(Optional.of(tokenYaRevocado));
 
         assertThatThrownBy(() -> refreshTokenService.renovar(tokenPlano))
@@ -118,7 +118,7 @@ class RefreshTokenServiceTest {
         String tokenPlano = TokenHasher.generarTokenPlano();
         TokenAuth tokenExpirado = new TokenAuth(usuario, TokenHasher.hash(tokenPlano),
                 Instant.now().minus(Duration.ofMinutes(1)), TipoToken.REFRESH);
-        when(tokenAuthRepository.findByTokenHashAndTipo(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
+        when(tokenAuthRepository.findForUpdate(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
                 .thenReturn(Optional.of(tokenExpirado));
 
         assertThatThrownBy(() -> refreshTokenService.renovar(tokenPlano))
@@ -131,7 +131,7 @@ class RefreshTokenServiceTest {
     @Test
     void rechazaTokenInexistente() {
         String tokenPlano = TokenHasher.generarTokenPlano();
-        when(tokenAuthRepository.findByTokenHashAndTipo(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
+        when(tokenAuthRepository.findForUpdate(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> refreshTokenService.renovar(tokenPlano))
