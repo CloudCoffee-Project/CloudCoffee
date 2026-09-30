@@ -178,6 +178,26 @@ comprueba firma y roles emitidos por Auth, rechazo de tokens vencidos, adulterad
 firmados por otra llave o algoritmo, claims obligatorios, acceso directo a cada
 servicio, rutas públicas, propagación del token, CORS y los flujos previos del backend.
 
+## Logout por dispositivo (INT2-23)
+
+Enviar `POST /v1/auth/logout` al Gateway (o `POST /auth/logout` directamente a Auth)
+con `Authorization: Bearer <accessToken>` y el refresh token actual del dispositivo:
+
+```json
+{"refreshToken": "<refreshToken>"}
+```
+
+La respuesta es `204 No Content`. Auth comprueba que el token sea de tipo `REFRESH`
+y pertenezca al usuario del JWT, y registra su revocación. Otras sesiones conservan
+sus refresh tokens. Repetir el logout con el mismo token devuelve `204` sin cambiar
+la revocación; intentar renovarlo devuelve `401`. Logout y refresh bloquean la misma
+fila durante la transacción para serializar operaciones sobre ese token.
+
+Sin JWT válido se devuelve `401`; un refresh token inexistente, de otro usuario o
+de otro tipo también devuelve `401`. Un cuerpo sin refresh token devuelve `400`.
+El access token conserva su vencimiento original; este endpoint revoca el refresh
+token de la sesión y no agrega una lista de revocación de JWT.
+
 ## CORS en API Gateway
 
 El Gateway gestiona CORS para `/v1/**`; los microservicios no necesitan configurar CORS.

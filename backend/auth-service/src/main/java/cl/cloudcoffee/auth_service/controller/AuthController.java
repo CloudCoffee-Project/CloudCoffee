@@ -3,6 +3,8 @@ package cl.cloudcoffee.auth_service.controller;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -23,6 +25,7 @@ import cl.cloudcoffee.auth_service.dto.RegistroClienteResponse;
 import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
 import cl.cloudcoffee.auth_service.dto.VerificarCorreoRequest;
 import cl.cloudcoffee.auth_service.service.LoginService;
+import cl.cloudcoffee.auth_service.service.LogoutService;
 import cl.cloudcoffee.auth_service.service.PasswordRecoveryService;
 import cl.cloudcoffee.auth_service.service.RefreshTokenService;
 import cl.cloudcoffee.auth_service.service.RegistroService;
@@ -37,15 +40,17 @@ public class AuthController {
     private final LoginService loginService;
     private final RefreshTokenService refreshTokenService;
     private final PasswordRecoveryService passwordRecoveryService;
+    private final LogoutService logoutService;
 
     public AuthController(RegistroService registroService, VerificacionService verificacionService,
             LoginService loginService, RefreshTokenService refreshTokenService,
-            PasswordRecoveryService passwordRecoveryService) {
+            PasswordRecoveryService passwordRecoveryService, LogoutService logoutService) {
         this.registroService = registroService;
         this.verificacionService = verificacionService;
         this.loginService = loginService;
         this.refreshTokenService = refreshTokenService;
         this.passwordRecoveryService = passwordRecoveryService;
+        this.logoutService = logoutService;
     }
 
     @PostMapping("/login")
@@ -56,6 +61,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public LoginResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return refreshTokenService.renovar(request.refreshToken());
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody RefreshTokenRequest request) {
+        logoutService.cerrarSesion(jwt.getSubject(), request.refreshToken());
     }
 
     @PostMapping("/register")
