@@ -129,7 +129,7 @@ visible. Lo que sí sigue funcionando es el logout y el resto del flujo de auth.
   llamar al endpoint. Es best-effort a propósito: si la red falla, igual limpia lo local y
   deja al usuario fuera de la sesión, que es lo que espera la pantalla. La baja del push token
   va en el mismo cierre, así que también queda desregistrado aunque el logout haya fallado.
-- **Lo que la app ya no usa de `datos-locales`**: el catálogo (home y detalle) viene del
-  Catalog-service desde INT4-25. El snapshot local y `services/catalogoLocal.ts` quedaron sin
-  uso: ninguna pantalla los importa, así que borrarlos es seguro cuando se quiera cerrar el
-  ciclo (el paso 2 del README de esa carpeta ya está hecho).
+- **El snapshot local del catálogo ya no existe**: el catálogo (home y detalle) viene del
+  Catalog-service desde INT4-25. `src/datos-locales/`, `services/catalogoLocal.ts` y su test
+  se borraron al no quedar ninguna pantalla que los importara. La app ya no muestra datos
+  inventados: sin backend, muestra el error normalizado.
