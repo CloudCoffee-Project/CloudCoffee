@@ -6,18 +6,19 @@
 //   - POST /v1/auth/verificacion      → confirma el correo con el token recibido.
 //   - POST /v1/auth/verificacion/reenviar → emite un token de verificación nuevo.
 //   - POST /v1/auth/password/recovery → solicita recuperar la contraseña (INT2-21-bis).
-//   - POST /v1/auth/password/reset    → restablece la contraseña con el token del correo.
-//   - POST /v1/auth/password/change   → cambia la contraseña estando autenticado (INT4-24).
 //   - POST /v1/auth/logout            → revoca el refreshToken de la sesión (INT4-25).
-//   - GET  /v1/auth/me                → perfil del usuario autenticado (INT4-23).
-//   - PUT  /v1/auth/me                → actualiza nombre/apellido/teléfono (INT4-23).
+//   - GET  /v1/auth/users/me         → perfil del usuario autenticado (INT4-23).
+//   - PATCH /v1/auth/users/me        → actualiza nombre/apellido/teléfono (INT4-23).
+//   - PATCH /v1/auth/users/me/password → cambia la contraseña (INT4-24).
 //
 // NOTA: login, registro, verificación, recuperación y logout ya responden en el
-// auth-service. Los de perfil (INT4-23) son la excepción: el gateway enruta
-// /v1/auth/**, pero el controller está mapeado a /v1/v1/auth y además busca por
-// email cuando el JWT trae el UUID en `sub`, así que hoy devolverían 404. Está
-// documentado en docs/contratos-backend.md; los tipos siguen la entidad Usuario
-// (mismo shape que RegistroClienteResponse).
+// auth-service. Los de perfil (INT4-23/24) tienen el contrato de `UserController`
+// de origin/main: viven bajo /v1/auth/users y el verbo de edición es PATCH, no
+// PUT. Quedan 404 por el gateway porque el controller se mapea a /v1/auth/users
+// mientras el gateway aplica StripPrefix=1 y le entrega /auth/users;AuthController
+// sí usa /auth y por eso ese funciona. Es un bug de backend: cuando se corrija el
+// prefijo, estas llamadas conectan sin tocar la app. Detalle en
+// docs/contratos-backend.md.
 
 import { decodeJwtPayload, httpClient } from './httpClient';
 import type {
@@ -34,21 +35,25 @@ import type {
   VerificarCorreoResponse,
 } from '../types/domain';
 
-// Ruta canónica de los endpoints de perfil propio. GET devuelve el
-// PerfilUsuario y PUT lo actualiza (contrato a implementar en el auth-service).
-export const PERFIL_ENDPOINT = '/v1/auth/me';
+// Rutas de perfil propio según `UserController` (INT4-23/24). El prefijo /v1 es el
+// que espera el gateway; internamente el servicio lo recibe sin él por el
+// StripPrefix=1, así que el mapeo del controller debería quedar en /auth/users.
+export const PERFIL_ENDPOINT = '/v1/auth/users/me';
 
-// Llama a GET /v1/auth/me y devuelve los datos del usuario autenticado.
+// Cambio de contraseña autenticado (INT4-24), mismo controller.
+export const CAMBIAR_PASSWORD_ENDPOINT = '/v1/auth/users/me/password';
+
+// Llama a GET /v1/auth/users/me y devuelve los datos del usuario autenticado.
 export async function obtenerPerfil(): Promise<PerfilUsuario> {
   const response = await httpClient.get<PerfilUsuario>(PERFIL_ENDPOINT);
 
   return response.data;
 }
 
-// Llama a PUT /v1/auth/me actualizando nombre, apellido y teléfono. Devuelve
-// el perfil persistido por el backend.
+// Llama a PATCH /v1/auth/users/me actualizando nombre, apellido y teléfono.
+// El verbo es PATCH: UserController no mapea PUT, que responde 405.
 export async function actualizarPerfil(datos: ActualizarPerfilRequest): Promise<PerfilUsuario> {
-  const response = await httpClient.put<PerfilUsuario>(PERFIL_ENDPOINT, {
+  const response = await httpClient.patch<PerfilUsuario>(PERFIL_ENDPOINT, {
     nombre: datos.nombre.trim(),
     apellido: datos.apellido.trim(),
     telefono: datos.telefono.trim(),
@@ -112,17 +117,21 @@ export async function restablecerPassword(token: string, nuevaPassword: string):
   await httpClient.post('/v1/auth/password/reset', body);
 }
 
-// Ruta canónica del cambio de contraseña autenticado (INT4-24). Contrato
-// pendiente en el auth-service: recibe la contraseña actual + la nueva y
-// cambia la clave del usuario autenticado. El gateway ya enruta /v1/auth/**,
-// así que hoy devolvería 404 hasta que el backend lo implemente.
-export const CAMBIAR_PASSWORD_ENDPOINT = '/v1/auth/password/change';
-
-/** Llama a POST /v1/auth/password/change con la contraseña actual y la nueva. */
+/**
+ * Cambia la contraseña del usuario autenticado (INT4-24).
+ *
+ * PATCH y no POST: `UserController` mapea `@PatchMapping("/me/password")` sobre
+ * `/v1/auth/users`, así que el verbo correcto es PATCH.
+ *
+ * El campo de la nueva contraseña es `passwordNueva`, que es como lo llama
+ * `ChangePasswordRequest`. Mandar `nuevaPassword` —el nombre que usa la app en
+ * su formulario— da 400 pidiendo `passwordNueva`, así que el body se traduce
+ * acá y no en la pantalla.
+ */
 export async function cambiarContrasena(datos: CambiarContrasenaRequest): Promise<void> {
-  await httpClient.post(CAMBIAR_PASSWORD_ENDPOINT, {
+  await httpClient.patch(CAMBIAR_PASSWORD_ENDPOINT, {
     passwordActual: datos.passwordActual,
-    nuevaPassword: datos.nuevaPassword,
+    passwordNueva: datos.nuevaPassword,
   });
 }
 

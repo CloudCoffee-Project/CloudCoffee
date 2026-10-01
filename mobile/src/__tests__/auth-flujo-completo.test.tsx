@@ -18,11 +18,12 @@
 // Bearer, que el backend revoque ese refresh, y que el dispositivo quede sin
 // tokens.
 //
-// Solo se mockea lo que no es del flujo: el perfil (GET /v1/auth/me está roto
-// del lado del server, ver docs/contratos-backend.md) y el token de push, que es
-// otro dominio (INT4-42). El refresh usa su propio cliente de axios (authRefresh,
-// aislado a propósito para no recursar con los interceptores), así que se
-// mockea ese módulo: la rotación y la revocación las simula el mismo backend.
+// Solo se mockea lo que no es del flujo: el perfil (GET /v1/auth/users/me da 404
+// por el prefijo /v1 duplicado en UserController, bug de backend; ver
+// docs/contratos-backend.md) y el token de push, que es otro dominio (INT4-42).
+// El refresh usa su propio cliente de axios (authRefresh, aislado a propósito para
+// no recursar con los interceptores), así que se mockea ese módulo: la rotación y
+// la revocación las simula el mismo backend.
 
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';

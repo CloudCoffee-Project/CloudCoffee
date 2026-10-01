@@ -2,10 +2,14 @@
 //
 // Pantalla de cambio de contraseña estando autenticado (INT4-24). Se accede
 // desde Mi Perfil (perfil.tsx → (cliente)/cambiar-contrasena). Llama a
-// POST /v1/auth/password/change con la contraseña actual y la nueva.
-// Validaciones espejo del backend (contraseña nueva mínimo 8 caracteres).
-// El endpoint ya responde en el auth-service; si falla, la pantalla muestra el
-// error normalizado del backend con botón de reintentar.
+// PATCH /v1/auth/users/me/password con la contraseña actual y la nueva; el
+// nombre del campo en el body (`passwordNueva`) lo pone el servicio, no la
+// pantalla, que sigue trabajando con `nuevaPassword`.
+// Validaciones espejo del backend: la nueva pide 8 caracteres en la app y el
+// ChangePasswordRequest exige 6, así que la pantalla es la más estricta.
+// El endpoint responde 404 mientras UserController no corrija el prefijo /v1
+// duplicado; cuando lo haga, conecta sin tocar esta pantalla. Si falla, muestra
+// el error normalizado con botón de reintentar.
 
 import { useState } from 'react';
 import {

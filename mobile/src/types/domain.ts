@@ -133,10 +133,10 @@ export interface RegistroClienteResponse {
   verificado: boolean;
 }
 
-// Perfil del usuario autenticado. Reutiliza la forma del RegistroClienteResponse
-// del backend (el auth-service no expone hoy un endpoint de perfil; cuando lo
-// haga devolverá la misma entidad Usuario). Definir estos tipos acá evita que la
-// pantalla invente sus propios campos (ver cabecera de este archivo).
+// Perfil del usuario autenticado. Es la forma de `PerfilResponse` del
+// auth-service (GET /v1/auth/users/me): id, email, nombre, apellido, telefono y
+// rol. `verificado` NO viene en ese DTO, así que es opcional: la app no puede
+// afirmar el estado de verificación a partir del perfil.
 export interface PerfilUsuario {
   id: string;
   email: string;
@@ -144,7 +144,7 @@ export interface PerfilUsuario {
   apellido: string;
   telefono: string;
   rol: string;
-  verificado: boolean;
+  verificado?: boolean;
 }
 
 // Body de edición de perfil: solo los campos editables (INT4-23). El backend
