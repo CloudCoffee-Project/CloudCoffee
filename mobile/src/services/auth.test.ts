@@ -5,6 +5,8 @@ import {
   CAMBIAR_PASSWORD_ENDPOINT,
   decodificarSesion,
   login,
+  LOGOUT_ENDPOINT,
+  logout,
   mapearRol,
   obtenerPerfil,
   PERFIL_ENDPOINT,
@@ -232,15 +234,58 @@ describe('cambiarContrasena', () => {
     jest.restoreAllMocks();
   });
 
-  it('llama a /v1/auth/password/change con la contraseña actual y la nueva', async () => {
+  it('llama a PATCH /v1/auth/users/me/password con la contraseña actual y la nueva', async () => {
+    const patchSpy = jest.spyOn(httpClient, 'patch').mockResolvedValue({ data: null });
+
+    await cambiarContrasena({ passwordActual: 'vieja-123', nuevaPassword: 'nueva-12345' });
+
+    expect(patchSpy).toHaveBeenCalledWith(CAMBIAR_PASSWORD_ENDPOINT, {
+      passwordActual: 'vieja-123',
+      passwordNueva: 'nueva-12345',
+    });
+  });
+
+  it('traduce nuevaPassword a passwordNueva, que es como lo llama el backend', async () => {
+    const patchSpy = jest.spyOn(httpClient, 'patch').mockResolvedValue({ data: null });
+
+    await cambiarContrasena({ passwordActual: 'vieja-123', nuevaPassword: 'otra-12345' });
+
+    // El body no puede llevar nuevaPassword: ChangePasswordRequest lo rechaza con
+    // 400 pidiendo passwordNueva.
+    expect(patchSpy.mock.calls[0][1]).not.toHaveProperty('nuevaPassword');
+  });
+
+  it('no usa POST: UserController mapea PATCH sobre /me/password', async () => {
+    const patchSpy = jest.spyOn(httpClient, 'patch').mockResolvedValue({ data: null });
     const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
 
     await cambiarContrasena({ passwordActual: 'vieja-123', nuevaPassword: 'nueva-12345' });
 
-    expect(postSpy).toHaveBeenCalledWith(CAMBIAR_PASSWORD_ENDPOINT, {
-      passwordActual: 'vieja-123',
-      nuevaPassword: 'nueva-12345',
-    });
+    expect(postSpy).not.toHaveBeenCalled();
+    expect(patchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('logout', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/logout con el refreshToken en el body', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
+
+    await logout('refresh-abc');
+
+    // El accessToken no va en el body: lo pone el interceptor del httpClient
+    // en el header Authorization, igual que en el resto de las llamadas.
+    expect(postSpy).toHaveBeenCalledWith(LOGOUT_ENDPOINT, { refreshToken: 'refresh-abc' });
+  });
+
+  it('propaga el error si el gateway no pudo revocar la sesión', async () => {
+    jest.spyOn(httpClient, 'post').mockRejectedValue(new Error('Sesión inválida'));
+
+    await expect(logout('refresh-abc')).rejects.toThrow('Sesión inválida');
   });
 });
 
@@ -250,13 +295,31 @@ describe('obtenerPerfil', () => {
     jest.restoreAllMocks();
   });
 
-  it('llama a GET /v1/auth/me y devuelve el perfil del usuario', async () => {
+  it('llama a GET /v1/auth/users/me y devuelve el perfil del usuario', async () => {
     const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({ data: perfilMock });
 
     const resultado = await obtenerPerfil();
 
     expect(getSpy).toHaveBeenCalledWith(PERFIL_ENDPOINT);
     expect(resultado).toEqual(perfilMock);
+  });
+
+  it('pide la ruta bajo /v1/auth/users, no /v1/auth/me', () => {
+    // El contrato es el de UserController: /v1/auth/users/me. La ruta vieja
+    // /v1/auth/me no existe en el backend y daba 404.
+    expect(PERFIL_ENDPOINT).toBe('/v1/auth/users/me');
+  });
+
+  it('no afirma verificado cuando PerfilResponse no lo trae', async () => {
+    // PerfilResponse es id/email/nombre/apellido/telefono/rol: no incluye
+    // verificado. La app no debe inventar ese dato.
+    const sinVerificado = { ...perfilMock };
+    delete (sinVerificado as { verificado?: boolean }).verificado;
+    jest.spyOn(httpClient, 'get').mockResolvedValue({ data: sinVerificado });
+
+    const resultado = await obtenerPerfil();
+
+    expect(resultado.verificado).toBeUndefined();
   });
 });
 
@@ -266,8 +329,8 @@ describe('actualizarPerfil', () => {
     jest.restoreAllMocks();
   });
 
-  it('llama a PUT /v1/auth/me normalizando nombre, apellido y teléfono', async () => {
-    const putSpy = jest.spyOn(httpClient, 'put').mockResolvedValue({ data: perfilMock });
+  it('llama a PATCH /v1/auth/users/me normalizando nombre, apellido y teléfono', async () => {
+    const patchSpy = jest.spyOn(httpClient, 'patch').mockResolvedValue({ data: perfilMock });
 
     const resultado = await actualizarPerfil({
       nombre: '  Ana  ',
@@ -275,11 +338,21 @@ describe('actualizarPerfil', () => {
       telefono: ' +56 9 1234 5678 ',
     });
 
-    expect(putSpy).toHaveBeenCalledWith(PERFIL_ENDPOINT, {
+    expect(patchSpy).toHaveBeenCalledWith(PERFIL_ENDPOINT, {
       nombre: 'Ana',
       apellido: 'Pérez',
       telefono: '+56 9 1234 5678',
     });
     expect(resultado).toEqual(perfilMock);
+  });
+
+  it('no usa PUT: UserController no mapea PUT y respondería 405', async () => {
+    const patchSpy = jest.spyOn(httpClient, 'patch').mockResolvedValue({ data: perfilMock });
+    const putSpy = jest.spyOn(httpClient, 'put').mockResolvedValue({ data: perfilMock });
+
+    await actualizarPerfil({ nombre: 'Ana', apellido: 'Pérez', telefono: '+56 9 1234 5678' });
+
+    expect(putSpy).not.toHaveBeenCalled();
+    expect(patchSpy).toHaveBeenCalledTimes(1);
   });
 });

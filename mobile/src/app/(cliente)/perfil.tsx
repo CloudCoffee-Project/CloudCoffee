@@ -5,11 +5,15 @@
 // acciones inferiores. La tarea pide editar nombre, apellido y teléfono, así
 // que la edición va más allá del mockup (que solo permitía el teléfono).
 //
-// Los datos salen de GET /v1/auth/me y la edición usa PUT /v1/auth/me
-// (services/auth.ts). Ambos endpoints son contrato pendiente del auth-service,
-// así que mientras el backend no los implemente la pantalla mostrará el error
-// normalizado (API_BASE_URL ya enruta /v1/auth/**). Validaciones espejo del
-// registro backend: nombre/apellido max 100 y teléfono ^[0-9+ ()-]{6,20}$.
+// Los datos salen de GET /v1/auth/users/me y la edición usa PATCH
+// /v1/auth/users/me (services/auth.ts), el contrato de `UserController`.
+// Hoy ambos responden 404 por el gateway: el controller está mapeado a
+// /v1/auth/users mientras el gateway aplica StripPrefix=1 y le entrega
+// /auth/users. Es un bug de backend; cuando se corrija el prefijo, esta pantalla
+// conecta sin cambios. Mientras tanto muestra el error normalizado con botón de
+// reintentar. Detalle en docs/contratos-backend.md.
+// Validaciones espejo del registro backend: nombre/apellido max 100 y
+// teléfono ^[0-9+ ()-]{6,20}$.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -284,7 +288,7 @@ export default function PerfilScreen() {
                     </Text>
                     <Text style={styles.avatarEmail}>{perfil.email}</Text>
                   </View>
-                  {perfil.verificado ? (
+                  {perfil.verificado === true ? (
                     <View style={styles.tagVerificado}>
                       <Text style={styles.tagVerificadoTexto}>Verificado</Text>
                     </View>

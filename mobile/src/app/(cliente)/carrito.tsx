@@ -121,6 +121,10 @@ export default function CarritoScreen() {
                       // no es un error del usuario, así que el botón se apaga en
                       // vez de dejarle pedir una unidad de más.
                       const alTope = linea.cantidad >= linea.stock;
+                      // Lo que todavía queda fuera del carrito. No es stock
+                      // reservado: es el total menos lo que el usuario ya se
+                      // llevó, para que se vea que la oferta es finita.
+                      const disponibles = Math.max(linea.stock - linea.cantidad, 0);
 
                       return (
                         <View
@@ -132,6 +136,14 @@ export default function CarritoScreen() {
                             <Text style={styles.itemNombre}>{linea.productoNombre}</Text>
                             <Text style={styles.itemPrecioUnitario}>
                               {formatearPrecio(linea.precioUnitario)} c/u
+                            </Text>
+                            <Text
+                              style={styles.itemStock}
+                              testID={`carrito-item-stock-${linea.ofertaId}`}
+                            >
+                              {disponibles > 0
+                                ? `Quedan ${disponibles} disponibles`
+                                : 'Sin stock restante'}
                             </Text>
                           </View>
 
@@ -414,6 +426,11 @@ const styles = StyleSheet.create({
   itemPrecioUnitario: {
     color: '#6B7280',
     fontSize: 11,
+  },
+  itemStock: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 2,
   },
   itemControles: {
     flexDirection: 'row',

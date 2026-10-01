@@ -327,6 +327,33 @@ describe('Carrito agrupado por cafetería (INT4-33)', () => {
     expect(leerCarrito(tree).items[0].cantidad).toBe(1);
   });
 
+  it('muestra cuánto stock queda fuera del carrito y lo descuenta al comprar', async () => {
+    const tree = await renderCarrito();
+    await agregar(tree, linea({ stock: 5 }), 2);
+
+    expect(texto(tree, 'carrito-item-stock-of-central-cafe')).toBe('Quedan 3 disponibles');
+
+    await pulsar(tree, 'carrito-item-mas-of-central-cafe');
+
+    expect(texto(tree, 'carrito-item-stock-of-central-cafe')).toBe('Quedan 2 disponibles');
+  });
+
+  it('avisa cuando la línea se llevó todo el stock de la oferta', async () => {
+    const tree = await renderCarrito();
+    await agregar(tree, linea({ stock: 5 }), 5);
+
+    expect(texto(tree, 'carrito-item-stock-of-central-cafe')).toBe('Sin stock restante');
+  });
+
+  it('bajar de una unidad devuelve el stock restante al cálculo', async () => {
+    const tree = await renderCarrito();
+    await agregar(tree, linea({ stock: 5 }), 2);
+
+    await pulsar(tree, 'carrito-item-menos-of-central-cafe');
+
+    expect(texto(tree, 'carrito-item-stock-of-central-cafe')).toBe('Quedan 4 disponibles');
+  });
+
   it('bajar de una unidad quita la línea, no la deja en cero', async () => {
     const tree = await renderCarrito();
     await agregar(tree, linea());
