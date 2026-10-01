@@ -4,9 +4,13 @@ import cl.cloudcoffee.auth_service.dto.PerfilResponse;
 import cl.cloudcoffee.auth_service.dto.UpdatePerfilRequest;
 import cl.cloudcoffee.auth_service.model.Usuario;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
+import cl.cloudcoffee.errors.BusinessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import cl.cloudcoffee.auth_service.dto.ChangePasswordRequest;
+
+import java.net.URI;
 
 @Service
 public class PerfilService {
@@ -62,7 +66,10 @@ public class PerfilService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         if (!passwordEncoder.matches(request.passwordActual(), usuario.getPasswordHash())) {
-            throw new RuntimeException("La contraseña actual es incorrecta");
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,
+                    URI.create("/problems/contrasena-actual-incorrecta"),
+                    "Contraseña actual incorrecta",
+                    "La contraseña actual no coincide con la del usuario.");
         }
 
         String nuevoHash = passwordEncoder.encode(request.passwordNueva());
