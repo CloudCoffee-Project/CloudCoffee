@@ -9,8 +9,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { clearTokens, onTokensCambiados, setTokens } from '../services/httpClient';
-import { decodificarSesion } from '../services/auth';
+import { clearTokens, getRefreshToken, onTokensCambiados, setTokens } from '../services/httpClient';
+import { decodificarSesion, logout } from '../services/auth';
 import { eliminarSesion, guardarSesion, leerSesion } from '../services/sessionStorage';
 import { eliminarRegistroPush } from '../services/notificacionesPush';
 import type { LoginResponse, SesionDecodificada } from '../types/domain';
@@ -23,6 +23,29 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+// Cierra la sesión en el backend (INT4-25) sin dejar que una falla de red
+// deje al usuario atrapado en la app.
+//
+// El revoke es "mejor esfuerzo" a propósito: si el servidor no responde, la
+// sesión local se cierra igual y los tokens se borran del dispositivo. Lo que
+// se pierde en ese caso es la revocación en el servidor, que queda cubierta por
+// dos cosas del contrato: el accessToken caduca corto y el refreshToken rota en
+// cada renovación, así que un token robado sirve para una sola renovación y no
+// para una sesión nueva. Preferimos una sesión cerrada con la revocación
+// pendiente antes que un botón que no hace nada porque la red se cayó.
+async function revocarSesionEnBackend(): Promise<void> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return;
+  }
+
+  try {
+    await logout(refreshToken);
+  } catch (error) {
+    console.warn('[Auth] No se pudo revocar la sesión en el backend:', error);
+  }
+}
 
 interface Props {
   children: ReactNode;
@@ -91,8 +114,11 @@ export function AuthProvider({ children }: Props) {
   );
 
   const cerrarSesion = useCallback(async () => {
-    // Elimina el token push del backend ANTES de limpiar los tokens de auth
-    // (INT4-42): así el DELETE viaja con el Authorization Bearer vigente.
+    // Revoca la sesión en el backend (INT4-25) antes de tocar nada en el
+    // dispositivo: POST /v1/auth/logout necesita el refreshToken en el body y el
+    // accessToken en el header Bearer, y ninguno de los dos sobrevive a
+    // clearTokens(). El mismo orden aplica al DELETE del token push (INT4-42).
+    await revocarSesionEnBackend();
     await eliminarRegistroPush();
     clearTokens();
     setSesion(null);

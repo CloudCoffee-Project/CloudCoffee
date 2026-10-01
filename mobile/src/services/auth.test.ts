@@ -5,6 +5,8 @@ import {
   CAMBIAR_PASSWORD_ENDPOINT,
   decodificarSesion,
   login,
+  LOGOUT_ENDPOINT,
+  logout,
   mapearRol,
   obtenerPerfil,
   PERFIL_ENDPOINT,
@@ -241,6 +243,29 @@ describe('cambiarContrasena', () => {
       passwordActual: 'vieja-123',
       nuevaPassword: 'nueva-12345',
     });
+  });
+});
+
+describe('logout', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a /v1/auth/logout con el refreshToken en el body', async () => {
+    const postSpy = jest.spyOn(httpClient, 'post').mockResolvedValue({ data: null });
+
+    await logout('refresh-abc');
+
+    // El accessToken no va en el body: lo pone el interceptor del httpClient
+    // en el header Authorization, igual que en el resto de las llamadas.
+    expect(postSpy).toHaveBeenCalledWith(LOGOUT_ENDPOINT, { refreshToken: 'refresh-abc' });
+  });
+
+  it('propaga el error si el gateway no pudo revocar la sesión', async () => {
+    jest.spyOn(httpClient, 'post').mockRejectedValue(new Error('Sesión inválida'));
+
+    await expect(logout('refresh-abc')).rejects.toThrow('Sesión inválida');
   });
 });
 

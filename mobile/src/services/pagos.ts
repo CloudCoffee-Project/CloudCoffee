@@ -12,10 +12,11 @@ export interface ItemCarrito {
 }
 
 // Datos de entrega y facturación que recopila el checkout (INT4-35) y que viajan
-// en el body de POST /v1/compras junto con los items. La dirección es requerida
-// cuando el método de entrega es envío a domicilio; con retiro en cafetería no
-// aplica. El backend lo reutilizará cuando implemente el controller; hoy acepta
-// el body de todos modos (la app no mockea).
+// en el body de POST /v1/compras junto con los items. El tipo refleja el contrato
+// del backend, que todavía contempla envío a domicilio, pero la app solo retira
+// en cafetería: manda siempre metodoEntrega 'retiro' y sin direccion. El backend
+// lo reutilizará cuando implemente el controller; hoy acepta el body de todos
+// modos (la app no mockea).
 export interface DatosEntregaCompra {
   nombre: string;
   correo: string;

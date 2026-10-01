@@ -305,8 +305,10 @@ export interface ItemCarrito {
   cafeteriaNombre: string;
   cantidad: number;
   // Stock de la oferta tal como estaba al agregar. Es una foto, no el stock en
-  // vivo: el carrito vive en memoria y no vuelve a preguntar al catalogo, asi
-  // que la disponibilidad real la revalida el backend al crear la orden.
+  // vivo: el carrito vive en memoria y no vuelve a preguntar al catálogo, así que
+  // el stock restante que ve el usuario se deriva restándole la cantidad que ya
+  // tiene en el carrito. POST /v1/compras todavia no existe, asi que nadie
+  // reserva stock: eso lo tendria que resolver el backend al crear la orden.
   stock: number;
 }
 

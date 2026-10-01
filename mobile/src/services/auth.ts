@@ -8,16 +8,15 @@
 //   - POST /v1/auth/password/recovery → solicita recuperar la contraseña (INT2-21-bis).
 //   - POST /v1/auth/password/reset    → restablece la contraseña con el token del correo.
 //   - POST /v1/auth/password/change   → cambia la contraseña estando autenticado (INT4-24).
+//   - POST /v1/auth/logout            → revoca el refreshToken de la sesión (INT4-25).
 //   - GET  /v1/auth/me                → perfil del usuario autenticado (INT4-23).
 //   - PUT  /v1/auth/me                → actualiza nombre/apellido/teléfono (INT4-23).
 //
-// NOTA: los endpoints de login y recuperación del backend están siendo
-// implementados en INT2-21. Hoy solo existen sus rutas públicas en el
-// gateway, así que las formas de request/response que asumimos acá siguen el
-// patrón del resto del contrato. Lo mismo ocurre con los endpoints de perfil
-// (INT4-23): el gateway ya enruta /v1/auth/**, pero el auth-service todavía no
-// expone el controller, así que hoy devolverían 404 hasta que el backend lo
-// implemente; los tipos se definen en domain.ts siguiendo la entidad Usuario
+// NOTA: login, registro, verificación, recuperación y logout ya responden en el
+// auth-service. Los de perfil (INT4-23) son la excepción: el gateway enruta
+// /v1/auth/**, pero el controller está mapeado a /v1/v1/auth y además busca por
+// email cuando el JWT trae el UUID en `sub`, así que hoy devolverían 404. Está
+// documentado en docs/contratos-backend.md; los tipos siguen la entidad Usuario
 // (mismo shape que RegistroClienteResponse).
 
 import { decodeJwtPayload, httpClient } from './httpClient';
@@ -125,6 +124,26 @@ export async function cambiarContrasena(datos: CambiarContrasenaRequest): Promis
     passwordActual: datos.passwordActual,
     nuevaPassword: datos.nuevaPassword,
   });
+}
+
+// Ruta canónica del cierre de sesión (INT4-25). El auth-service la implementa:
+// revoca el refreshToken de la sesión y responde 204 sin cuerpo.
+export const LOGOUT_ENDPOINT = '/v1/auth/logout';
+
+/**
+ * Revoca la sesión en el backend (INT4-25).
+ *
+ * El refreshToken va en el body y el accessToken viaja en el header
+ * `Authorization: Bearer`, que pone el interceptor del httpClient por lo mismo
+ * que en el resto de las llamadas: acá no se arma a mano.
+ *
+ * Es la mitad del cierre de sesión que ocurre en el servidor. La otra mitad
+ * (olvidar los tokens en el dispositivo) la hace AuthContext.cerrarSesion,
+ * siempre después de esta llamada: si se limpuran antes, el refreshToken ya no
+ * está ni en memoria ni en SecureStore y no hay nada que revocar.
+ */
+export async function logout(refreshToken: string): Promise<void> {
+  await httpClient.post(LOGOUT_ENDPOINT, { refreshToken });
 }
 
 // Mapea el rol del backend (CLIENTE, CAJERO, ADMIN_CAFETERIA, SUPER_ADMIN)

@@ -73,6 +73,14 @@ function agregar(item: NuevoItemCarrito, cantidad: number): void {
   act(() => carrito().agregar(item, cantidad));
 }
 
+function cambiarCantidad(ofertaId: string, cantidad: number): void {
+  act(() => carrito().cambiarCantidad(ofertaId, cantidad));
+}
+
+function quitar(ofertaId: string): void {
+  act(() => carrito().quitar(ofertaId));
+}
+
 beforeEach(() => {
   arbol = null;
   mockUseAuth.mockReset();
@@ -140,6 +148,35 @@ describe('Carrito global (INT4-32)', () => {
     agregar(nuevo({ ofertaId: 'of-norte' }), -3);
 
     expect(carrito().items).toEqual([]);
+  });
+
+  it('cantidadDe devuelve lo que hay de cada oferta y 0 si no está', () => {
+    montar();
+
+    agregar(nuevo({ stock: 5 }), 3);
+    agregar(nuevo({ ofertaId: 'of-kiosko', cafeteriaId: 'cafe-kiosko' }), 1);
+
+    expect(carrito().cantidadDe('of-central')).toBe(3);
+    expect(carrito().cantidadDe('of-kiosko')).toBe(1);
+    expect(carrito().cantidadDe('of-inexistente')).toBe(0);
+  });
+
+  it('cantidadDe sigue a la línea cuando sube, baja o se quita', () => {
+    montar();
+
+    agregar(nuevo({ stock: 5 }), 2);
+    expect(carrito().cantidadDe('of-central')).toBe(2);
+
+    cambiarCantidad('of-central', 4);
+    expect(carrito().cantidadDe('of-central')).toBe(4);
+
+    // Bajar de 1 elimina la línea, así que tampoco queda cantidad.
+    cambiarCantidad('of-central', 0);
+    expect(carrito().cantidadDe('of-central')).toBe(0);
+
+    agregar(nuevo({ stock: 5 }), 1);
+    quitar('of-central');
+    expect(carrito().cantidadDe('of-central')).toBe(0);
   });
 
   it('refresca el precio si el catálogo cambió entre una agregado y otro', () => {

@@ -100,7 +100,7 @@ function RootNavigator() {
   useEffect(() => {
     const token = getAccessToken();
     connectWebSocket(token ?? 'token_de_prueba', () => {
-      console.warn('¡Listo! Conexión WebSocket establecida');
+      /*  console.warn('¡Listo! Conexión WebSocket establecida');*/
     });
 
     return () => {

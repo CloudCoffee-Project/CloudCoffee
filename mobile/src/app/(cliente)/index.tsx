@@ -6,15 +6,15 @@
 // barra de búsqueda toleran errores de tipeo sobre esos mismos datos, y las
 // cafeterías de cada producto salen de menor a mayor precio.
 //
-// Los datos salen de services/catalogoLocal.ts, que lee el snapshot de
-// src/datos-locales: mismas firmas que services/catalog.ts, que es la ruta real
-// contra el gateway (categorías GET /v1/catalog/categorias y productos
-// GET /v1/catalog/productos del campus seleccionado).
+// Los datos salen de services/catalog.ts, contra el gateway: categorías
+// GET /v1/catalog/categorias y productos GET /v1/catalog/productos del campus
+// seleccionado. INT4-25 conectó esta pantalla al catalog-service: antes leía el
+// snapshot local de src/datos-locales a través de services/catalogoLocal.ts,
+// que tiene las mismas firmas, así que el swap fue cambiar el import.
 //
-// Se usa el snapshot porque el catalog-service todavia no implementa los
-// controllers: no hay GET /v1/catalog/campus ni GET /v1/catalog/productos, y las
-// tablas estan vacias. El contrato que se consume es el real, asi que el cambio
-// al backend es cambiar un import. Ver src/datos-locales/README.md.
+// Si el gateway responde con problem+json (o sin sesión, que estas rutas
+// exigen), la pantalla muestra el error normalizado con botón de reintento —
+// nunca una lista hardcodeada.
 //
 // Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de las
 // Ofertas del producto: Producto no tiene precio propio. Se listan todas, una
@@ -44,22 +44,17 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
-// De donde vienen los datos: del snapshot local de src/datos-locales, a traves
-// de services/catalogoLocal.ts. No es una pantalla especial: pide las mismas
-// tres funciones que pediria al backend y no sabe de donde salen. En el sprint
-// de la conexion directa a la base, este import vuelve a ser
-// '../../services/catalog' y no hay que tocar nada mas de este archivo.
-//
-// ordenarOfertasPorPrecio sigue viniendo del servicio real a proposito: es una
-// funcion pura que no depende del origen de los datos, y asi el snapshot y el
-// gateway ordenan las ofertas exactamente igual.
+// De donde vienen los datos: del gateway, a traves de services/catalog.ts. La
+// pantalla no sabe si al otro lado hay un backend o un snapshot: pide las mismas
+// funciones que pedia antes del swap (INT4-25).
 import {
   leerCampusSeleccionado,
   listarCategorias,
   listarProductos,
-} from '../../services/catalogoLocal';
-import { ordenarOfertasPorPrecio } from '../../services/catalog';
+  ordenarOfertasPorPrecio,
+} from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
+import { useCarrito } from '../../context/CarritoContext';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
 // Filtro de "todas las categorías". No es un id del catálogo: es el valor del
@@ -119,15 +114,25 @@ function formatearPrecio(precio: number): string {
 // El ícono del mockup se elegía por nombre de categoría en español. Las
 // categorías reales llegan con id opaco, así que se usa un ícono neutro en vez
 // de inventar un mapeo que rompería con ids desconocidos.
-function formatearDisponibilidad(oferta: Oferta): string {
+//
+// Se descuenta lo que el usuario ya tiene en el carrito para que el número sea
+// el mismo que muestra el detalle del producto: el catálogo no reserva stock,
+// así que si acá se mostrara el total, la misma oferta aparecería con dos
+// números distintos según la pantalla.
+function formatearDisponibilidad(oferta: Oferta, enCarrito: number): string {
   if (!oferta.disponible || oferta.stock <= 0) {
     return 'Agotado';
   }
-  return `${oferta.stock} disp.`;
+  const restante = Math.max(oferta.stock - enCarrito, 0);
+  if (restante === 0) {
+    return `${oferta.stock} en tu carrito`;
+  }
+  return `${restante} disp.`;
 }
 
 export default function CatalogoProductosScreen() {
   const router = useRouter();
+  const { cantidadDe } = useCarrito();
   const [categorias, setCategorias] = useState<Categoria[] | null>(null);
   const [productos, setProductos] = useState<Producto[] | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
@@ -269,12 +274,12 @@ export default function CatalogoProductosScreen() {
                       <Text
                         style={[
                           styles.offerStock,
-                          !oferta.disponible || oferta.stock <= 0
+                          !oferta.disponible || oferta.stock - cantidadDe(oferta.ofertaId) <= 0
                             ? styles.offerStockAgotado
                             : styles.offerStockDisponible,
                         ]}
                       >
-                        {formatearDisponibilidad(oferta)}
+                        {formatearDisponibilidad(oferta, cantidadDe(oferta.ofertaId))}
                       </Text>
                     </View>
                   ))

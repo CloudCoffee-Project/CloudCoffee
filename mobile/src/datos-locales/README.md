@@ -1,24 +1,33 @@
 # datos-locales
 
-Datos del catálogo para trabajar sin backend.
+Snapshot del dominio del catálogo —campus, cafeterías, categorías, productos y
+ofertas— para trabajar sin backend.
 
-## Qué es
+> **Estado actual: sin uso.** El `catalog-service` ya expone `PublicCatalogController`
+> (INT4-25), y `app/(cliente)/index.tsx` pasó a leer de `services/catalog.ts`. Nada
+> en la app importa esta carpeta: el único que lo hacía, `services/catalogoLocal.ts`,
+> quedó huérfano junto con su test. El catálogo de la app ahora sale del gateway, con
+> su error normalizado y sin datos inventados en pantalla.
+>
+> Se conserva, sin borrar, como red de seguridad hasta que el backend esté
+> desplegado en el ambiente de pruebas. Para cerrarlo: borrar esta carpeta,
+> `services/catalogoLocal.ts` y `services/catalogoLocal.test.ts`.
 
-Un snapshot del dominio del catálogo —campus, cafeterías, categorías, productos y
-ofertas— que la app puede leer sin pegarle a ningún servidor. Vive acá, en una
-carpeta propia, y **no se importa desde la app directamente**: lo consume
-`services/catalogoLocal.ts`, que es el punto de swap.
+## Qué era
 
-## Por qué existe
+Un snapshot del dominio del catálogo que la app podía leer sin pegarle a ningún
+servidor. Lo consumía `services/catalogoLocal.ts`, que era el punto de swap.
 
-El `catalog-service` tiene las entidades, los repositorios y las cinco tablas
-creadas por la migración de Flyway, pero **no tiene controllers**. No existe
+## Por qué existía
+
+El `catalog-service` tenía las entidades, los repositorios y las cinco tablas
+creadas por la migración de Flyway, pero **no tenía controllers**. No existía
 `GET /v1/catalog/campus` ni `GET /v1/catalog/productos`, así que el catálogo no
-tiene de dónde leer contra el gateway.
+tenía de dónde leer contra el gateway.
 
 Mientras tanto, INT4-31 a INT4-34 (comparación de precios, estado global del
 carrito, agrupamiento por cafetería y agregar/quitar desde el detalle) sí se
-pueden desarrollar, probar y revisar. Eso es lo que sirve este snapshot.
+pudieron desarrollar, probar y revisar. Eso es lo que sirvió este snapshot.
 
 ## De dónde salen los datos
 
@@ -52,20 +61,21 @@ agrega al tipo cuando exista el endpoint.
 
 ## Cómo se borra
 
-En el sprint de conexión directa a la base:
+El paso 2 ya está hecho: `app/(cliente)/index.tsx` importa `services/catalog`.
 
-1. Borrar esta carpeta.
-2. En `app/(cliente)/index.tsx`, cambiar el import de `services/catalogoLocal`
-   por `services/catalog`.
-3. Borrar `services/catalogoLocal.ts` y su test.
+Quedan dos pasos, que son borrados de código muerto:
+
+1. Borrar `services/catalogoLocal.ts` y `services/catalogoLocal.test.ts`.
+2. Borrar esta carpeta.
 
 No hay nada más que tocar. `index.tsx` no sabe de dónde salen los datos: solo
 pide `listarProductos(campusId, categoriaId?)` y recibe `Producto[]`. Esa
-independencia es el punto de todo este directorio.
+independencia es el punto de todo este directorio, y por eso el swap no tocó
+ninguna pantalla.
 
 ## Lo que NO está acá
 
-**No hay login, ni sesión, ni usuarios de prueba.** El login sigue siendo real
-contra `POST /v1/auth/login`, que hoy da 404. Es decir: con estos datos se
-desarrolla y se testea el carrito, pero **no se puede ver la app en un
-dispositivo** hasta que el backend implemente ese endpoint.
+**No hay login, ni sesión, ni usuarios de prueba.** El login siempre fue real
+contra `POST /v1/auth/login`. Es decir: con estos datos se desarrollaba y se
+testeaba el carrito, pero **no se podía ver la app en un dispositivo** hasta que
+el backend implementara ese endpoint.

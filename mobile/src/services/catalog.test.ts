@@ -10,6 +10,7 @@ import {
   limpiarCampusSeleccionado,
   listarCampus,
   listarCategorias,
+  listarOfertasProducto,
   listarProductos,
   obtenerProducto,
   ordenarOfertasPorPrecio,
@@ -55,6 +56,38 @@ const productoMock: Producto = {
   categoriaId: 'cat-1',
   offers: [ofertaMock],
 };
+
+// DTOs tal como los devuelve el catalog-service: el producto sin ofertas (van en
+// su propio endpoint) y con los nombres en inglés que usa ProductOfferResponse.
+const productoDto = {
+  id: 'prod-1',
+  categoriaId: 'cat-1',
+  nombre: 'Café Americano 12oz',
+  descripcion: 'Espresso doble con agua caliente.',
+  imagenUrl: null,
+  estado: 'ACTIVE',
+};
+
+const ofertaDto = {
+  id: 'oferta-1',
+  cafeteriaId: 'cafe-1',
+  cafeteriaName: 'Cafetería Central',
+  price: 1800,
+  stock: 4,
+  disponible: true,
+};
+
+// El listado devuelve una Page de Spring Data, no un array: la parte que la app
+// consume es `content`.
+const paginaDeProductos = { content: [productoDto], totalElements: 1, number: 0, size: 100 };
+
+// Reparte las respuestas por URL, como haría el gateway: el listado pide la
+// página de productos y, por cada producto, sus ofertas.
+function getPorRuta(respuestas: Record<string, unknown>): jest.SpyInstance {
+  return jest.spyOn(httpClient, 'get').mockImplementation((async (url: string) => ({
+    data: respuestas[url],
+  })) as unknown as typeof httpClient.get);
+}
 
 describe('listarCampus', () => {
   afterEach(() => {
@@ -106,23 +139,124 @@ describe('listarProductos', () => {
     jest.restoreAllMocks();
   });
 
-  it('envía solo el campus cuando no hay categoría seleccionada', async () => {
-    const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({ data: [productoMock] });
+  it('lee el contenido de la Page y le adjunta las ofertas del campus', async () => {
+    getPorRuta({
+      [PRODUCTOS_ENDPOINT]: paginaDeProductos,
+      [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [ofertaDto],
+    });
 
     const resultado = await listarProductos('campus-1');
 
-    expect(getSpy).toHaveBeenCalledWith(PRODUCTOS_ENDPOINT, { params: { campusId: 'campus-1' } });
     expect(resultado).toEqual([productoMock]);
   });
 
+  it('envía solo el campus (con el tamaño de página) cuando no hay categoría', async () => {
+    const getSpy = getPorRuta({
+      [PRODUCTOS_ENDPOINT]: paginaDeProductos,
+      [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [ofertaDto],
+    });
+
+    await listarProductos('campus-1');
+
+    expect(getSpy).toHaveBeenCalledWith(PRODUCTOS_ENDPOINT, {
+      params: { campusId: 'campus-1', size: 100 },
+    });
+  });
+
   it('envía campus y categoría cuando se filtra por categoría', async () => {
-    const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({ data: [productoMock] });
+    const getSpy = getPorRuta({
+      [PRODUCTOS_ENDPOINT]: paginaDeProductos,
+      [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [ofertaDto],
+    });
 
     await listarProductos('campus-1', 'cat-1');
 
     expect(getSpy).toHaveBeenCalledWith(PRODUCTOS_ENDPOINT, {
-      params: { campusId: 'campus-1', categoriaId: 'cat-1' },
+      params: { campusId: 'campus-1', categoriaId: 'cat-1', size: 100 },
     });
+  });
+
+  it('traduce el DTO de la oferta al tipo del dominio (price, cafeteriaName, id)', async () => {
+    getPorRuta({
+      [PRODUCTOS_ENDPOINT]: paginaDeProductos,
+      [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [
+        { ...ofertaDto, price: 1490.5, cafeteriaName: 'Cafetería Norte', disponible: false },
+      ],
+    });
+
+    const [producto] = await listarProductos('campus-1');
+
+    expect(producto.offers).toEqual([
+      {
+        ofertaId: 'oferta-1',
+        cafeteriaId: 'cafe-1',
+        cafeteriaNombre: 'Cafetería Norte',
+        precio: 1490.5,
+        stock: 4,
+        disponible: false,
+      },
+    ]);
+  });
+
+  it('no deja pasar los campos que el dominio no tiene', async () => {
+    getPorRuta({
+      [PRODUCTOS_ENDPOINT]: paginaDeProductos,
+      [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [ofertaDto],
+    });
+
+    const [producto] = await listarProductos('campus-1');
+
+    expect(producto).not.toHaveProperty('imagenUrl');
+    expect(producto).not.toHaveProperty('estado');
+  });
+
+  it('devuelve lista vacía si el campus no tiene productos', async () => {
+    getPorRuta({ [PRODUCTOS_ENDPOINT]: { content: [] } });
+
+    expect(await listarProductos('campus-1')).toEqual([]);
+  });
+
+  it('propaga el error si falla el listado', async () => {
+    jest.spyOn(httpClient, 'get').mockRejectedValue(new Error('Catálogo no disponible'));
+
+    await expect(listarProductos('campus-1')).rejects.toThrow('Catálogo no disponible');
+  });
+
+  it('propaga el error si falla la carga de ofertas de un producto', async () => {
+    jest.spyOn(httpClient, 'get').mockImplementation((async (url: string) => {
+      if (url === PRODUCTOS_ENDPOINT) {
+        return { data: paginaDeProductos };
+      }
+      throw new Error('No pudimos leer las ofertas');
+    }) as unknown as typeof httpClient.get);
+
+    // Prefiere fallar antes que mostrar el producto sin precio, que se vería
+    // como "Sin ofertas disponibles" y sería un dato falso.
+    await expect(listarProductos('campus-1')).rejects.toThrow('No pudimos leer las ofertas');
+  });
+});
+
+describe('listarOfertasProducto', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('llama a GET /v1/catalog/productos/{id}/ofertas con el campus activo', async () => {
+    const getSpy = getPorRuta({ [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [ofertaDto] });
+
+    const resultado = await listarOfertasProducto('prod-1', 'campus-1');
+
+    expect(getSpy).toHaveBeenCalledWith(`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`, {
+      params: { campusId: 'campus-1' },
+    });
+    expect(resultado).toEqual([ofertaMock]);
+  });
+
+  it('devuelve lista vacía si el producto no tiene ofertas en el campus', async () => {
+    getPorRuta({ [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [] });
+
+    expect(await listarOfertasProducto('prod-1', 'campus-1')).toEqual([]);
   });
 });
 
@@ -132,15 +266,35 @@ describe('obtenerProducto', () => {
     jest.restoreAllMocks();
   });
 
-  it('llama a GET /v1/catalog/productos/{id} con el campus activo', async () => {
-    const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({ data: productoMock });
+  it('arma el detalle con el producto del listado y sus ofertas del campus', async () => {
+    // No hay GET /productos/{id}: el producto sale de la página del campus y
+    // las ofertas de su propio endpoint, en paralelo.
+    const getSpy = getPorRuta({
+      [PRODUCTOS_ENDPOINT]: paginaDeProductos,
+      [`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`]: [ofertaDto],
+    });
 
     const resultado = await obtenerProducto('prod-1', 'campus-1');
 
-    expect(getSpy).toHaveBeenCalledWith(`${PRODUCTOS_ENDPOINT}/prod-1`, {
+    expect(getSpy).toHaveBeenCalledWith(PRODUCTOS_ENDPOINT, {
+      params: { campusId: 'campus-1', size: 100 },
+    });
+    expect(getSpy).toHaveBeenCalledWith(`${PRODUCTOS_ENDPOINT}/prod-1/ofertas`, {
       params: { campusId: 'campus-1' },
     });
     expect(resultado).toEqual(productoMock);
+  });
+
+  it('falla con 404 si el producto no está en el catálogo del campus', async () => {
+    getPorRuta({
+      [PRODUCTOS_ENDPOINT]: { content: [] },
+      [`${PRODUCTOS_ENDPOINT}/prod-9/ofertas`]: [],
+    });
+
+    await expect(obtenerProducto('prod-9', 'campus-1')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+    });
   });
 
   it('propaga el error si el gateway responde con problem+json', async () => {

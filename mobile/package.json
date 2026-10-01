@@ -66,6 +66,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "jest",
     "prepare": "cd .. && git config core.hooksPath mobile/.husky || true"

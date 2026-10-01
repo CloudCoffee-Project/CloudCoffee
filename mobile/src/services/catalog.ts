@@ -6,28 +6,31 @@
 // móvil: las pantallas nunca pegan httpClient ni definen sus propios tipos.
 //
 // Contrato (doc del equipo, app móvil):
-//   - GET /v1/catalog/campus             → campus disponibles.
-//   - GET /v1/catalog/categorias         → categorías del catálogo.
-//   - GET /v1/catalog/productos          → productos del campus, con filtro
-//                                          opcional de categoría.
-//   - GET /v1/catalog/productos/{id}     → detalle de un producto (INT4-30),
-//                                          con sus ofertas en el campus.
+//   - GET /v1/catalog/campus                 → campus disponibles, con sus cafeterías.
+//   - GET /v1/catalog/categorias             → categorías del catálogo.
+//   - GET /v1/catalog/productos?campusId=    → productos del campus (paginada), con
+//                                              filtro opcional de categoría.
+//   - GET /v1/catalog/productos/{id}/ofertas?campusId= → las ofertas de un producto
+//                                              en las cafeterías del campus.
 //
-// El gateway ya enruta /v1/catalog/** y declara públicas las consultas GET de
-// /campus y /categorias (GatewaySecurityConfig, INT2-33). La ruta de productos
-// sigue el mismo prefijo, que es la canónica del dominio.
+// El gateway enruta /v1/catalog/** con StripPrefix=1 y declara públicas las
+// consultas GET de /campus y /categorias (GatewaySecurityConfig, INT2-33). Las
+// de productos y ofertas exigen sesión: el interceptor del httpClient las
+// manda con el Bearer que haya, y su 401 dispara el refresh (INT4-17).
 //
-// TODO: el catalog-service todavía NO implementa los controllers (solo tiene
-// entidades, enums y repositorios). Consumimos el contrato real y, si el
-// gateway responde con problem+json, la pantalla muestra el error normalizado
-// vía toApiError con botón de reintento — nunca una lista hardcodeada. Mismo
-// contrato provisional que ordenes.ts y seguimientos.ts.
+// Los cuatro endpoints están implementados en el catalog-service
+// (PublicCatalogController + los DTO ProductResponse / ProductOfferResponse).
+// El JSON no es el de las entidades: por eso el servicio traduce los DTOs del
+// backend a los tipos del dominio. Ver "Shape real del catálogo" más abajo.
+//
+// El precio nunca sale del producto: Producto no lo tiene, y la app lee el
+// precio y el stock de las Ofertas.
 //
 // Los tipos vienen de src/types/domain.ts (Campus, Cafeteria, Categoria,
 // Oferta, Producto): no se redefinen acá ni en las pantallas, para que el
 // contrato del dominio tenga un solo lugar.
 //
-// La búsqueda de texto NO es un parámetro del endpoint: el servicio entrega el
+// La búsqueda de texto NO se un parámetro del endpoint: el servicio entrega el
 // catálogo del campus y la pantalla filtra sobre esos datos reales.
 //
 // Modelo de relación (ver backend/catalog-service): Campus 1:N Cafeteria, y
@@ -37,7 +40,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { httpClient } from './httpClient';
+import { ApiError, httpClient } from './httpClient';
 import { CAMPUS_STORAGE_KEY } from './campus';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
@@ -45,6 +48,86 @@ import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 export const CAMPUS_ENDPOINT = '/v1/catalog/campus';
 export const CATEGORIAS_ENDPOINT = '/v1/catalog/categorias';
 export const PRODUCTOS_ENDPOINT = '/v1/catalog/productos';
+
+// ---------------------------------------------------------------------------
+// Shape real del catálogo (INT4-25: conexión contra el catalog-service).
+//
+// El backend no devuelve los tipos de src/types/domain.ts: devuelve sus DTOs, y
+// hay dos diferencias que obligan a traducir en el servicio en vez de tipar la
+// respuesta directo.
+//
+// 1. /productos es una página de Spring Data, no un array. Viene
+//    `{ content: [...], totalElements, ... }`, y `content` es la parte que la app
+//    usa: el resto son metadatos de paginación que el catálogo no necesita.
+//
+// 2. El producto NO trae sus ofertas y no existe GET /productos/{id}. Las ofertas
+//    van en /productos/{id}/ofertas, con otro idioma: `price`, `stock`,
+//    `cafeteriaName` y `disponible`. Como el precio vive en la oferta (RN-11/12),
+//    un producto sin sus ofertas no tiene precio que mostrar, así que el servicio
+//    las pide y las adjunta en `Producto.offers`: desde afuera el catálogo sigue
+//    siendo la lista de productos con sus ofertas, que es lo que las pantallas
+//    (INT4-28 listado, INT4-30 detalle, INT4-31 comparación) ya saben leer.
+// ---------------------------------------------------------------------------
+
+// Tamaño de página del listado. El endpoint pagina (Spring Data, 20 por
+// defecto) y el catálogo de un campus cabe holgadamente en una página; se pide
+// explícito para no depender de ese valor por defecto del servidor.
+const TAMANO_PAGINA = 100;
+
+// Subconjunto de la Page de Spring que la app consume.
+interface PaginaSpring<T> {
+  content: T[];
+}
+
+// ProductResponse del catalog-service. `imagenUrl` y `estado` los manda el
+// backend pero no están en Producto del dominio: la app no muestra la foto del
+// producto (usa un ícono neutro) ni cambia el estilo por su estado, así que no
+// se leen. El estado lo aplica el backend en la propia consulta (solo devuelve
+// productos con oferta disponible en cafetería abierta del campus).
+interface ProductoResponse {
+  id: string;
+  categoriaId: string;
+  nombre: string;
+  descripcion: string;
+}
+
+// ProductOfferResponse del catalog-service.
+interface OfertaResponse {
+  id: string;
+  cafeteriaId: string;
+  cafeteriaName: string;
+  price: number;
+  stock: number;
+  disponible: boolean;
+}
+
+/** Ruta de las ofertas de un producto en el campus indicado. */
+export function ofertasEndpoint(productoId: string): string {
+  return `${PRODUCTOS_ENDPOINT}/${productoId}/ofertas`;
+}
+
+// El precio y el stock llegan como number de un BigDecimal del backend; se
+// convierten acá para que el resto de la app los trate como números sin castear
+// en cada pantalla.
+function mapearOferta(dto: OfertaResponse): Oferta {
+  return {
+    ofertaId: dto.id,
+    cafeteriaId: dto.cafeteriaId,
+    cafeteriaNombre: dto.cafeteriaName,
+    precio: Number(dto.price),
+    stock: Number(dto.stock),
+    disponible: dto.disponible,
+  };
+}
+
+function mapearProducto(dto: ProductoResponse): Producto {
+  return {
+    id: dto.id,
+    nombre: dto.nombre,
+    descripcion: dto.descripcion,
+    categoriaId: dto.categoriaId,
+  };
+}
 
 /** Llama a GET /v1/catalog/campus y devuelve los campus del catálogo. */
 export async function listarCampus(): Promise<Campus[]> {
@@ -61,29 +144,82 @@ export async function listarCategorias(): Promise<Categoria[]> {
 }
 
 /**
- * Llama a GET /v1/catalog/productos para un campus y, opcionalmente, para una
- * categoría. El campus es obligatorio porque el catálogo es relativo a la sede
- * elegida (RN-11/12): los precios y el stock difieren por cafetería.
+ * Llama a GET /v1/catalog/productos/{id}/ofertas y devuelve las ofertas de ese
+ * producto en las cafeterías del campus. Es el precio y el stock de la sede
+ * activa, no los de otra (RN-11/12).
  */
-export async function listarProductos(campusId: string, categoriaId?: string): Promise<Producto[]> {
-  const response = await httpClient.get<Producto[]>(PRODUCTOS_ENDPOINT, {
-    params: categoriaId ? { campusId, categoriaId } : { campusId },
-  });
-
-  return response.data;
-}
-
-/**
- * Llama a GET /v1/catalog/productos/{id} para el detalle de un producto (INT4-30).
- * El campus se manda siempre: el precio y el stock del detalle son los de esa
- * sede, no los de otra.
- */
-export async function obtenerProducto(productoId: string, campusId: string): Promise<Producto> {
-  const response = await httpClient.get<Producto>(`${PRODUCTOS_ENDPOINT}/${productoId}`, {
+export async function listarOfertasProducto(
+  productoId: string,
+  campusId: string
+): Promise<Oferta[]> {
+  const response = await httpClient.get<OfertaResponse[]>(ofertasEndpoint(productoId), {
     params: { campusId },
   });
 
-  return response.data;
+  return response.data.map(mapearOferta);
+}
+
+// Trae los productos del campus SIN ofertas. El listado y el detalle los usan
+// para conseguir nombre, descripción y categoría; las ofertas llegan aparte.
+async function pedirProductos(campusId: string, categoriaId?: string): Promise<Producto[]> {
+  const response = await httpClient.get<PaginaSpring<ProductoResponse>>(PRODUCTOS_ENDPOINT, {
+    params: categoriaId
+      ? { campusId, categoriaId, size: TAMANO_PAGINA }
+      : { campusId, size: TAMANO_PAGINA },
+  });
+
+  return response.data.content.map(mapearProducto);
+}
+
+/**
+ * Llama a GET /v1/catalog/productos para un campus y, opcionalmente, para una
+ * categoría, y devuelve los productos con sus ofertas del campus ya adjuntas.
+ *
+ * El campus es obligatorio porque el catálogo es relativo a la sede elegida
+ * (RN-11/12): los precios y el stock difieren por cafetería.
+ *
+ * El backend no manda las ofertas con el producto, así que se piden una por
+ * producto y se adjuntan. Van en paralelo (Promise.all) para que la pantalla
+ * espere una sola vez y no una por tarjeta: con el catálogo de un campus son
+ * unas pocas decenas de peticiones. Si alguna falla, la promesa rechaza y la
+ * pantalla muestra el error normalizado con botón de reintento, en vez de
+ * mostrar el producto sin precio (que se vería como "Sin ofertas", que es un
+ * dato falso).
+ */
+export async function listarProductos(campusId: string, categoriaId?: string): Promise<Producto[]> {
+  const productos = await pedirProductos(campusId, categoriaId);
+  const conOfertas = await Promise.all(
+    productos.map(async (producto) => ({
+      ...producto,
+      offers: await listarOfertasProducto(producto.id, campusId),
+    }))
+  );
+
+  return conOfertas;
+}
+
+/**
+ * Devuelve el detalle de un producto (INT4-30) con las ofertas del campus.
+ *
+ * Se arma con los dos endpoints que existen: el producto sale del listado del
+ * campus (no hay GET /productos/{id}) y las ofertas de
+ * GET /productos/{id}/ofertas. Si el producto no está en el catálogo del campus
+ * —porque no existe, o porque el backend no lo devuelve al no tener oferta
+ * disponible en esa sede— se devuelve un ApiError 404 en vez de un Producto a
+ * medias, para que la pantalla muestre su aviso de error con reintento.
+ */
+export async function obtenerProducto(productoId: string, campusId: string): Promise<Producto> {
+  const [productos, ofertas] = await Promise.all([
+    pedirProductos(campusId),
+    listarOfertasProducto(productoId, campusId),
+  ]);
+
+  const producto = productos.find((item) => item.id === productoId);
+  if (!producto) {
+    throw new ApiError('El producto no existe en este campus.', 404);
+  }
+
+  return { ...producto, offers: ofertas };
 }
 
 // ---------------------------------------------------------------------------

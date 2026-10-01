@@ -4,8 +4,8 @@
 // desde Mi Perfil (perfil.tsx → (cliente)/cambiar-contrasena). Llama a
 // POST /v1/auth/password/change con la contraseña actual y la nueva.
 // Validaciones espejo del backend (contraseña nueva mínimo 8 caracteres).
-// El contrato del auth-service aún no existe: hasta que se implemente, la
-// pantalla muestra el error normalizado del endpoint (404) sin romper.
+// El endpoint ya responde en el auth-service; si falla, la pantalla muestra el
+// error normalizado del backend con botón de reintentar.
 
 import { useState } from 'react';
 import {

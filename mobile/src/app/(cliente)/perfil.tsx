@@ -6,10 +6,12 @@
 // que la edición va más allá del mockup (que solo permitía el teléfono).
 //
 // Los datos salen de GET /v1/auth/me y la edición usa PUT /v1/auth/me
-// (services/auth.ts). Ambos endpoints son contrato pendiente del auth-service,
-// así que mientras el backend no los implemente la pantalla mostrará el error
-// normalizado (API_BASE_URL ya enruta /v1/auth/**). Validaciones espejo del
-// registro backend: nombre/apellido max 100 y teléfono ^[0-9+ ()-]{6,20}$.
+// (services/auth.ts). El controller existe en el auth-service pero hoy responde
+// 404: está mapeado a /v1/v1/auth (el gateway solo quita un prefijo) y además
+// busca por email cuando el JWT trae el UUID en `sub`. La pantalla muestra el
+// error normalizado con botón de reintentar; el detalle está en
+// docs/contratos-backend.md. Validaciones espejo del registro backend:
+// nombre/apellido max 100 y teléfono ^[0-9+ ()-]{6,20}$.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
