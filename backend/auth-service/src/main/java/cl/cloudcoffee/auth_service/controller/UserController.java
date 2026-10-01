@@ -11,7 +11,7 @@ import cl.cloudcoffee.auth_service.dto.ChangePasswordRequest;
 import java.security.Principal;
 
 @RestController
-@RequestMapping("/v1/auth/users")
+@RequestMapping("/auth/users")
 public class UserController {
 
     private final PerfilService perfilService;
