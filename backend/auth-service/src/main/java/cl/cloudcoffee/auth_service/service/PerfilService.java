@@ -24,15 +24,13 @@ public class PerfilService {
     }
 
     public PerfilResponse obtenerPerfilUsuario(String idUsuario) {
-        Usuario usuario = usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = buscarUsuario(idUsuario);
 
         return mapToResponse(usuario);
     }
 
     public PerfilResponse actualizarPerfilUsuario(String idUsuario, UpdatePerfilRequest request) {
-        Usuario usuario = usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = buscarUsuario(idUsuario);
 
         if (request.nombre() != null && !request.nombre().isBlank()) {
             usuario.setNombre(request.nombre());
@@ -51,6 +49,13 @@ public class PerfilService {
         return mapToResponse(usuarioActualizado);
     }
 
+    private Usuario buscarUsuario(String idUsuario) {
+        return usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND,
+                        URI.create("/problems/usuario-no-encontrado"), "Usuario no encontrado",
+                        "No existe una cuenta asociada al usuario autenticado."));
+    }
+
     private PerfilResponse mapToResponse(Usuario usuario) {
         return new PerfilResponse(
                 usuario.getId(),
@@ -62,8 +67,7 @@ public class PerfilService {
         );
     }
     public void cambiarPassword(String idUsuario, ChangePasswordRequest request) {
-        Usuario usuario = usuarioRepository.findById(java.util.UUID.fromString(idUsuario))
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = buscarUsuario(idUsuario);
 
         if (!passwordEncoder.matches(request.passwordActual(), usuario.getPasswordHash())) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED,
