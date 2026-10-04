@@ -48,8 +48,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
-          "microphonePermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
+          "cameraPermission": "CloudCoffee usa la c\u00e1mara para escanear el c\u00f3digo QR de retiro de tu pedido.",
           "barcodeScannerEnabled": true
         }
       ],
@@ -59,11 +58,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "owner": "cloudcoffee-team",
     "extra": {
       "eas": {
         "projectId": "1cd0caa5-153b-43a4-ada5-94ddb2e72fee"
       }
-    }
+    },
+    "owner": "cloudcoffee-team"
   }
 }

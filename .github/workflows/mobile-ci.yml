@@ -86,7 +86,7 @@ jobs:
   # Único check que debe marcarse como required. Corre siempre y es el único
   # que GitHub ve en todos los PRs, incluidos los que no tocan mobile/.
   gate:
-    name: Compuerta CI
+    name: Compuerta CI mobile
     needs: [changes, quality]
     # always() es necesario para que el gate evalúe el resultado aunque
     # quality haya fallado o sido omitido.
