@@ -19,6 +19,11 @@ jobs:
     name: Detectar cambios
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # paths-filter consulta la API de GitHub para listar los archivos del PR,
+    # por eso este job necesita pull-requests: read además de contents: read.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
@@ -26,10 +31,6 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v4
         with:
-          # pull-requests: read es necesario para que paths-filter consulte la
-          # API de GitHub en eventos pull_request.
-          permissions:
-            pull-requests: read
           filters: |
             mobile:
               - 'mobile/**'
