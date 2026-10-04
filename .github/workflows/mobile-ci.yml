@@ -1,11 +1,11 @@
 name: Mobile CI
 
 on:
+  # Sin paths: el job es required en main, así que tiene que reportarse en
+  # todos los PRs. Con filtro por paths, un PR que solo toque backend/ nunca
+  # reportaría este check y quedaría bloqueado para siempre.
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - "mobile/**"
-      - ".github/workflows/mobile-ci.yml"
   workflow_dispatch:
 
 permissions:
