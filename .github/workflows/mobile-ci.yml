@@ -1,0 +1,62 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck, lint, tests and web export
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.13.0"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test -- --ci --coverage=false
+
+      - name: Build web bundle
+        env:
+          # Variables EXPO_PUBLIC_* se hornean dentro del bundle: nunca pongas
+          # secretos acá. Solo la URL pública del gateway.
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+        run: npx expo export --platform web --output-dir /tmp/expo-export-web
+
+      - name: Upload web build on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-web-export
+          path: /tmp/expo-export-web
+          retention-days: 3

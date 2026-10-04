@@ -8,7 +8,8 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "cl.cloudcoffee.mobile"
     },
     "android": {
       "package": "cl.cloudcoffee.mobile",
@@ -58,11 +59,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "owner": "cloudcoffee-team",
     "extra": {
       "eas": {
-        "projectId": "470426dd-6390-4892-8cdc-d88b4b99e1f3"
+        "projectId": "1cd0caa5-153b-43a4-ada5-94ddb2e72fee"
       }
-    },
-    "owner": "tomasjss-team"
+    }
   }
 }
