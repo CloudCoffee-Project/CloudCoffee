@@ -1,9 +1,6 @@
 name: Mobile CI
 
 on:
-  # Sin paths: el job es required en main, así que tiene que reportarse en
-  # todos los PRs. Con filtro por paths, un PR que solo toque backend/ nunca
-  # reportaría este check y quedaría bloqueado para siempre.
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -16,8 +13,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Detecta si el PR toca mobile/. Se ejecuta siempre para que el job gate de
+  # abajo siempre pueda decidir, incluso en PRs que solo cambian backend.
+  changes:
+    name: Detectar cambios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - name: Evaluar archivos modificados
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          # pull-requests: read es necesario para que paths-filter consulte la
+          # API de GitHub en eventos pull_request.
+          permissions:
+            pull-requests: read
+          filters: |
+            mobile:
+              - 'mobile/**'
+              - '.github/workflows/mobile-ci.yml'
+
   quality:
     name: Typecheck, lint, tests and web export
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -60,3 +81,39 @@ jobs:
           name: expo-web-export
           path: /tmp/expo-export-web
           retention-days: 3
+
+  # Único check que debe marcarse como required. Corre siempre y es el único
+  # que GitHub ve en todos los PRs, incluidos los que no tocan mobile/.
+  gate:
+    name: Compuerta CI
+    needs: [changes, quality]
+    # always() es necesario para que el gate evalúe el resultado aunque
+    # quality haya fallado o sido omitido.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verificar resultado de los jobs
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+        run: |
+          case "$QUALITY_RESULT" in
+            success)
+              echo "OK: las verificaciones de mobile pasaron."
+              ;;
+            skipped)
+              echo "OK: el PR no modifica mobile/, no hay nada que verificar."
+              ;;
+            failure)
+              echo "::error::Fallaron las verificaciones de mobile."
+              exit 1
+              ;;
+            cancelled)
+              echo "::error::Las verificaciones de mobile fueron canceladas."
+              exit 1
+              ;;
+            *)
+              echo "::error::Resultado inesperado: $QUALITY_RESULT"
+              exit 1
+              ;;
+          esac
