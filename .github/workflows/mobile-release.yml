@@ -1,0 +1,87 @@
+name: Mobile Release
+
+on:
+  # Builds solo bajo demanda. El plan Free de Expo incluye 15 builds de
+  # Android y 15 de iOS por mes: dispararlos en cada merge a main agota la
+  # cuota en pocas semanas.
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Perfil de EAS a construir"
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+      platform:
+        description: "Plataforma a construir"
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: EAS build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.13.0"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install --global eas-cli@latest
+
+      - name: Verify Expo auth
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Falta el secret EXPO_TOKEN en el repositorio"
+            exit 1
+          fi
+          eas whoami
+
+      - name: Resolve build inputs
+        id: build
+        env:
+          PROFILE: ${{ inputs.profile }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          set -euo pipefail
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+
+      - name: Build (Android)
+        if: steps.build.outputs.platform == 'android' || steps.build.outputs.platform == 'all'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+        run: eas build --platform android --profile "${{ steps.build.outputs.profile }}" --non-interactive --no-wait
+
+      - name: Build (iOS)
+        if: steps.build.outputs.platform == 'ios' || steps.build.outputs.platform == 'all'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+        run: eas build --platform ios --profile "${{ steps.build.outputs.profile }}" --non-interactive --no-wait
