@@ -194,12 +194,15 @@ Login, recuperación y reenvío incluyen `429` y el encabezado **Retry-After**
 limiting para las cuotas y su configuración.
 
 La documentación refleja estas diferencias ya existentes: cambio de contraseña
-exige un mínimo de 6 caracteres, mientras registro y reset exigen 8; una contraseña
-actual incorrecta o un usuario no encontrado en perfil produce `500` en la
-implementación actual. No se promete un `400`/`404` que el servicio aún no devuelve.
-Logout revoca solo el refresh token del dispositivo; los access tokens existentes
-siguen vigentes hasta expirar. Refresh rota su token y reset revoca todos los
-refresh tokens del usuario. El cambio de contraseña de perfil no revoca tokens.
+exige un mínimo de 6 caracteres, mientras registro y reset exigen 8. En perfil, una
+contraseña actual incorrecta produce `401` y un usuario no encontrado produce `404`.
+
+Revocación de sesiones: logout revoca solo el refresh token del dispositivo.
+Refresh rota su token. Reset y cambio de contraseña de perfil revocan todos los
+refresh tokens del usuario en la misma transacción que actualiza el hash. En todos
+los casos los access tokens ya emitidos son JWT stateless y **siguen vigentes hasta
+su expiración** (`cloudcoffee.jwt.access-token-ttl`, 15 minutos por defecto); al
+expirar, el cliente no puede renovarlos y debe iniciar sesión de nuevo.
 
 ### Verificación
 
