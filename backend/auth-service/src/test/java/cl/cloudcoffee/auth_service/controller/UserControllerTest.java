@@ -25,12 +25,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 
+import cl.cloudcoffee.auth_service.dto.LoginResponse;
 import cl.cloudcoffee.auth_service.model.Rol;
 import cl.cloudcoffee.auth_service.model.Usuario;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 import cl.cloudcoffee.auth_service.service.JwtTokenService;
+import cl.cloudcoffee.auth_service.service.LoginService;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
 @SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
@@ -46,7 +49,10 @@ class UserControllerTest extends JwtTestSupport {
     @Autowired private UsuarioRepository usuarios;
     @Autowired private JwtTokenService jwtTokenService;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private LoginService loginService;
     @MockitoBean private RabbitTemplate rabbitTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Usuario usuario() {
         Usuario usuario = new Usuario(UUID.randomUUID() + "@cloudcoffee.cl",
@@ -80,6 +86,11 @@ class UserControllerTest extends JwtTestSupport {
     private ResultActions login(String email, String password) throws Exception {
         return mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password)));
+    }
+
+    private ResultActions refresh(String refreshToken) throws Exception {
+        return mvc.perform(post("/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"%s\"}".formatted(refreshToken)));
     }
 
     @Test
@@ -216,9 +227,47 @@ class UserControllerTest extends JwtTestSupport {
     }
 
     @Test
+    void cambiarPasswordRevocaLosRefreshTokensDeTodasLasSesionesPrevias() throws Exception {
+        Usuario usuario = usuario();
+        LoginResponse dispositivoA = loginService.iniciarSesion(usuario.getEmail(), "password123");
+        LoginResponse dispositivoB = loginService.iniciarSesion(usuario.getEmail(), "password123");
+
+        mvc.perform(patch("/auth/users/me/password").header("Authorization", "Bearer " + dispositivoA.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cambioPasswordJson("password123", "nuevaPassword456")))
+                .andExpect(status().isOk());
+
+        refresh(dispositivoA.refreshToken()).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.type").value("/problems/refresh-token-invalido"));
+        refresh(dispositivoB.refreshToken()).andExpect(status().isUnauthorized());
+
+        String nuevoLogin = login(usuario.getEmail(), "nuevaPassword456").andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String nuevoRefreshToken = objectMapper.readTree(nuevoLogin).get("refreshToken").asText();
+        refresh(nuevoRefreshToken).andExpect(status().isOk());
+    }
+
+    @Test
+    void elAccessTokenActualSigueVigenteHastaSuExpiracionTrasCambiarPassword() throws Exception {
+        Usuario usuario = usuario();
+        LoginResponse sesion = loginService.iniciarSesion(usuario.getEmail(), "password123");
+
+        mvc.perform(patch("/auth/users/me/password").header("Authorization", "Bearer " + sesion.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cambioPasswordJson("password123", "nuevaPassword456")))
+                .andExpect(status().isOk());
+
+        // Los access tokens son JWT stateless: no se revocan, solo dejan de poder renovarse.
+        mvc.perform(get("/auth/users/me").header("Authorization", "Bearer " + sesion.accessToken()))
+                .andExpect(status().isOk());
+        refresh(sesion.refreshToken()).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void rechazaCambioDePasswordConPasswordActualIncorrecta() throws Exception {
         Usuario usuario = usuario();
         String hashOriginal = usuario.getPasswordHash();
+        LoginResponse sesion = loginService.iniciarSesion(usuario.getEmail(), "password123");
 
         cambiarPassword(usuario, cambioPasswordJson("password-incorrecta", "nuevaPassword456"))
                 .andExpect(status().isUnauthorized())
@@ -226,6 +275,8 @@ class UserControllerTest extends JwtTestSupport {
                 .andExpect(jsonPath("$.type").value("/problems/contrasena-actual-incorrecta"));
 
         assertThat(recargar(usuario).getPasswordHash()).isEqualTo(hashOriginal);
+        // Un intento fallido no cierra las sesiones existentes.
+        refresh(sesion.refreshToken()).andExpect(status().isOk());
         login(usuario.getEmail(), "password123").andExpect(status().isOk());
     }
 
