@@ -55,7 +55,7 @@ public class UserController {
         return ResponseEntity.ok(perfilActualizado);
     }
     @Operation(operationId = "cambiarPassword", summary = "Cambiar contraseña propia",
-            description = "Comprueba la contraseña actual y guarda la nueva. La longitud mínima actual es 6 caracteres. No revoca tokens. En la implementación actual, una contraseña actual incorrecta produce 500.")
+            description = "Comprueba la contraseña actual y guarda la nueva. La longitud mínima actual es 6 caracteres. Revoca todos los refresh tokens del usuario en la misma transacción, cerrando las sesiones de todos los dispositivos. El access token actual no se revoca: sigue vigente hasta su expiración (15 minutos por defecto) y luego hay que iniciar sesión con la nueva contraseña. Una contraseña actual incorrecta produce 401 sin revocar sesiones.")
     @ApiResponse(responseCode = "200", description = "Contraseña actualizada, sin cuerpo", content = @Content)
     @PatchMapping("/me/password")
     public ResponseEntity<Void> cambiarPassword(
