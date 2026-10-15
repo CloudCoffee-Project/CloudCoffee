@@ -29,6 +29,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 
 import cl.cloudcoffee.auth_service.dto.LoginResponse;
+import com.nimbusds.jose.JWSAlgorithm;
+
 import cl.cloudcoffee.auth_service.model.Rol;
 import cl.cloudcoffee.auth_service.model.Usuario;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
