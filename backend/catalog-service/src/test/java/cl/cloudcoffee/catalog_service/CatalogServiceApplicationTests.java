@@ -48,6 +48,16 @@ class CatalogServiceApplicationTests extends ServiceJwtTests {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void devSeedIsNotLoadedOutsideDevProfile() throws Exception {
+        mvc.perform(get("/catalog/campus"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+        mvc.perform(get("/catalog/categorias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
     @ParameterizedTest
     @CsvSource({"GET, campus", "HEAD, campus", "GET, categorias", "HEAD, categorias"})
     void publicCatalogQueriesReachMvcWithoutJwt(String method, String endpoint) throws Exception {

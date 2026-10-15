@@ -71,6 +71,19 @@ cd auth-service
 ./mvnw spring-boot:run
 ```
 
+### Catálogo de desarrollo (INT2-36)
+
+El perfil `dev` de catalog-service agrega `db/seed/dev` a Flyway y carga un
+catálogo reproducible: 2 campus, 5 cafeterías (abiertas, cerrada y en mantención),
+4 categorías, 12 productos y 20 ofertas con precios y stock variados. Ningún otro
+perfil lo carga. En Docker Compose se activa con `CATALOG_SPRING_PROFILES=docker,dev`
+en `.env` (valor de `.env.example`); si la variable falta, se usa solo `docker`.
+
+El seed es una migración repetible con UUID fijos: se reaplica sola al editarla y
+no duplica filas. Los UUID del primer campus, categoría y producto coinciden con
+los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
+esperados de filtros, búsqueda y comparación de precios sobre estos datos.
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
@@ -194,12 +207,15 @@ Login, recuperación y reenvío incluyen `429` y el encabezado **Retry-After**
 limiting para las cuotas y su configuración.
 
 La documentación refleja estas diferencias ya existentes: cambio de contraseña
-exige un mínimo de 6 caracteres, mientras registro y reset exigen 8; una contraseña
-actual incorrecta o un usuario no encontrado en perfil produce `500` en la
-implementación actual. No se promete un `400`/`404` que el servicio aún no devuelve.
-Logout revoca solo el refresh token del dispositivo; los access tokens existentes
-siguen vigentes hasta expirar. Refresh rota su token y reset revoca todos los
-refresh tokens del usuario. El cambio de contraseña de perfil no revoca tokens.
+exige un mínimo de 6 caracteres, mientras registro y reset exigen 8. En perfil, una
+contraseña actual incorrecta produce `401` y un usuario no encontrado produce `404`.
+
+Revocación de sesiones: logout revoca solo el refresh token del dispositivo.
+Refresh rota su token. Reset y cambio de contraseña de perfil revocan todos los
+refresh tokens del usuario en la misma transacción que actualiza el hash. En todos
+los casos los access tokens ya emitidos son JWT stateless y **siguen vigentes hasta
+su expiración** (`cloudcoffee.jwt.access-token-ttl`, 15 minutos por defecto); al
+expirar, el cliente no puede renovarlos y debe iniciar sesión de nuevo.
 
 ### Verificación
 

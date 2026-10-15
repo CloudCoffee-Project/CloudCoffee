@@ -61,6 +61,9 @@ class OpenApiAccessTests extends JwtTestSupport {
         assertThat(api.at("/components/schemas/Problem/properties/errors/items/properties/field/type").asText()).isEqualTo("string");
         assertThat(api.at("/components/schemas/RegistroClienteRequest/properties/password/minLength").asInt()).isEqualTo(8);
         assertThat(api.at("/components/schemas/ChangePasswordRequest/properties/passwordNueva/minLength").asInt()).isEqualTo(6);
+        assertThat(api.at("/paths/~1auth~1users~1me~1password/patch/responses/404").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1auth~1users~1me~1password/patch/description").asText())
+                .contains("Revoca todos los refresh tokens").contains("vigente hasta su expiración");
         assertThat(api.at("/components/schemas/LoginRequest/properties/email/example").asText()).isEqualTo("cliente@example.com");
     }
 

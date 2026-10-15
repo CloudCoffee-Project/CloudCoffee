@@ -1,0 +1,6 @@
+# Solo para pruebas: Spring Boot carga este archivo además de classpath:/application.yml.
+# Las pruebas no deben depender de un colector Zipkin real en localhost:9411.
+management:
+  tracing:
+    export:
+      enabled: false
