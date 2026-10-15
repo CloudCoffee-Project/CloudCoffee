@@ -24,7 +24,14 @@ import cl.cloudcoffee.security.testing.JwtTestSupport;
  * INT2-36: carga el seed de desarrollo y verifica sobre él los filtros,
  * la búsqueda y la comparación de precios del catálogo.
  */
-@SpringBootTest(properties = "management.tracing.enabled=false")
+// Base propia: en CI las demás pruebas comparten un PostgreSQL vacío
+// (SPRING_DATASOURCE_URL) y el seed no debe filtrarse hacia ellas.
+@SpringBootTest(properties = {
+        "management.tracing.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:dev-catalog-seed;DB_CLOSE_DELAY=-1",
+        "spring.datasource.username=sa",
+        "spring.datasource.password="
+})
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
 class DevCatalogSeedIntegrationTests extends JwtTestSupport {
