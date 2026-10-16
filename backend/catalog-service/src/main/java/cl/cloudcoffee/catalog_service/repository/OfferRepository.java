@@ -22,4 +22,13 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
             @Param("productId") UUID productId,
             @Param("campusId") UUID campusId
     );
+
+    // INT2-65: inventario completo de una cafetería, sin filtrar por estado.
+    @Query("""
+        SELECT o FROM Offer o
+        JOIN FETCH o.product p
+        WHERE o.cafeteria.id = :cafeteriaId
+        ORDER BY p.name ASC
+    """)
+    List<Offer> findInventoryByCafeteria(@Param("cafeteriaId") UUID cafeteriaId);
 }

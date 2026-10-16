@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
 import java.util.Set;
+import java.util.UUID;
 
 import cl.cloudcoffee.errors.security.ApiSecurityErrorHandler;
 import jakarta.servlet.DispatcherType;
@@ -60,9 +61,30 @@ public class JwtSecurityAutoConfiguration {
                         return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token",
                                 "JWT requires sub, exp and a valid role", null));
                     }
+                    // INT2-65: solo el personal puede traer cafetería, y debe ser un UUID.
+                    Object cafeteria = jwt.getClaims().get(CafeteriaAccess.CLAIM);
+                    if (cafeteria != null && (!CafeteriaAccess.ROLES_PERSONAL.contains(role)
+                            || !(cafeteria instanceof String id) || !esUuid(id))) {
+                        return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token",
+                                "JWT cafeteriaId must be a UUID and is only allowed for staff roles", null));
+                    }
                     return OAuth2TokenValidatorResult.success();
                 }));
         return decoder;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    CafeteriaAccess cafeteriaAccess() {
+        return new CafeteriaAccess();
+    }
+
+    private static boolean esUuid(String value) {
+        try {
+            return UUID.fromString(value).toString().equalsIgnoreCase(value);
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     @Bean
