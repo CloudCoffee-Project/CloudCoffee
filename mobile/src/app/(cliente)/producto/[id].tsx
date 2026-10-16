@@ -15,13 +15,17 @@
 // traslado al carrito ocurrió. El carrito (INT4-33) sigue siendo donde el usuario
 // revisa y cambia lo que compró.
 //
-// Los datos salen de services/catalog.ts:
-//   - GET /v1/catalog/productos/{id}?campusId= → el producto con sus ofertas.
-//   - GET /v1/catalog/categorias                 → para poner el nombre de la
+// Los datos salen de services/catalog.ts, que habla con el Catalog-service:
+//   - GET /v1/catalog/productos?campusId=         → el producto dentro de la
+//     página del campus (no existe GET /productos/{id}, así que el detalle se
+//     arma cruzando el listado con las ofertas).
+//   - GET /v1/catalog/productos/{id}/ofertas?campusId= → una oferta por
+//     cafetería de esa sede.
+//   - GET /v1/catalog/categorias                   → para poner el nombre de la
 //     categoría en la pastilla (Producto solo trae categoriaId).
-// El backend todavía no implementa los controllers: la pantalla consume el
-// contrato real y muestra el error normalizado (toApiError) con botón de
-// reintento, sin fallback a datos hardcodeados.
+// El backend ya expone esos controllers: la pantalla consume el contrato real y
+// muestra el error normalizado (toApiError) con botón de reintento, sin fallback
+// a datos hardcodeados.
 //
 // Los tipos vienen de src/types/domain.ts. El precio y el stock se leen de la
 // Oferta elegida: Producto no tiene precio propio. La dirección que se muestra
@@ -80,7 +84,7 @@ export default function DetalleProductoScreen() {
   const [ofertaElegida, setOfertaElegida] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
 
-  const { agregar: agregarItem, quitar } = useCarrito();
+  const { agregar: agregarItem, quitar, cantidadDe } = useCarrito();
 
   // Confirmación de que el producto entró al carrito. Vive en la pantalla y no
   // en CarritoContext a propósito: el carrito global guarda lo que se compró,
@@ -193,12 +197,19 @@ export default function DetalleProductoScreen() {
 
   const total = activa ? activa.precio * cantidad : 0;
 
-  const puedeSumar = Boolean(activa && cantidad < activa.stock);
+  // El stock que trae la oferta es el total del catálogo. Lo que el usuario ya
+  // tiene en el carrito hay que restarlo, porque el carrito no reserva nada: sin
+  // esto la pantalla muestra siempre el stock entero y deja agregar el mismo café
+  // cuantas veces se quiera.
+  const enCarrito = activa ? cantidadDe(activa.ofertaId) : 0;
+  const restante = activa ? Math.max(activa.stock - enCarrito, 0) : 0;
+
+  const puedeSumar = Boolean(activa && cantidad < restante);
 
   function cambiarCantidad(delta: number): void {
     if (!activa) return;
     const siguiente = cantidad + delta;
-    if (siguiente < 1 || siguiente > activa.stock) return;
+    if (siguiente < 1 || siguiente > restante) return;
     setCantidad(siguiente);
   }
 
@@ -287,6 +298,7 @@ export default function DetalleProductoScreen() {
             {ofertas.map((oferta) => {
               const agotada = estaAgotada(oferta);
               const seleccionadaActual = activa?.ofertaId === oferta.ofertaId;
+              const disponible = Math.max(oferta.stock - cantidadDe(oferta.ofertaId), 0);
 
               return (
                 <Pressable
@@ -312,7 +324,14 @@ export default function DetalleProductoScreen() {
                         agotada ? styles.ofertaEstadoAgotada : styles.ofertaEstadoDisponible,
                       ]}
                     >
-                      {agotada ? '🔴 Agotado' : `🟢 En stock · ${oferta.stock} disp.`}
+                      {/* Agotada es que no hay stock en el catálogo; sin stock
+                          restante pero con stock es que el usuario ya lo tiene
+                          todo en el carrito, que es otra cosa. */}
+                      {agotada
+                        ? '🔴 Agotado'
+                        : disponible > 0
+                          ? `🟢 En stock · ${disponible} disp.`
+                          : `📦 ${oferta.stock} en tu carrito`}
                     </Text>
                   </View>
                   <Text style={styles.ofertaPrecio}>{formatearPrecio(oferta.precio)}</Text>
@@ -368,7 +387,7 @@ export default function DetalleProductoScreen() {
   }
 
   const agregarAlCarrito = () => {
-    if (!activa || !producto) return;
+    if (!activa || !producto || restante < 1) return;
     agregarItem(
       {
         ofertaId: activa.ofertaId,
@@ -384,7 +403,11 @@ export default function DetalleProductoScreen() {
     mostrarAviso(`Agregado al carrito · ${cantidad} × ${producto.nombre}`);
   };
 
-  const botonAgregarDisabled = !activa;
+  // Sin stock restante el botón se apaga en vez de truncar en silencio: antes,
+  // pedir una unidad más de las que quedaban entraba menos de lo pedido y el
+  // aviso decía una cantidad que no era la que se agregó.
+  const sinStockRestante = Boolean(activa) && restante < 1;
+  const botonAgregarDisabled = !activa || sinStockRestante;
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top']}>
@@ -428,9 +451,11 @@ export default function DetalleProductoScreen() {
             testID="producto-detalle-agregar"
           >
             <Text style={styles.btnAgregarTexto}>
-              {botonAgregarDisabled
+              {!activa
                 ? 'Agotado en este punto'
-                : `Agregar ${cantidad} al carrito · ${formatearPrecio(total)}`}
+                : sinStockRestante
+                  ? `Ya tienes todo el stock · ${activa.stock} en el carrito`
+                  : `Agregar ${cantidad} al carrito · ${formatearPrecio(total)}`}
             </Text>
           </Pressable>
         </View>

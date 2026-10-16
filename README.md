@@ -117,6 +117,14 @@ docker compose down --volumes
 
 El último comando elimina las bases de datos locales y debe utilizarse con precaución.
 
+## Contrato de API para web y mobile
+
+La [guía de OpenAPI y Swagger del backend](backend/README.md#openapi-y-swagger--api-sprint-1-int2-31)
+explica cómo habilitar la documentación con `OPENAPI_ENABLED=true`, consultar
+Auth/Catálogo desde Gateway y probar operaciones con JWT. Está desactivada por defecto.
+Con Docker Compose, Swagger se abre en http://localhost:18080/swagger-ui.html;
+al ejecutar Gateway directamente con su TLS predeterminado, usar HTTPS.
+
 ## Servicios
 
 | Componente | Acceso desde el computador |

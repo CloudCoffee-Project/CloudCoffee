@@ -8,9 +8,9 @@
 // Estructura (según la especificación):
 //   - Resumen del pedido: líneas del carrito agrupadas por punto de retiro,
 //     desglose de precios (Subtotal / Despacho / Impuestos) y total a pagar.
-//   - Datos de entrega y facturación: campos validados (nombre completo, correo,
-//     teléfono y dirección física cuando el método es envío) + método de entrega
-//     (retiro en cafetería, sin costo, por defecto; o envío estándar $4.990).
+//   - Datos de entrega y facturación: campos validados (nombre completo, correo y
+//     teléfono). No hay dirección porque CloudCoffee solo retira en cafetería, así
+//     que el método de entrega se informa en vez de elegirse y el despacho es $0.
 //   - Método de pago: Mercado Pago (pasarela integrada). La tarjeta se ingresa
 //     en el sitio de Mercado Pago, no en la app (la app no maneja datos PCI).
 //   - Botón principal "Confirmar y Pagar $X": al pulsarlo entra en estado de
@@ -71,11 +71,12 @@ import {
 } from '../../services/pagos';
 
 type Vista = 'revision' | 'revision_requerida' | 'realizada' | 'fallo';
-type MetodoEntrega = 'retiro' | 'envio';
 
-// Envío estándar (3-5 días) según el mockup. El retiro en cafetería es sin
-// costo y es el método por defecto (el modelo de CloudCoffee es retiro).
-const DESPACHO_ENVIO = 4990;
+// CloudCoffee solo retira en cafetería: no hay envío a domicilio, así que no hay
+// método de entrega que elegir ni despacho que sumar. El retiro es siempre el
+// punto de retiro donde está cada cafetería del carrito.
+const METODO_ENTREGA = 'retiro' as const;
+
 // Mensaje del estado 401/403 según la especificación (el aviso de "Nada se
 // cobró y tu carrito sigue listo" vive en la vista de fallo, debajo).
 const TEXTO_AUTH =
@@ -85,14 +86,13 @@ interface FormularioEntrega {
   nombre: string;
   correo: string;
   telefono: string;
-  direccion: string;
 }
 
 function formatearPrecio(precio: number): string {
   return `$${precio.toLocaleString('es-CL')}`;
 }
 
-function validarFormulario(form: FormularioEntrega, metodo: MetodoEntrega): Record<string, string> {
+function validarFormulario(form: FormularioEntrega): Record<string, string> {
   const errores: Record<string, string> = {};
 
   if (form.nombre.trim().length < 3) {
@@ -106,11 +106,6 @@ function validarFormulario(form: FormularioEntrega, metodo: MetodoEntrega): Reco
   const digitos = form.telefono.replace(/\D/g, '');
   if (digitos.length < 7 || digitos.length > 15) {
     errores.telefono = 'Ingresa un teléfono válido (solo números).';
-  }
-
-  // La dirección física solo aplica cuando elige envío a domicilio.
-  if (metodo === 'envio' && form.direccion.trim().length < 10) {
-    errores.direccion = 'Ingresa tu dirección de envío.';
   }
 
   return errores;
@@ -153,9 +148,7 @@ export default function CheckoutScreen() {
     nombre: '',
     correo: '',
     telefono: '',
-    direccion: '',
   });
-  const [metodoEntrega, setMetodoEntrega] = useState<MetodoEntrega>('retiro');
   const [errores, setErrores] = useState<Record<string, string>>({});
 
   const cambiarCampo = useCallback((campo: keyof FormularioEntrega, valor: string): void => {
@@ -164,13 +157,10 @@ export default function CheckoutScreen() {
     setErrores((prev) => (prev[campo] ? { ...prev, [campo]: '' } : prev));
   }, []);
 
-  const despacho = metodoEntrega === 'envio' ? DESPACHO_ENVIO : 0;
-  const totalAPagar = total + despacho;
-
   const confirmar = useCallback(async (): Promise<void> => {
     // 1) Validación local antes de tocar el backend: no se envía un pedido sin
     //    los datos de entrega completos.
-    const erroresForm = validarFormulario(formulario, metodoEntrega);
+    const erroresForm = validarFormulario(formulario);
     setErrores(erroresForm);
     if (Object.values(erroresForm).some(Boolean)) {
       return;
@@ -201,8 +191,7 @@ export default function CheckoutScreen() {
         nombre: formulario.nombre.trim(),
         correo: formulario.correo.trim(),
         telefono: formulario.telefono.trim(),
-        metodoEntrega,
-        ...(formulario.direccion.trim() ? { direccion: formulario.direccion.trim() } : {}),
+        metodoEntrega: METODO_ENTREGA,
       };
 
       const compra = await crearCompra(payload, accessToken, datosEntrega);
@@ -284,7 +273,7 @@ export default function CheckoutScreen() {
     } finally {
       setProcesando(false);
     }
-  }, [items, formulario, metodoEntrega, vaciar, router]);
+  }, [items, formulario, vaciar, router]);
 
   const volverAlCarrito = useCallback((): void => {
     router.back();
@@ -512,7 +501,7 @@ export default function CheckoutScreen() {
             {grupos.length === 1 ? '1 punto de retiro' : `${grupos.length} puntos de retiro`}
           </Text>
           <Text style={styles.total} testID="checkout-total">
-            {formatearPrecio(totalAPagar)}
+            {formatearPrecio(total)}
           </Text>
         </View>
 
@@ -572,13 +561,9 @@ export default function CheckoutScreen() {
             </Text>
           </View>
           <View style={styles.desgloseFila}>
-            <Text style={styles.desgloseTexto}>
-              {metodoEntrega === 'envio'
-                ? 'Despacho · Envío estándar (3-5 días)'
-                : 'Despacho · Retiro en cafetería'}
-            </Text>
+            <Text style={styles.desgloseTexto}>Despacho · Retiro en cafetería</Text>
             <Text style={styles.desgloseValor} testID="checkout-desglose-despacho">
-              {metodoEntrega === 'envio' ? formatearPrecio(DESPACHO_ENVIO) : '$0'}
+              $0
             </Text>
           </View>
           <View style={styles.desgloseFila}>
@@ -593,38 +578,21 @@ export default function CheckoutScreen() {
         <View style={styles.formSeccion} testID="checkout-form-entrega">
           <Text style={styles.seccionTitulo}>Datos de entrega y facturación</Text>
 
+          {/* Sin envío a domicilio no hay nada que elegir: el retiro en
+              cafetería es el único método, así que se informa en vez de fingir
+              un selector con una sola opción. */}
           <Text style={styles.campoLabel}>Método de entrega</Text>
-          <View style={styles.metodoEntrega}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.opcionEntrega,
-                metodoEntrega === 'retiro' && styles.opcionEntregaActiva,
-                pressed && styles.btnPresionado,
-              ]}
-              onPress={() => setMetodoEntrega('retiro')}
-              testID="checkout-metodo-retiro"
-            >
-              <Text style={styles.opcionEntregaIcono}>🏪</Text>
-              <View style={styles.opcionEntregaInfo}>
-                <Text style={styles.opcionEntregaNombre}>Retiro en cafetería</Text>
-                <Text style={styles.opcionEntregaDetalle}>Sin costo</Text>
-              </View>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.opcionEntrega,
-                metodoEntrega === 'envio' && styles.opcionEntregaActiva,
-                pressed && styles.btnPresionado,
-              ]}
-              onPress={() => setMetodoEntrega('envio')}
-              testID="checkout-metodo-envio"
-            >
-              <Text style={styles.opcionEntregaIcono}>🚚</Text>
-              <View style={styles.opcionEntregaInfo}>
-                <Text style={styles.opcionEntregaNombre}>Envío estándar (3-5 días)</Text>
-                <Text style={styles.opcionEntregaDetalle}>{formatearPrecio(DESPACHO_ENVIO)}</Text>
-              </View>
-            </Pressable>
+          <View
+            style={[styles.opcionEntrega, styles.opcionEntregaActiva]}
+            testID="checkout-metodo-retiro"
+          >
+            <Text style={styles.opcionEntregaIcono}>🏪</Text>
+            <View style={styles.opcionEntregaInfo}>
+              <Text style={styles.opcionEntregaNombre}>Retiro en cafetería</Text>
+              <Text style={styles.opcionEntregaDetalle} testID="checkout-entrega-detalle">
+                {origen}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
@@ -682,30 +650,6 @@ export default function CheckoutScreen() {
               </Text>
             )}
           </View>
-
-          {metodoEntrega === 'envio' ? (
-            <View style={styles.inputGroup}>
-              <Text style={styles.campoLabel}>Dirección de envío</Text>
-              <TextInput
-                value={formulario.direccion}
-                onChangeText={(valor) => cambiarCampo('direccion', valor)}
-                placeholder="Calle, número, comuna, ciudad"
-                placeholderTextColor="#A89F95"
-                autoCapitalize="words"
-                style={[styles.input, errores.direccion ? styles.inputError : null]}
-                testID="checkout-direccion"
-              />
-              {!!errores.direccion && (
-                <Text style={styles.campoError} testID="checkout-error-direccion">
-                  {errores.direccion}
-                </Text>
-              )}
-            </View>
-          ) : (
-            <Text style={styles.retiroRecap} testID="checkout-entrega-detalle">
-              {origen}
-            </Text>
-          )}
         </View>
 
         {/* Método de pago: pasarela integrada (la tarjeta se ingresa en MP) */}
@@ -738,7 +682,7 @@ export default function CheckoutScreen() {
             <ActivityIndicator color="#FFFFFF" testID="checkout-procesando" />
           ) : (
             <Text style={styles.btnPrimarioTexto} testID="checkout-confirmar-texto">
-              {`Confirmar y Pagar ${formatearPrecio(totalAPagar)}`}
+              {`Confirmar y Pagar ${formatearPrecio(total)}`}
             </Text>
           )}
         </Pressable>
@@ -1039,9 +983,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
   },
-  metodoEntrega: {
-    gap: 8,
-  },
   opcionEntrega: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1073,12 +1014,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 11,
   },
-  retiroRecap: {
-    color: '#6B7280',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-
   // Método de pago (pasarela integrada; la tarjeta se ingresa en Mercado Pago)
   pagoSeccion: {
     gap: 8,

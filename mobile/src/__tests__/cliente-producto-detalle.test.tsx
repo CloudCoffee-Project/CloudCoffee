@@ -331,6 +331,89 @@ describe('Detalle de producto', () => {
     expect(textoDe(boton())).toContain('$3.600');
   });
 
+  it('descuenta del cartel el stock que el usuario ya tiene en el carrito', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({ offers: [oferta({ ofertaId: 'of-central', precio: 1800, stock: 4 })] })
+    );
+
+    const tree = await renderDetalle();
+    const tarjeta = () => tree.root.findByProps({ testID: 'producto-detalle-oferta-of-central' });
+
+    expect(textoDe(tarjeta())).toContain('En stock · 4 disp.');
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
+    });
+
+    // El catálogo no se volvió a preguntar: lo que baja es el stock menos lo que
+    // el propio carrito ya tiene, que es lo que el usuario está viendo.
+    expect(textoDe(tarjeta())).toContain('En stock · 3 disp.');
+  });
+
+  it('el stepper se acota al stock que queda, no al stock total', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({ offers: [oferta({ ofertaId: 'of-central', precio: 1800, stock: 4 })] })
+    );
+
+    const tree = await renderDetalle();
+    const mas = () => tree.root.findByProps({ testID: 'producto-detalle-mas' });
+
+    // Se lleva 3 de las 4 disponibles.
+    await act(async () => {
+      mas().props.onPress();
+    });
+    await act(async () => {
+      mas().props.onPress();
+    });
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
+    });
+
+    // Queda 1, así que el stepper se apaga aunque la oferta siga teniendo 4.
+    expect(leerCarrito(tree).items[0].cantidad).toBe(3);
+    expect(mas().props.disabled).toBe(true);
+  });
+
+  it('no trunca en silencio cuando el usuario ya se llevó todo el stock', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({ offers: [oferta({ ofertaId: 'of-central', precio: 1800, stock: 1 })] })
+    );
+
+    const tree = await renderDetalle();
+    const boton = () => tree.root.findByProps({ testID: 'producto-detalle-agregar' });
+    const tarjeta = () => tree.root.findByProps({ testID: 'producto-detalle-oferta-of-central' });
+
+    await act(async () => {
+      boton().props.onPress();
+    });
+
+    expect(boton().props.disabled).toBe(true);
+    expect(textoDe(boton())).toContain('Ya tienes todo el stock');
+    expect(textoDe(tarjeta())).toContain('1 en tu carrito');
+    // Y la línea no creció a escondidas.
+    expect(leerCarrito(tree).items[0].cantidad).toBe(1);
+  });
+
+  it('devuelve el stock al catálogo cuando se quita la línea del carrito', async () => {
+    mockObtenerProducto.mockResolvedValue(
+      producto({ offers: [oferta({ ofertaId: 'of-central', precio: 1800, stock: 2 })] })
+    );
+
+    const tree = await renderDetalle();
+    const tarjeta = () => tree.root.findByProps({ testID: 'producto-detalle-oferta-of-central' });
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-agregar' }).props.onPress();
+    });
+    expect(textoDe(tarjeta())).toContain('En stock · 1 disp.');
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'producto-detalle-basurero' }).props.onPress();
+    });
+
+    expect(textoDe(tarjeta())).toContain('En stock · 2 disp.');
+  });
+
   it('no deja bajar de una unidad', async () => {
     const tree = await renderDetalle();
 

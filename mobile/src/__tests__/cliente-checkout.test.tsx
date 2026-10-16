@@ -105,7 +105,6 @@ const FORM_VALIDO = {
   nombre: 'María Fernanda López',
   correo: 'maria@ca.cloudcoffee.cl',
   telefono: '+56912345678',
-  direccion: '',
 };
 
 function linea(over: Partial<NuevoItemCarrito> = {}): NuevoItemCarrito {
@@ -166,8 +165,8 @@ async function escribir(tree: ReactTestRenderer, testID: string, valor: string):
   });
 }
 
-// Llena los tres campos obligatorios (y la dirección si se pasa). Sin overrides
-// el formulario queda válido con el método por defecto (retiro en cafetería).
+// Llena los tres campos obligatorios. Sin overrides el formulario queda válido:
+// CloudCoffee solo retira en cafetería, así que no hay dirección que escribir.
 async function llenarFormulario(
   tree: ReactTestRenderer,
   overrides: Partial<typeof FORM_VALIDO> = {}
@@ -176,9 +175,6 @@ async function llenarFormulario(
   await escribir(tree, 'checkout-nombre', datos.nombre);
   await escribir(tree, 'checkout-correo', datos.correo);
   await escribir(tree, 'checkout-telefono', datos.telefono);
-  if (datos.direccion) {
-    await escribir(tree, 'checkout-direccion', datos.direccion);
-  }
 }
 
 async function pulsar(tree: ReactTestRenderer, testID: string): Promise<void> {
@@ -293,13 +289,13 @@ describe('Checkout (INT4-35)', () => {
     expect(texto(tree, 'checkout-desglose-despacho')).toBe('$0');
     expect(texto(tree, 'checkout-desglose-impuestos')).toBe('Incluidos');
 
-    // Datos de entrega y facturación: método de entrega + campos validados.
+    // Datos de entrega y facturación: retiro en cafetería y campos validados.
     expect(tree.root.findByProps({ testID: 'checkout-metodo-retiro' })).toBeDefined();
-    expect(tree.root.findByProps({ testID: 'checkout-metodo-envio' })).toBeDefined();
     expect(tree.root.findByProps({ testID: 'checkout-nombre' })).toBeDefined();
     expect(tree.root.findByProps({ testID: 'checkout-correo' })).toBeDefined();
     expect(tree.root.findByProps({ testID: 'checkout-telefono' })).toBeDefined();
-    // Con retiro seleccionado no se pide dirección física, se resume el retiro.
+    // No hay envío a domicilio, así que no hay dirección que pedir: se resume
+    // dónde se retira.
     expect(texto(tree, 'checkout-entrega-detalle')).toContain('Retiro programado en 2 puntos');
     expect(() => tree.root.findByProps({ testID: 'checkout-direccion' })).toThrow();
 
@@ -385,7 +381,7 @@ describe('Checkout (INT4-35)', () => {
     });
   });
 
-  it('con método envío se suma el despacho, se exige dirección y viaja en el payload', async () => {
+  it('no ofrece envío a domicilio: ni método, ni dirección, ni despacho', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
@@ -400,19 +396,14 @@ describe('Checkout (INT4-35)', () => {
       2
     );
 
-    // 6.000 + 4.990 de despacho estándar = 10.990; ahora sí se pide la dirección.
-    await pulsar(tree, 'checkout-metodo-envio');
-    expect(texto(tree, 'checkout-total')).toBe('$10.990');
-    expect(texto(tree, 'checkout-desglose-despacho')).toBe('$4.990');
-    expect(tree.root.findByProps({ testID: 'checkout-direccion' })).toBeDefined();
+    // El retiro es el único método: se informa, no se elige.
+    expect(texto(tree, 'checkout-desglose-despacho')).toBe('$0');
+    expect(texto(tree, 'checkout-total')).toBe('$6.000');
+    expect(() => tree.root.findByProps({ testID: 'checkout-metodo-envio' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'checkout-direccion' })).toThrow();
 
-    // Sin dirección el envío no se puede despachar: la validación frena.
+    // Y el pedido sale siempre como retiro, sin dirección.
     await llenarFormulario(tree);
-    await pulsar(tree, 'checkout-confirmar');
-    expect(mockCrearCompra).not.toHaveBeenCalled();
-    expect(texto(tree, 'checkout-error-direccion')).toBe('Ingresa tu dirección de envío.');
-
-    await escribir(tree, 'checkout-direccion', 'Av. Alemania 1234, Lautaro, Araucanía');
     await pulsar(tree, 'checkout-confirmar');
 
     expect(mockCrearCompra).toHaveBeenCalledWith(
@@ -425,8 +416,7 @@ describe('Checkout (INT4-35)', () => {
         nombre: FORM_VALIDO.nombre,
         correo: FORM_VALIDO.correo,
         telefono: FORM_VALIDO.telefono,
-        direccion: 'Av. Alemania 1234, Lautaro, Araucanía',
-        metodoEntrega: 'envio',
+        metodoEntrega: 'retiro',
       }
     );
   });

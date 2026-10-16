@@ -53,6 +53,11 @@ interface CarritoContextValue {
   cambiarCantidad: (ofertaId: string, cantidad: number) => void;
   quitar: (ofertaId: string) => void;
   vaciar: () => void;
+  // Cuántas unidades de esa oferta ya están en el carrito. Es lo que permite
+  // mostrar el stock restante: la oferta trae el stock total del catálogo y lo
+  // que el usuario ya se llevó hay que restarlo, porque el carrito no reserva
+  // nada en el backend.
+  cantidadDe: (ofertaId: string) => number;
 }
 
 const CarritoContext = createContext<CarritoContextValue | null>(null);
@@ -127,6 +132,19 @@ export function CarritoProvider({ children }: Props) {
   );
   const unidades = useMemo(() => items.reduce((suma, linea) => suma + linea.cantidad, 0), [items]);
 
+  // Índice de cantidad por oferta, derivado de items: no es estado propio, así
+  // que no puede quedar desincronizado con las líneas.
+  const cantidadesPorOferta = useMemo(() => {
+    const porOferta = new Map<string, number>();
+    for (const linea of items) porOferta.set(linea.ofertaId, linea.cantidad);
+    return porOferta;
+  }, [items]);
+
+  const cantidadDe = useCallback(
+    (ofertaId: string) => cantidadesPorOferta.get(ofertaId) ?? 0,
+    [cantidadesPorOferta]
+  );
+
   // El subtotal y las unidades de cada grupo se acumulan línea por línea para no
   // volver a recorrer items al pintar. El Map conserva el orden de inserción, así
   // que no hace falta un sort aparte.
@@ -156,8 +174,18 @@ export function CarritoProvider({ children }: Props) {
   }, [items]);
 
   const value = useMemo<CarritoContextValue>(
-    () => ({ items, total, unidades, grupos, agregar, cambiarCantidad, quitar, vaciar }),
-    [items, total, unidades, grupos, agregar, cambiarCantidad, quitar, vaciar]
+    () => ({
+      items,
+      total,
+      unidades,
+      grupos,
+      agregar,
+      cambiarCantidad,
+      quitar,
+      vaciar,
+      cantidadDe,
+    }),
+    [items, total, unidades, grupos, agregar, cambiarCantidad, quitar, vaciar, cantidadDe]
   );
 
   return <CarritoContext.Provider value={value}>{children}</CarritoContext.Provider>;

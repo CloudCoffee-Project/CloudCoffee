@@ -133,10 +133,10 @@ export interface RegistroClienteResponse {
   verificado: boolean;
 }
 
-// Perfil del usuario autenticado. Reutiliza la forma del RegistroClienteResponse
-// del backend (el auth-service no expone hoy un endpoint de perfil; cuando lo
-// haga devolverá la misma entidad Usuario). Definir estos tipos acá evita que la
-// pantalla invente sus propios campos (ver cabecera de este archivo).
+// Perfil del usuario autenticado. Es la forma de `PerfilResponse` del
+// auth-service (GET /v1/auth/users/me): id, email, nombre, apellido, telefono y
+// rol. `verificado` NO viene en ese DTO, así que es opcional: la app no puede
+// afirmar el estado de verificación a partir del perfil.
 export interface PerfilUsuario {
   id: string;
   email: string;
@@ -144,7 +144,7 @@ export interface PerfilUsuario {
   apellido: string;
   telefono: string;
   rol: string;
-  verificado: boolean;
+  verificado?: boolean;
 }
 
 // Body de edición de perfil: solo los campos editables (INT4-23). El backend
@@ -305,8 +305,10 @@ export interface ItemCarrito {
   cafeteriaNombre: string;
   cantidad: number;
   // Stock de la oferta tal como estaba al agregar. Es una foto, no el stock en
-  // vivo: el carrito vive en memoria y no vuelve a preguntar al catalogo, asi
-  // que la disponibilidad real la revalida el backend al crear la orden.
+  // vivo: el carrito vive en memoria y no vuelve a preguntar al catálogo, así que
+  // el stock restante que ve el usuario se deriva restándole la cantidad que ya
+  // tiene en el carrito. POST /v1/compras todavia no existe, asi que nadie
+  // reserva stock: eso lo tendria que resolver el backend al crear la orden.
   stock: number;
 }
 

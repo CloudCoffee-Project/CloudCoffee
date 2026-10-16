@@ -8,14 +8,10 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 import CatalogoProductosScreen from '../app/(cliente)/index';
-// La pantalla saca los datos de services/catalogoLocal (el snapshot local), no
-// de services/catalog. Ver src/datos-clocales/README.md: el swap al backend es
-// cambiar ese import, y este test acompanha el cambio.
-import {
-  leerCampusSeleccionado,
-  listarCategorias,
-  listarProductos,
-} from '../services/catalogoLocal';
+// Desde INT4-25 la pantalla saca los datos de services/catalog, contra el
+// gateway (antes leía el snapshot local de src/datos-locales por medio de
+// services/catalogoLocal). El mock va en el módulo que la pantalla importa.
+import { leerCampusSeleccionado, listarCategorias, listarProductos } from '../services/catalog';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
 import { CarritoProvider } from '../context/CarritoContext';
@@ -35,11 +31,12 @@ jest.mock('../context/AuthContext', () => ({
   })),
 }));
 
-// La pantalla pide los datos a catalogoLocal, asi que el mock va ahi. Lo que
-// ordena las ofertas (ordenarOfertasPorPrecio) sigue viniendo de
-// services/catalog, que no se mockea: es una funcion pura y probarla de verdad
-// cubre que la escalera de precios funcione sobre estos datos.
-jest.mock('../services/catalogoLocal', () => ({
+// La pantalla pide los datos a services/catalog, asi que el mock va ahi. Lo que
+// ordena las ofertas (ordenarOfertasPorPrecio) viene del mismo módulo pero no se
+// mockea: es una funcion pura y probarla de verdad sobre estos datos cubre que
+// la escalera de precios (INT4-31) funcione.
+jest.mock('../services/catalog', () => ({
+  ...jest.requireActual('../services/catalog'),
   leerCampusSeleccionado: jest.fn(),
   listarCategorias: jest.fn(),
   listarProductos: jest.fn(),

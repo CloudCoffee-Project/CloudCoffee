@@ -78,7 +78,8 @@ public class JwtSecurityAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
     SecurityFilterChain serviceSecurityFilterChain(HttpSecurity http, ApiSecurityErrorHandler errors,
-            JwtAuthenticationConverter converter) throws Exception {
+            JwtAuthenticationConverter converter,
+            @Value("${cloudcoffee.openapi.enabled:${OPENAPI_ENABLED:false}}") boolean openapiEnabled) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -92,6 +93,12 @@ public class JwtSecurityAutoConfiguration {
                         .authenticationEntryPoint(errors).accessDeniedHandler(errors))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        // Solo lectura del contrato cuando se habilita expresamente en desarrollo.
+                        .requestMatchers(request -> openapiEnabled
+                                && ("GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod()))
+                                && ((request.getContextPath() + "/v3/api-docs").equals(request.getRequestURI())
+                                    || (request.getContextPath() + "/v3/api-docs.yaml").equals(request.getRequestURI())))
+                            .permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh",
                                 "/auth/verificacion", "/auth/verificacion/reenviar",
                                 "/auth/password/recovery", "/auth/password/reset").permitAll()
