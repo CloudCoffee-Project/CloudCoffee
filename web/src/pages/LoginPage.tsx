@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { request, ApiRequestError } from '../services/httpClient';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { useAuth } from '../hooks/useAuth';
 
 interface LoginResponse {
   accessToken: string;
@@ -10,6 +11,7 @@ interface LoginResponse {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -46,11 +48,7 @@ export function LoginPage() {
         })
       });
 
-      // Criterio: Login exitoso entrega los tokens a la capa de sesión.
-      localStorage.setItem('accessToken', response.accessToken);
-      if (response.refreshToken) {
-        localStorage.setItem('refreshToken', response.refreshToken);
-      }
+      login(response.accessToken, response.refreshToken);
 
       // Redirigir tras inicio exitoso
       navigate('/');
