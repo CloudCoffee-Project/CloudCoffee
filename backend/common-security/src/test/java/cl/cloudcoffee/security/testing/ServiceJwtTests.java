@@ -62,8 +62,20 @@ public abstract class ServiceJwtTests extends JwtTestSupport {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
+    protected void staffJwtWithAssignedCafeteriaAuthenticates(String role) throws Exception {
+        String jwt = sign(claims().claim("role", role)
+                .claim("cafeteriaId", java.util.UUID.randomUUID().toString()).build(),
+                KEYS, com.nimbusds.jose.JWSAlgorithm.RS256);
+        securityMvc.perform(get("/jwt-test/identity").header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ROLE_" + role));
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"malformed", "expired", "wrong-key", "wrong-algorithm", "missing-exp",
-            "missing-sub", "missing-role", "invalid-role", "future", "tampered", "hmac"})
+            "missing-sub", "missing-role", "invalid-role", "cafeteria-on-client", "cafeteria-not-uuid",
+            "future", "tampered", "hmac"})
     protected void invalidJwtIsRejectedLocally(String kind) throws Exception {
         securityMvc.perform(get("/jwt-test/identity")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + invalidToken(kind)))
