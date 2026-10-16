@@ -6,8 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,7 +26,10 @@ import cl.cloudcoffee.auth_service.dto.ChangePasswordRequest;
 import cl.cloudcoffee.auth_service.dto.PerfilResponse;
 import cl.cloudcoffee.auth_service.dto.UpdatePerfilRequest;
 import cl.cloudcoffee.auth_service.model.Rol;
+import cl.cloudcoffee.auth_service.model.TipoToken;
+import cl.cloudcoffee.auth_service.model.TokenAuth;
 import cl.cloudcoffee.auth_service.model.Usuario;
+import cl.cloudcoffee.auth_service.repository.TokenAuthRepository;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 import cl.cloudcoffee.errors.BusinessException;
 
@@ -32,6 +38,9 @@ class PerfilServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private TokenAuthRepository tokenAuthRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -81,6 +90,7 @@ class PerfilServiceTest {
 
         verify(usuarioRepository, never()).save(any());
         verify(passwordEncoder, never()).encode(anyString());
+        verifyNoInteractions(tokenAuthRepository);
     }
 
     @Test
@@ -98,17 +108,25 @@ class PerfilServiceTest {
     }
 
     @Test
-    void cambiarPasswordGuardaElNuevoHash() {
+    void cambiarPasswordGuardaElNuevoHashYRevocaTodasLasSesiones() {
         Usuario usuario = usuarioDePrueba();
+        TokenAuth sesionA = new TokenAuth(usuario, "hash-refresh-a", Instant.now().plusSeconds(3600),
+                TipoToken.REFRESH);
+        TokenAuth sesionB = new TokenAuth(usuario, "hash-refresh-b", Instant.now().plusSeconds(3600),
+                TipoToken.REFRESH);
         when(usuarioRepository.findById(usuario.getId())).thenReturn(Optional.of(usuario));
         when(passwordEncoder.matches("password123", "hash-almacenado")).thenReturn(true);
         when(passwordEncoder.encode("nuevaPassword")).thenReturn("hash-nuevo");
+        when(tokenAuthRepository.findByUsuarioIdAndTipoAndRevokedAtIsNull(usuario.getId(), TipoToken.REFRESH))
+                .thenReturn(List.of(sesionA, sesionB));
 
         perfilService.cambiarPassword(usuario.getId().toString(),
                 new ChangePasswordRequest("password123", "nuevaPassword"));
 
         assertThat(usuario.getPasswordHash()).isEqualTo("hash-nuevo");
         verify(usuarioRepository).save(usuario);
+        assertThat(sesionA.estaVigente()).isFalse();
+        assertThat(sesionB.estaVigente()).isFalse();
     }
 
     @Test
@@ -125,5 +143,6 @@ class PerfilServiceTest {
         assertThat(usuario.getPasswordHash()).isEqualTo("hash-almacenado");
         verify(passwordEncoder, never()).encode(anyString());
         verify(usuarioRepository, never()).save(any());
+        verifyNoInteractions(tokenAuthRepository);
     }
 }

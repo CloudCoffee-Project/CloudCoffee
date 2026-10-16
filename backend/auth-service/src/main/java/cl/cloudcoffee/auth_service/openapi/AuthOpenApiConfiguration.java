@@ -46,7 +46,7 @@ public class AuthOpenApiConfiguration {
                     operation.getResponses().addApiResponse("415", problem("Se requiere Content-Type: application/json", 415, path));
                 }
                 operation.getResponses().addApiResponse("401", problem(
-                        "JWT inválido; en rutas protegidas también JWT ausente. Login: credenciales incorrectas. Refresh/logout: refresh token inválido.", 401, path));
+                        "JWT inválido; en rutas protegidas también JWT ausente. Login: credenciales incorrectas. Refresh/logout: refresh token inválido. Cambio de contraseña: contraseña actual incorrecta.", 401, path));
                 operation.getResponses().addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
                 if (path.equals("/auth/login")) {
                     operation.getResponses().addApiResponse("403", problem("Cuenta sin correo verificado", 403, path));
@@ -57,6 +57,9 @@ public class AuthOpenApiConfiguration {
                 }
                 if (path.equals("/auth/verificacion/reenviar")) {
                     operation.getResponses().addApiResponse("404", problem("No existe una cuenta para el correo", 404, path));
+                }
+                if (path.startsWith("/auth/users/me")) {
+                    operation.getResponses().addApiResponse("404", problem("No existe la cuenta del sujeto del JWT", 404, path));
                 }
                 if (List.of("/auth/login", "/auth/password/recovery", "/auth/verificacion/reenviar").contains(path)) {
                     operation.getResponses().addApiResponse("429", problem("Cuota por IP agotada en API Gateway; no llega a Auth", 429, path)
