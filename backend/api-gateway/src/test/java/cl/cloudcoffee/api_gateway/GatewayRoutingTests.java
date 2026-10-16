@@ -47,13 +47,15 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     private static final Map<String, BackendStub> BACKENDS = Map.of(
             "auth", new BackendStub("auth"),
             "catalog", new BackendStub("catalog"),
-            "notifications", new BackendStub("notifications"));
+            "notifications", new BackendStub("notifications"),
+            "orders", new BackendStub("orders"));
 
     @DynamicPropertySource
     static void backendUrls(DynamicPropertyRegistry registry) {
         registry.add("AUTH_SERVICE_URL", () -> BACKENDS.get("auth").url());
         registry.add("CATALOG_SERVICE_URL", () -> BACKENDS.get("catalog").url());
         registry.add("NOTIFICATION_SERVICE_URL", () -> BACKENDS.get("notifications").url());
+        registry.add("ORDER_SERVICE_URL", () -> BACKENDS.get("orders").url());
     }
 
     @Autowired
@@ -76,7 +78,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     @CsvSource({
             "auth, /v1/auth/users/me, /auth/users/me",
             "catalog, /v1/catalog/productos/42, /catalog/productos/42",
-            "notifications, /v1/notifications/42, /notifications/42"
+            "notifications, /v1/notifications/42, /notifications/42",
+            "orders, /v1/compras/42/pago, /compras/42/pago"
     })
     void routesToTheCorrectBackendAndStripsOnlyTheVersion(String service,
             String externalPath, String internalPath) throws Exception {

@@ -136,6 +136,39 @@ nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
 `PasarelaPagoSimulada` (`SIMULADO`) solo entrega una referencia, y la simulación
 del resultado y su consulta llegan con INT2-76.
 
+### Simulación de pago y consulta (INT2-76)
+
+Escenarios deterministas, sin proveedor externo: no se piden datos de tarjeta ni se
+usan Mercado Pago, `initPoint` o webhooks. Gateway enruta `/v1/compras/**` a
+order-service.
+
+| Endpoint | Respuesta |
+|---|---|
+| `POST /v1/compras/{compraId}/pago/simulacion` | `201` intento nuevo; `200` pendiente resuelto o clave repetida |
+| `GET /v1/compras/{compraId}/pago` | `200` último intento; `404` si no hay pagos |
+
+El comando recibe `{"escenario": "APROBADO" | "RECHAZADO" | "PENDIENTE"}` y el
+encabezado obligatorio `Idempotency-Key` (1-100 caracteres `A-Z a-z 0-9 . _ : -`).
+Cualquier otro campo, como tarjeta o importe, se ignora: el monto sale de la compra.
+
+- **Propietario:** solo el `sub` del JWT dueño de la compra puede simular o consultar.
+  Una compra ajena responde `404`, igual que una inexistente.
+- **Sin duplicados:** cada comando queda registrado por `(compra, clave)`. Repetir la
+  clave devuelve el mismo pago sin volver a ejecutarlo; la misma clave con otro
+  escenario responde `409`.
+- Un pago `PENDIENTE` se resuelve en el mismo registro. Solo se abre un intento nuevo
+  si la compra no tiene pagos o el último fue rechazado; una compra ya aprobada
+  responde `409`.
+
+Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
+compras de prueba para las cuentas de INT2-65:
+
+| Compra | Dueño | Monto |
+|---|---|---|
+| `77777777-7777-4777-8777-777777777701` | `comprador@cloudcoffee.dev` | 3700 |
+| `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
+| `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
