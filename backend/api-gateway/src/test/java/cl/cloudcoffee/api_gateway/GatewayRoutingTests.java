@@ -103,6 +103,14 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertThat(received.path()).isEqualTo("/auth/" + endpoint);
     }
 
+    @Test
+    void proxyUsesApacheHttpClientInsteadOfJdkClient() throws Exception {
+        // java.net.http fallaba de forma intermitente al reenviar (NPE en Http1Exchange) y respondía 500.
+        mvc.perform(head("/v1/catalog/campus")).andExpect(status().isOk());
+
+        assertThat(BACKENDS.get("catalog").take().userAgent()).startsWith("Apache-HttpClient/");
+    }
+
     @ParameterizedTest
     @CsvSource({"GET, campus", "GET, categorias", "HEAD, campus", "HEAD, categorias"})
     void catalogQueriesArePublic(String method, String endpoint) throws Exception {
@@ -298,7 +306,7 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     private record RecordedRequest(String method, String path, String query,
-            String body, String authorization, String contentType) {
+            String body, String authorization, String contentType, String userAgent) {
     }
 
     private static final class BackendStub {
@@ -320,7 +328,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                         requests.add(new RecordedRequest(exchange.getRequestMethod(),
                                 exchange.getRequestURI().getRawPath(), exchange.getRequestURI().getRawQuery(),
                                 body, exchange.getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION),
-                                exchange.getRequestHeaders().getFirst(HttpHeaders.CONTENT_TYPE)));
+                                exchange.getRequestHeaders().getFirst(HttpHeaders.CONTENT_TYPE),
+                                exchange.getRequestHeaders().getFirst(HttpHeaders.USER_AGENT)));
                         boolean reject = body.equals("{\"reject\":true}");
                         byte[] response = (reject ? PROBLEM : "{\"service\":\"" + name + "\"}")
                                 .getBytes(StandardCharsets.UTF_8);
