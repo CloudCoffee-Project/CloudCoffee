@@ -116,7 +116,11 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
       if (!headers.has('Accept')) {
         headers.set('Accept', 'application/json');
       }
-
+      const token = localStorage.getItem('accessToken');
+      const isAuthRoute = path.startsWith('/v1/auth/login') || path.startsWith('/v1/auth/register') || path.startsWith('/v1/auth/refresh');
+      if (token && !isAuthRoute && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
       let response: Response;
       try {
         response = await fetcher(url, { ...options, headers });
