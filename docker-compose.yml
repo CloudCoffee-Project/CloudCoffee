@@ -18,7 +18,8 @@ services:
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             JWT_PRIVATE_KEY_LOCATION: file:/run/cloudcoffee-jwt/jwt_private_key
-            SPRING_PROFILES_ACTIVE: docker
+            # INT2-65: "docker,dev" carga las cuentas de prueba; por defecto no se cargan.
+            SPRING_PROFILES_ACTIVE: ${AUTH_SPRING_PROFILES:-docker}
             SERVER_PORT: 8081
             DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME}
             DB_USER: ${AUTH_DB_USER}
