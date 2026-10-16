@@ -119,6 +119,11 @@ El último comando elimina las bases de datos locales y debe utilizarse con prec
 
 ## Contrato de API para web y mobile
 
+Para el Sprint 2, consultar el
+[contrato de compra, pago simulado y retiro (INT2-50)](backend/docs/compra-pago-retiro.md).
+Incluye OpenAPI y ejemplos de eventos como referencia para las implementaciones
+de backend y clientes.
+
 La [guía de OpenAPI y Swagger del backend](backend/README.md#openapi-y-swagger--api-sprint-1-int2-31)
 explica cómo habilitar la documentación con `OPENAPI_ENABLED=true`, consultar
 Auth/Catálogo desde Gateway y probar operaciones con JWT. Está desactivada por defecto.
