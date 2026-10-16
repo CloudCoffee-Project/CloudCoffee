@@ -84,6 +84,58 @@ no duplica filas. Los UUID del primer campus, categoría y producto coinciden co
 los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
 esperados de filtros, búsqueda y comparación de precios sobre estos datos.
 
+### Personal por cafetería y cuentas de prueba (INT2-65)
+
+Auth guarda la cafetería de cada `CAJERO` y `ADMIN_CAFETERIA` en
+`asignaciones_cafeteria`. `cafeteria_id` es el UUID de catalog-service guardado por
+valor: no hay FK ni tablas compartidas entre servicios. Al emitir el access token,
+Auth agrega el claim `cafeteriaId` solo al personal con asignación; clientes,
+super administradores y personal sin asignación no lo reciben.
+
+Los servicios autorizan con `CafeteriaAccess` (common-security), que lee rol y
+cafetería solo del JWT firmado; encabezados, parámetros y cuerpos del frontend no
+cuentan. El personal opera únicamente su cafetería, `SUPER_ADMIN` opera cualquiera,
+y el resto recibe `403`. El decodificador rechaza con `401` un `cafeteriaId` que no
+sea UUID o que venga en un rol que no es de personal. El registro público siempre
+crea un `CLIENTE` sin asignación e ignora `rol` o `cafeteriaId` enviados.
+
+Primer uso: `GET /catalog/cafeterias/{cafeteriaId}/ofertas`, inventario completo
+de la cafetería (incluye ofertas agotadas).
+
+Con `AUTH_SPRING_PROFILES=docker,dev` (valor de `.env.example`), Auth carga estas
+cuentas verificadas, todas con contraseña `CafeDemo123!`:
+
+| Correo | Rol | Cafetería |
+|---|---|---|
+| `comprador@cloudcoffee.dev` | `CLIENTE` | — |
+| `cajero.central@cloudcoffee.dev` | `CAJERO` | Cafetería Central |
+| `admin.central@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Central |
+| `cajero.patio@cloudcoffee.dev` | `CAJERO` | Cafetería Patio Norte |
+| `admin.patio@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Patio Norte |
+| `cajero.sinasignar@cloudcoffee.dev` | `CAJERO` | sin asignación |
+
+Las cafeterías son las del seed de catálogo, así que conviene activar ambos perfiles
+`dev`. La asignación viaja en el access token: un cambio rige desde el siguiente
+login o refresh (máximo 15 minutos).
+
+### Pagos simulados en order-service (INT2-53)
+
+La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
+`usuario_id` del JWT y `monto_total` calculado por el servidor) y `pagos`, vinculados
+por FK. La base restringe el estado a `PENDIENTE`, `APROBADO` o `RECHAZADO`, exige
+montos positivos y no admite referencias repetidas de un mismo proveedor.
+
+Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
+no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
+un resultado contradictorio responde `409`. `@Version` impide que dos resultados
+concurrentes se sobrescriban. Una compra admite varios intentos de pago, pero nunca
+dos `PENDIENTE` o `APROBADO` a la vez: tras un rechazo se puede reintentar.
+
+`PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
+nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
+`PasarelaPagoSimulada` (`SIMULADO`) solo entrega una referencia, y la simulación
+del resultado y su consulta llegan con INT2-76.
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
@@ -174,6 +226,7 @@ Todas las rutas siguientes incluyen el prefijo público `/v1` al usar Gateway.
 | `GET /catalog/categorias` | `200`, lista de categorías | No |
 | `GET /catalog/productos` | `200`, página de productos | Sí |
 | `GET /catalog/productos/{id}/ofertas` | `200`, lista por precio ascendente | Sí |
+| `GET /catalog/cafeterias/{cafeteriaId}/ofertas` | `200`, inventario de la cafetería asignada | Sí (personal) |
 
 Logout (INT2-23), perfil (INT2-24) y cambio de contraseña (INT2-25) ya están
 integrados en la base actual; no quedan endpoints pendientes de la lista mínima
