@@ -1,0 +1,5 @@
+# INT2-65: perfil exclusivo de desarrollo. Agrega las cuentas de prueba
+# (db/seed/dev) a las migraciones; ningún otro perfil las carga.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed/dev

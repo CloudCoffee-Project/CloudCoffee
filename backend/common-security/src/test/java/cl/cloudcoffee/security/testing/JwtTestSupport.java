@@ -84,6 +84,8 @@ public abstract class JwtTestSupport {
             case "missing-sub" -> sign(claims().subject(null).build(), KEYS, JWSAlgorithm.RS256);
             case "missing-role" -> sign(claims().claim("role", null).build(), KEYS, JWSAlgorithm.RS256);
             case "invalid-role" -> sign(claims().claim("role", "ROOT").build(), KEYS, JWSAlgorithm.RS256);
+            case "cafeteria-on-client" -> sign(claims().claim("cafeteriaId", UUID.randomUUID().toString()).build(), KEYS, JWSAlgorithm.RS256);
+            case "cafeteria-not-uuid" -> sign(claims().claim("role", "CAJERO").claim("cafeteriaId", "central").build(), KEYS, JWSAlgorithm.RS256);
             case "future" -> sign(claims().notBeforeTime(Date.from(Instant.now().plusSeconds(60))).build(), KEYS, JWSAlgorithm.RS256);
             case "tampered" -> {
                 String[] parts = token().split("\\.");
