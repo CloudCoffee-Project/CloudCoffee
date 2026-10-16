@@ -118,6 +118,24 @@ Las cafeterías son las del seed de catálogo, así que conviene activar ambos p
 `dev`. La asignación viaja en el access token: un cambio rige desde el siguiente
 login o refresh (máximo 15 minutos).
 
+### Pagos simulados en order-service (INT2-53)
+
+La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
+`usuario_id` del JWT y `monto_total` calculado por el servidor) y `pagos`, vinculados
+por FK. La base restringe el estado a `PENDIENTE`, `APROBADO` o `RECHAZADO`, exige
+montos positivos y no admite referencias repetidas de un mismo proveedor.
+
+Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
+no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
+un resultado contradictorio responde `409`. `@Version` impide que dos resultados
+concurrentes se sobrescriban. Una compra admite varios intentos de pago, pero nunca
+dos `PENDIENTE` o `APROBADO` a la vez: tras un rechazo se puede reintentar.
+
+`PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
+nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
+`PasarelaPagoSimulada` (`SIMULADO`) solo entrega una referencia, y la simulación
+del resultado y su consulta llegan con INT2-76.
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
