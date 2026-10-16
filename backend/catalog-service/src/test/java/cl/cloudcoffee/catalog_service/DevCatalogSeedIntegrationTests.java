@@ -1,0 +1,198 @@
+package cl.cloudcoffee.catalog_service;
+
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import javax.sql.DataSource;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+import cl.cloudcoffee.security.testing.JwtTestSupport;
+
+/**
+ * INT2-36: carga el seed de desarrollo y verifica sobre él los filtros,
+ * la búsqueda y la comparación de precios del catálogo.
+ */
+// Base propia: en CI las demás pruebas comparten un PostgreSQL vacío
+// (SPRING_DATASOURCE_URL) y el seed no debe filtrarse hacia ellas.
+@SpringBootTest(properties = {
+        "management.tracing.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:dev-catalog-seed;DB_CLOSE_DELAY=-1",
+        "spring.datasource.username=sa",
+        "spring.datasource.password="
+})
+@AutoConfigureMockMvc
+@ActiveProfiles("dev")
+class DevCatalogSeedIntegrationTests extends JwtTestSupport {
+
+    static final String SEED = "db/seed/dev/R__seed_catalogo_desarrollo.sql";
+    static final String CAMPUS_SAN_FRANCISCO = "11111111-1111-4111-8111-111111111111";
+    static final String CAMPUS_SAN_JUAN_PABLO = "11111111-1111-4111-8111-111111111112";
+    static final String CATEGORIA_CAFES = "22222222-2222-4222-8222-222222222222";
+    static final String CATEGORIA_BEBIDAS_FRIAS = "22222222-2222-4222-8222-222222222223";
+    static final String CAFE_AMERICANO = "33333333-3333-4333-8333-333333333333";
+    static final String LATTE_VAINILLA = "33333333-3333-4333-8333-333333333335";
+    static final String AGUA_MINERAL = "33333333-3333-4333-8333-333333333339";
+    static final String BROWNIE = "33333333-3333-4333-8333-33333333333c";
+
+    @Autowired
+    MockMvc mvc;
+
+    @Autowired
+    DataSource dataSource;
+
+    @Test
+    void seedCargaDosCampusConSusCafeterias() throws Exception {
+        mvc.perform(get("/catalog/campus"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].nombre", contains("Campus San Francisco", "Campus San Juan Pablo II")))
+                .andExpect(jsonPath("$[0].cafeterias[*].nombre",
+                        contains("Cafetería Biblioteca", "Cafetería Central", "Cafetería Ingeniería")))
+                .andExpect(jsonPath("$[1].cafeterias[*].nombre",
+                        contains("Cafetería Patio Norte", "Kiosko Gimnasio")));
+    }
+
+    @Test
+    void seedCargaCategoriasOrdenadas() throws Exception {
+        mvc.perform(get("/catalog/categorias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].nombre",
+                        contains("Bebidas frías", "Cafés", "Pastelería", "Sándwiches")));
+    }
+
+    @Test
+    void productosSoloIncluyeOfertasPublicadasDelCampus() throws Exception {
+        // Fuera: Brownie (cafetería cerrada), Agua mineral (OUT_OF_STOCK) y los de otro campus.
+        productos(CAMPUS_SAN_FRANCISCO, null, null)
+                .andExpect(jsonPath("$.totalElements").value(8))
+                .andExpect(jsonPath("$.content[*].nombre", contains(
+                        "Café americano", "Cappuccino", "Frappé moca", "Jugo natural de naranja",
+                        "Latte de vainilla", "Medialuna", "Muffin de arándanos", "Sándwich ave palta")));
+
+        // Fuera: Brownie y Agua mineral del kiosko en mantención.
+        productos(CAMPUS_SAN_JUAN_PABLO, null, null)
+                .andExpect(jsonPath("$.content[*].nombre", contains(
+                        "Café americano", "Café helado", "Jugo natural de naranja",
+                        "Medialuna", "Sándwich vegetariano")));
+    }
+
+    @Test
+    void productoConOfertasEnVariasCafeteriasApareceUnaVez() throws Exception {
+        productos(CAMPUS_SAN_FRANCISCO, null, "americano")
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(CAFE_AMERICANO));
+    }
+
+    @Test
+    void filtraPorCategoria() throws Exception {
+        productos(CAMPUS_SAN_FRANCISCO, CATEGORIA_CAFES, null)
+                .andExpect(jsonPath("$.content[*].nombre",
+                        contains("Café americano", "Cappuccino", "Latte de vainilla")))
+                .andExpect(jsonPath("$.content[*].categoriaId",
+                        contains(CATEGORIA_CAFES, CATEGORIA_CAFES, CATEGORIA_CAFES)));
+    }
+
+    @Test
+    void buscaEnNombreYDescripcionSinDistinguirMayusculas() throws Exception {
+        // "Frappé moca" solo menciona el café en su descripción.
+        productos(CAMPUS_SAN_FRANCISCO, null, "CAFÉ")
+                .andExpect(jsonPath("$.content[*].nombre", contains("Café americano", "Frappé moca")));
+    }
+
+    @Test
+    void combinaBusquedaYCategoria() throws Exception {
+        productos(CAMPUS_SAN_FRANCISCO, CATEGORIA_BEBIDAS_FRIAS, "café")
+                .andExpect(jsonPath("$.content[*].nombre", contains("Frappé moca")));
+    }
+
+    @Test
+    void busquedaSinCoincidenciasDevuelvePaginaVacia() throws Exception {
+        productos(CAMPUS_SAN_FRANCISCO, null, "empanada")
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void paginaLosProductosDelCampus() throws Exception {
+        mvc.perform(get("/catalog/productos")
+                        .header("Authorization", "Bearer " + token())
+                        .param("campusId", CAMPUS_SAN_FRANCISCO)
+                        .param("page", "1").param("size", "3").param("sort", "name,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].nombre",
+                        contains("Jugo natural de naranja", "Latte de vainilla", "Medialuna")))
+                .andExpect(jsonPath("$.totalElements").value(8))
+                .andExpect(jsonPath("$.totalPages").value(3));
+    }
+
+    @Test
+    void comparaOfertasDelCampusPorPrecioAscendente() throws Exception {
+        // La oferta de Cafetería Ingeniería (1100, cerrada) no participa.
+        ofertas(CAFE_AMERICANO, CAMPUS_SAN_FRANCISCO)
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].cafeteriaName", contains("Cafetería Biblioteca", "Cafetería Central")))
+                .andExpect(jsonPath("$[*].price", contains(1300.0, 1500.0)))
+                .andExpect(jsonPath("$[*].stock", contains(3, 40)))
+                .andExpect(jsonPath("$[*].disponible", contains(true, true)));
+
+        ofertas(CAFE_AMERICANO, CAMPUS_SAN_JUAN_PABLO)
+                .andExpect(jsonPath("$[*].cafeteriaName", contains("Cafetería Patio Norte")))
+                .andExpect(jsonPath("$[*].price", contains(1600.0)));
+    }
+
+    @Test
+    void ofertaSinStockSePublicaComoNoDisponible() throws Exception {
+        ofertas(LATTE_VAINILLA, CAMPUS_SAN_FRANCISCO)
+                .andExpect(jsonPath("$[*].stock", contains(0)))
+                .andExpect(jsonPath("$[*].disponible", contains(false)));
+    }
+
+    @Test
+    void ofertasDeCafeteriaNoAbiertaOAgotadaNoSePublican() throws Exception {
+        ofertas(BROWNIE, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$").isEmpty());
+        ofertas(BROWNIE, CAMPUS_SAN_JUAN_PABLO).andExpect(jsonPath("$").isEmpty());
+        ofertas(AGUA_MINERAL, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void seedEsIdempotente() throws Exception {
+        // Flyway lo re-ejecuta cada vez que cambia su checksum.
+        new ResourceDatabasePopulator(new ClassPathResource(SEED)).execute(dataSource);
+
+        mvc.perform(get("/catalog/campus")).andExpect(jsonPath("$", hasSize(2)));
+        productos(CAMPUS_SAN_FRANCISCO, null, null).andExpect(jsonPath("$.totalElements").value(8));
+        ofertas(CAFE_AMERICANO, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    private ResultActions productos(String campusId, String categoriaId, String q) throws Exception {
+        var request = get("/catalog/productos")
+                .header("Authorization", "Bearer " + token())
+                .param("campusId", campusId)
+                .param("sort", "name,asc");
+        if (categoriaId != null) {
+            request.param("categoriaId", categoriaId);
+        }
+        if (q != null) {
+            request.param("q", q);
+        }
+        return mvc.perform(request).andExpect(status().isOk());
+    }
+
+    private ResultActions ofertas(String productId, String campusId) throws Exception {
+        return mvc.perform(get("/catalog/productos/{id}/ofertas", productId)
+                        .header("Authorization", "Bearer " + token())
+                        .param("campusId", campusId))
+                .andExpect(status().isOk());
+    }
+}

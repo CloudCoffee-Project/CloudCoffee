@@ -1,0 +1,5 @@
+# INT2-36: perfil exclusivo de desarrollo. Agrega el seed del catálogo
+# (db/seed/dev) a las migraciones; ningún otro perfil lo carga.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed/dev

@@ -71,6 +71,19 @@ cd auth-service
 ./mvnw spring-boot:run
 ```
 
+### Catálogo de desarrollo (INT2-36)
+
+El perfil `dev` de catalog-service agrega `db/seed/dev` a Flyway y carga un
+catálogo reproducible: 2 campus, 5 cafeterías (abiertas, cerrada y en mantención),
+4 categorías, 12 productos y 20 ofertas con precios y stock variados. Ningún otro
+perfil lo carga. En Docker Compose se activa con `CATALOG_SPRING_PROFILES=docker,dev`
+en `.env` (valor de `.env.example`); si la variable falta, se usa solo `docker`.
+
+El seed es una migración repetible con UUID fijos: se reaplica sola al editarla y
+no duplica filas. Los UUID del primer campus, categoría y producto coinciden con
+los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
+esperados de filtros, búsqueda y comparación de precios sobre estos datos.
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1

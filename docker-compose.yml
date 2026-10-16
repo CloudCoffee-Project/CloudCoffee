@@ -70,7 +70,8 @@ services:
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
-            SPRING_PROFILES_ACTIVE: docker
+            # INT2-36: "docker,dev" carga el catálogo de desarrollo; por defecto no se carga.
+            SPRING_PROFILES_ACTIVE: ${CATALOG_SPRING_PROFILES:-docker}
             SERVER_PORT: 8082
             DB_URL: jdbc:postgresql://catalog-db:5432/${CATALOG_DB_NAME}
             DB_USER: ${CATALOG_DB_USER}
