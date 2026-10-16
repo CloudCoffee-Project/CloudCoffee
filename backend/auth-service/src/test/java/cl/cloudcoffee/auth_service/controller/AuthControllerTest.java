@@ -14,9 +14,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +40,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import cl.cloudcoffee.auth_service.messaging.AuthEventPublisher;
 import cl.cloudcoffee.auth_service.messaging.CloudCoffeeEvent;
+import cl.cloudcoffee.auth_service.model.TipoToken;
+import cl.cloudcoffee.auth_service.model.TokenAuth;
+import cl.cloudcoffee.auth_service.model.Usuario;
+import cl.cloudcoffee.auth_service.repository.TokenAuthRepository;
+import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 
 @SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 @AutoConfigureMockMvc
@@ -48,6 +60,12 @@ class AuthControllerTest extends JwtTestSupport {
 
     @Autowired
     private JwtDecoder jwtDecoder;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private TokenAuthRepository tokenAuthRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -94,6 +112,29 @@ class AuthControllerTest extends JwtTestSupport {
 
     private static String refreshJson(String refreshToken) {
         return "{\"refreshToken\": \"%s\"}".formatted(refreshToken);
+    }
+
+    private static String emailUnico(String prefijo) {
+        return prefijo + "-" + UUID.randomUUID() + "@cloudcoffee.cl";
+    }
+
+    private static String sha256(String token) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(token.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** Persiste un token con valor plano conocido para probar tipos y vigencias que el flujo HTTP no expone. */
+    private TokenAuth persistirToken(String email, String tokenPlano, Instant expiresAt, TipoToken tipo)
+            throws Exception {
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseThrow();
+        return tokenAuthRepository.saveAndFlush(new TokenAuth(usuario, sha256(tokenPlano), expiresAt, tipo));
+    }
+
+    private void registrarCliente(String email) throws Exception {
+        mvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registroJson(email)))
+                .andExpect(status().isCreated());
     }
 
     /** Registra un cliente con la contraseña estándar de las pruebas y confirma su correo. */
@@ -434,5 +475,151 @@ class AuthControllerTest extends JwtTestSupport {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(refreshJson(refreshTokenDispositivoB)))
                 .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"token\": null}", "{\"token\": \"\"}", "{\"token\": \"   \"}"})
+    void verificacionExigeToken(String cuerpo) throws Exception {
+        mvc.perform(post("/auth/verificacion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    void reenvioDeVerificacionInvalidaElTokenAnterior() throws Exception {
+        String email = emailUnico("reenvio-invalida-anterior");
+        registrarCliente(email);
+        String tokenOriginal = capturarTokenVerificacionPublicado(email);
+
+        mvc.perform(post("/auth/verificacion/reenviar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reenviarJson(email)))
+                .andExpect(status().isAccepted());
+        String tokenNuevo = capturarTokenVerificacionPublicado(email);
+        assertThat(tokenNuevo).isNotEqualTo(tokenOriginal);
+
+        mvc.perform(post("/auth/verificacion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(verificarJson(tokenOriginal)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("/problems/token-invalido"));
+        assertThat(usuarioRepository.findByEmail(email).orElseThrow().isVerificado()).isFalse();
+
+        mvc.perform(post("/auth/verificacion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(verificarJson(tokenNuevo)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rechazaTokenDeVerificacionExpiradoSinVerificarLaCuenta() throws Exception {
+        String email = emailUnico("verificacion-expirada");
+        registrarCliente(email);
+        persistirToken(email, "verificacion-expirada-" + email, Instant.now().minusSeconds(1),
+                TipoToken.VERIFICACION_CORREO);
+
+        mvc.perform(post("/auth/verificacion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(verificarJson("verificacion-expirada-" + email)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("/problems/token-invalido"));
+
+        assertThat(usuarioRepository.findByEmail(email).orElseThrow().isVerificado()).isFalse();
+    }
+
+    @Test
+    void verificacionNoAceptaTokensDeOtroTipo() throws Exception {
+        String email = emailUnico("verificacion-otro-tipo");
+        registrarCliente(email);
+        TokenAuth refresh = persistirToken(email, "refresh-" + email, Instant.now().plusSeconds(3600),
+                TipoToken.REFRESH);
+        TokenAuth recuperacion = persistirToken(email, "recuperacion-" + email, Instant.now().plusSeconds(3600),
+                TipoToken.RECUPERACION_PASSWORD);
+
+        for (String tokenPlano : new String[] {"refresh-" + email, "recuperacion-" + email}) {
+            mvc.perform(post("/auth/verificacion")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(verificarJson(tokenPlano)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        assertThat(usuarioRepository.findByEmail(email).orElseThrow().isVerificado()).isFalse();
+        assertThat(tokenAuthRepository.findById(refresh.getId()).orElseThrow().estaVigente()).isTrue();
+        assertThat(tokenAuthRepository.findById(recuperacion.getId()).orElseThrow().estaVigente()).isTrue();
+    }
+
+    @Test
+    void rechazaReenvioParaCuentaYaVerificada() throws Exception {
+        String email = emailUnico("reenvio-ya-verificada");
+        registrarYVerificarCliente(email);
+
+        mvc.perform(post("/auth/verificacion/reenviar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reenviarJson(email)))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("/problems/correo-ya-verificado"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"email\": \"\"}", "{\"email\": \"no-es-un-correo\"}"})
+    void reenvioExigeUnCorreoValido(String cuerpo) throws Exception {
+        mvc.perform(post("/auth/verificacion/reenviar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"refreshToken\": null}", "{\"refreshToken\": \"\"}",
+            "{\"refreshToken\": \"   \"}"})
+    void refreshExigeRefreshToken(String cuerpo) throws Exception {
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    void refreshRechazaTokenExpiradoSinEmitirNuevosTokens() throws Exception {
+        String email = emailUnico("refresh-expirado");
+        registrarYVerificarCliente(email);
+        persistirToken(email, "refresh-expirado-" + email, Instant.now().minusSeconds(1), TipoToken.REFRESH);
+        long cantidad = tokenAuthRepository.count();
+
+        mvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson("refresh-expirado-" + email)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.type").value("/problems/refresh-token-invalido"));
+
+        assertThat(tokenAuthRepository.count()).isEqualTo(cantidad);
+    }
+
+    @Test
+    void refreshNoAceptaTokensDeOtroTipo() throws Exception {
+        String email = emailUnico("refresh-otro-tipo");
+        registrarYVerificarCliente(email);
+        TokenAuth verificacion = persistirToken(email, "verificacion-" + email, Instant.now().plusSeconds(3600),
+                TipoToken.VERIFICACION_CORREO);
+        TokenAuth recuperacion = persistirToken(email, "recuperacion-" + email, Instant.now().plusSeconds(3600),
+                TipoToken.RECUPERACION_PASSWORD);
+
+        for (String tokenPlano : new String[] {"verificacion-" + email, "recuperacion-" + email}) {
+            mvc.perform(post("/auth/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(refreshJson(tokenPlano)))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.type").value("/problems/refresh-token-invalido"));
+        }
+
+        assertThat(tokenAuthRepository.findById(verificacion.getId()).orElseThrow().estaVigente()).isTrue();
+        assertThat(tokenAuthRepository.findById(recuperacion.getId()).orElseThrow().estaVigente()).isTrue();
     }
 }
