@@ -1,0 +1,11 @@
+# Solo para pruebas: Spring Boot carga este archivo además de classpath:/application.yml.
+# Las pruebas no dependen de un broker RabbitMQ: el consumidor se invoca directamente.
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+management:
+  health:
+    rabbit:
+      enabled: false

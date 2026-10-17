@@ -84,6 +84,124 @@ no duplica filas. Los UUID del primer campus, categoría y producto coinciden co
 los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
 esperados de filtros, búsqueda y comparación de precios sobre estos datos.
 
+### Personal por cafetería y cuentas de prueba (INT2-65)
+
+Auth guarda la cafetería de cada `CAJERO` y `ADMIN_CAFETERIA` en
+`asignaciones_cafeteria`. `cafeteria_id` es el UUID de catalog-service guardado por
+valor: no hay FK ni tablas compartidas entre servicios. Al emitir el access token,
+Auth agrega el claim `cafeteriaId` solo al personal con asignación; clientes,
+super administradores y personal sin asignación no lo reciben.
+
+Los servicios autorizan con `CafeteriaAccess` (common-security), que lee rol y
+cafetería solo del JWT firmado; encabezados, parámetros y cuerpos del frontend no
+cuentan. El personal opera únicamente su cafetería, `SUPER_ADMIN` opera cualquiera,
+y el resto recibe `403`. El decodificador rechaza con `401` un `cafeteriaId` que no
+sea UUID o que venga en un rol que no es de personal. El registro público siempre
+crea un `CLIENTE` sin asignación e ignora `rol` o `cafeteriaId` enviados.
+
+Primer uso: `GET /catalog/cafeterias/{cafeteriaId}/ofertas`, inventario completo
+de la cafetería (incluye ofertas agotadas).
+
+Con `AUTH_SPRING_PROFILES=docker,dev` (valor de `.env.example`), Auth carga estas
+cuentas verificadas, todas con contraseña `CafeDemo123!`:
+
+| Correo | Rol | Cafetería |
+|---|---|---|
+| `comprador@cloudcoffee.dev` | `CLIENTE` | — |
+| `cajero.central@cloudcoffee.dev` | `CAJERO` | Cafetería Central |
+| `admin.central@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Central |
+| `cajero.patio@cloudcoffee.dev` | `CAJERO` | Cafetería Patio Norte |
+| `admin.patio@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Patio Norte |
+| `cajero.sinasignar@cloudcoffee.dev` | `CAJERO` | sin asignación |
+
+Las cafeterías son las del seed de catálogo, así que conviene activar ambos perfiles
+`dev`. La asignación viaja en el access token: un cambio rige desde el siguiente
+login o refresh (máximo 15 minutos).
+
+### Pagos simulados en order-service (INT2-53)
+
+La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
+`usuario_id` del JWT y `monto_total` calculado por el servidor) y `pagos`, vinculados
+por FK. La base restringe el estado a `PENDIENTE`, `APROBADO` o `RECHAZADO`, exige
+montos positivos y no admite referencias repetidas de un mismo proveedor.
+
+Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
+no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
+un resultado contradictorio responde `409`. `@Version` impide que dos resultados
+concurrentes se sobrescriban. Una compra nunca tiene dos pagos `PENDIENTE` o
+`APROBADO` a la vez; desde INT2-77, un rechazo cierra la compra.
+
+`PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
+nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
+`PasarelaPagoSimulada` (`SIMULADO`) solo entrega una referencia, y la simulación
+del resultado y su consulta llegan con INT2-76.
+
+### Simulación de pago y consulta (INT2-76)
+
+Escenarios deterministas, sin proveedor externo: no se piden datos de tarjeta ni se
+usan Mercado Pago, `initPoint` o webhooks. Gateway enruta `/v1/compras/**` a
+order-service.
+
+| Endpoint | Respuesta |
+|---|---|
+| `POST /v1/compras/{compraId}/pago/simulacion` | `201` intento nuevo; `200` pendiente resuelto o clave repetida |
+| `GET /v1/compras/{compraId}/pago` | `200` último intento; `404` si no hay pagos |
+
+El comando recibe `{"escenario": "APROBADO" | "RECHAZADO" | "PENDIENTE"}` y el
+encabezado obligatorio `Idempotency-Key` (1-100 caracteres `A-Z a-z 0-9 . _ : -`).
+Cualquier otro campo, como tarjeta o importe, se ignora: el monto sale de la compra.
+
+- **Propietario:** solo el `sub` del JWT dueño de la compra puede simular o consultar.
+  Una compra ajena responde `404`, igual que una inexistente.
+- **Sin duplicados:** cada comando queda registrado por `(compra, clave)`. Repetir la
+  clave devuelve el mismo pago sin volver a ejecutarlo; la misma clave con otro
+  escenario responde `409`.
+- Un pago `PENDIENTE` se resuelve en el mismo registro. Solo se abre un pago si la
+  compra no tiene ninguno; una compra pagada, rechazada o expirada responde `409`.
+
+Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
+compras de prueba para las cuentas de INT2-65:
+
+| Compra | Dueño | Monto |
+|---|---|---|
+| `77777777-7777-4777-8777-777777777701` | `comprador@cloudcoffee.dev` | 3700 |
+| `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
+| `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
+
+### Resultado del pago sobre compras, reservas y stock (INT2-77)
+
+La compra tiene estado (`PENDIENTE_PAGO`, `PAGADA`, `RECHAZADA`, `EXPIRADA`) y
+reservas por oferta (`ACTIVA`, `CONFIRMADA`, `LIBERADA`) con vencimiento
+`cloudcoffee.reservas.vigencia` (15 minutos por defecto). El resultado del pago se
+aplica en la misma transacción que lo registra:
+
+| Resultado | Compra | Reservas |
+|---|---|---|
+| `APROBADO` | `PAGADA` | `CONFIRMADA` |
+| `RECHAZADO` | `RECHAZADA` | `LIBERADA` |
+| `PENDIENTE` | sin cambios | `ACTIVA` hasta `vence_en` |
+
+- `ExpiracionReservasJob` (cada `cloudcoffee.reservas.expiracion.intervalo`, 1 minuto
+  por defecto) expira las compras pendientes con reservas vencidas: rechaza el pago
+  pendiente con el motivo de reserva vencida, libera las reservas y deja la compra
+  `EXPIRADA`. Una aprobación que llega con la reserva ya vencida también se rechaza.
+- Un resultado repetido no reaplica nada ni vuelve a publicar; una transición
+  inválida responde `409` sin tocar compra ni reservas.
+- Tras un rechazo o vencimiento la compra queda cerrada: reintentar exige otra compra.
+
+**Eventos** (exchange `cloudcoffee.events`, sobre `CloudCoffeeEvent`):
+`order.pago.aprobado.v1` y `order.pago.rechazado.v1`, con `eventId` propio,
+`traceId` de la traza activa y payload `pagoId`, `compraId`, `usuarioId`, `estado`,
+`monto`, `motivoRechazo` (si aplica) e `items` (`ofertaId`, `cantidad`). Se publican
+después del commit; si RabbitMQ no responde, el resultado igual queda guardado y el
+error se registra (garantizar la entrega requiere una tabla outbox).
+
+**Stock:** catalog-service consume `order.pago.aprobado.v1` en la cola
+`catalog.events` (con DLQ) y descuenta el stock de cada oferta. Registra cada
+`eventId` en `eventos_procesados`, así que una entrega repetida no descuenta dos
+veces. Las compras de prueba del perfil `dev` traen reservas sobre ofertas de
+Cafetería Central.
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
@@ -174,6 +292,7 @@ Todas las rutas siguientes incluyen el prefijo público `/v1` al usar Gateway.
 | `GET /catalog/categorias` | `200`, lista de categorías | No |
 | `GET /catalog/productos` | `200`, página de productos | Sí |
 | `GET /catalog/productos/{id}/ofertas` | `200`, lista por precio ascendente | Sí |
+| `GET /catalog/cafeterias/{cafeteriaId}/ofertas` | `200`, inventario de la cafetería asignada | Sí (personal) |
 
 Logout (INT2-23), perfil (INT2-24) y cambio de contraseña (INT2-25) ya están
 integrados en la base actual; no quedan endpoints pendientes de la lista mínima
