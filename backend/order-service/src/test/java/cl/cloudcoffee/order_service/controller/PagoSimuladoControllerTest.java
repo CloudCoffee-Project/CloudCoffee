@@ -112,17 +112,17 @@ class PagoSimuladoControllerTest extends JwtTestSupport {
     }
 
     @Test
-    void trasUnRechazoUnaClaveNuevaAbreOtroIntento() throws Exception {
+    void trasUnRechazoLaCompraQuedaCerrada() throws Exception {
+        // INT2-77: el rechazo libera las reservas; una clave nueva no reabre la compra.
         Compra compra = compra("1500.00");
         simular(compra, dueno, "clave-1", "RECHAZADO").andExpect(status().isCreated());
 
         simular(compra, dueno, "clave-2", "APROBADO")
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.estado").value("APROBADO"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("/problems/compra-cerrada"));
 
-        assertThat(pagosDe(compra)).extracting(Pago::getEstado)
-                .containsExactly(EstadoPago.RECHAZADO, EstadoPago.APROBADO);
-        consultar(compra, dueno).andExpect(jsonPath("$.estado").value("APROBADO"));
+        assertThat(pagosDe(compra)).extracting(Pago::getEstado).containsExactly(EstadoPago.RECHAZADO);
+        consultar(compra, dueno).andExpect(jsonPath("$.estado").value("RECHAZADO"));
     }
 
     @Test

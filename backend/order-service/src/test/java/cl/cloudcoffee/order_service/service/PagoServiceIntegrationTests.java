@@ -71,18 +71,16 @@ class PagoServiceIntegrationTests extends JwtTestSupport {
     }
 
     @Test
-    void permiteReintentarTrasUnRechazo() {
+    void unRechazoCierraLaCompraYNoAdmiteOtroPago() {
+        // INT2-77: el rechazo libera las reservas; reintentar exige una compra nueva.
         Compra compra = compra("1500.00");
         Pago rechazado = pagoService.iniciarPago(compra.getId());
         pagoService.registrarResultado(rechazado.getId(), EstadoPago.RECHAZADO, "Tarjeta rechazada");
 
-        Pago reintento = pagoService.iniciarPago(compra.getId());
+        assertConflicto(() -> pagoService.iniciarPago(compra.getId()));
 
         assertThat(pagos.findByCompraIdOrderByCreatedAtAsc(compra.getId()))
-                .extracting(Pago::getId, Pago::getEstado)
-                .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(rechazado.getId(), EstadoPago.RECHAZADO),
-                        org.assertj.core.groups.Tuple.tuple(reintento.getId(), EstadoPago.PENDIENTE));
+                .extracting(Pago::getEstado).containsExactly(EstadoPago.RECHAZADO);
     }
 
     @Test
