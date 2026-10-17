@@ -31,4 +31,9 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         ORDER BY p.name ASC
     """)
     List<Offer> findInventoryByCafeteria(@Param("cafeteriaId") UUID cafeteriaId);
+
+    // INT2-77: serializa los descuentos de stock de una misma oferta.
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Offer o WHERE o.id = :id")
+    java.util.Optional<Offer> findForUpdate(@Param("id") UUID id);
 }
