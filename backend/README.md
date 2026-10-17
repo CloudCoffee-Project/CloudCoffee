@@ -128,8 +128,8 @@ montos positivos y no admite referencias repetidas de un mismo proveedor.
 Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
 no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
 un resultado contradictorio responde `409`. `@Version` impide que dos resultados
-concurrentes se sobrescriban. Una compra admite varios intentos de pago, pero nunca
-dos `PENDIENTE` o `APROBADO` a la vez: tras un rechazo se puede reintentar.
+concurrentes se sobrescriban. Una compra nunca tiene dos pagos `PENDIENTE` o
+`APROBADO` a la vez; desde INT2-77, un rechazo cierra la compra.
 
 `PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
 nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
@@ -156,9 +156,8 @@ Cualquier otro campo, como tarjeta o importe, se ignora: el monto sale de la com
 - **Sin duplicados:** cada comando queda registrado por `(compra, clave)`. Repetir la
   clave devuelve el mismo pago sin volver a ejecutarlo; la misma clave con otro
   escenario responde `409`.
-- Un pago `PENDIENTE` se resuelve en el mismo registro. Solo se abre un intento nuevo
-  si la compra no tiene pagos o el último fue rechazado; una compra ya aprobada
-  responde `409`.
+- Un pago `PENDIENTE` se resuelve en el mismo registro. Solo se abre un pago si la
+  compra no tiene ninguno; una compra pagada, rechazada o expirada responde `409`.
 
 Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
 compras de prueba para las cuentas de INT2-65:
@@ -168,6 +167,40 @@ compras de prueba para las cuentas de INT2-65:
 | `77777777-7777-4777-8777-777777777701` | `comprador@cloudcoffee.dev` | 3700 |
 | `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
 | `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
+
+### Resultado del pago sobre compras, reservas y stock (INT2-77)
+
+La compra tiene estado (`PENDIENTE_PAGO`, `PAGADA`, `RECHAZADA`, `EXPIRADA`) y
+reservas por oferta (`ACTIVA`, `CONFIRMADA`, `LIBERADA`) con vencimiento
+`cloudcoffee.reservas.vigencia` (15 minutos por defecto). El resultado del pago se
+aplica en la misma transacción que lo registra:
+
+| Resultado | Compra | Reservas |
+|---|---|---|
+| `APROBADO` | `PAGADA` | `CONFIRMADA` |
+| `RECHAZADO` | `RECHAZADA` | `LIBERADA` |
+| `PENDIENTE` | sin cambios | `ACTIVA` hasta `vence_en` |
+
+- `ExpiracionReservasJob` (cada `cloudcoffee.reservas.expiracion.intervalo`, 1 minuto
+  por defecto) expira las compras pendientes con reservas vencidas: rechaza el pago
+  pendiente con el motivo de reserva vencida, libera las reservas y deja la compra
+  `EXPIRADA`. Una aprobación que llega con la reserva ya vencida también se rechaza.
+- Un resultado repetido no reaplica nada ni vuelve a publicar; una transición
+  inválida responde `409` sin tocar compra ni reservas.
+- Tras un rechazo o vencimiento la compra queda cerrada: reintentar exige otra compra.
+
+**Eventos** (exchange `cloudcoffee.events`, sobre `CloudCoffeeEvent`):
+`order.pago.aprobado.v1` y `order.pago.rechazado.v1`, con `eventId` propio,
+`traceId` de la traza activa y payload `pagoId`, `compraId`, `usuarioId`, `estado`,
+`monto`, `motivoRechazo` (si aplica) e `items` (`ofertaId`, `cantidad`). Se publican
+después del commit; si RabbitMQ no responde, el resultado igual queda guardado y el
+error se registra (garantizar la entrega requiere una tabla outbox).
+
+**Stock:** catalog-service consume `order.pago.aprobado.v1` en la cola
+`catalog.events` (con DLQ) y descuenta el stock de cada oferta. Registra cada
+`eventId` en `eventos_procesados`, así que una entrega repetida no descuenta dos
+veces. Las compras de prueba del perfil `dev` traen reservas sobre ofertas de
+Cafetería Central.
 
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
