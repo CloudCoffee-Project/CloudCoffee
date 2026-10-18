@@ -1,8 +1,10 @@
 # Línea base de tiempo de arranque (INT4-113)
 
 Cuánto tarda la app en mostrar su primera pantalla útil. **Es una medición, no una
-optimización**: no se cambió código de la app para mejorar nada, solo se instrumentó
-la medición desde afuera y se dejó el número registrado con su contexto.
+optimización**: no se cambió código de la app para mejorar nada. La medición web se
+instrumentó desde afuera (sin tocar la app) y la del teléfono con una marca temporal de
+log que **se revirtió** al terminar; en el repositorio no queda ningún cambio de código
+por esta tarea.
 
 ## Resumen (la tabla)
 
@@ -34,9 +36,10 @@ Contexto de esa tabla:
   escritorio. **No** son comparables con el arranque nativo en un teléfono (que
   además incluye el arranque de la app nativa, la carga del bundle Hermes y el
   splash). Ver "Alcance y limitaciones".
-- **Medición en teléfono**: existe además una estimación informal de ~7,5 s abriendo
-  la app en **Expo Go** (modo desarrollo). Está documentada aparte y tampoco es
-  comparable con esta tabla: ver "Estimación en teléfono (Expo Go, modo desarrollo)".
+- **Medición en teléfono**: hay además una medición instrumentada en un **teléfono
+  real** abriendo la app en **Expo Go** (modo desarrollo), con mediana **5 795 ms**.
+  Tampoco es comparable con esta tabla web (son caminos distintos); ver "Medición en
+  teléfono (Expo Go, modo desarrollo)".
 
 ## Qué se midió exactamente
 
@@ -129,48 +132,99 @@ mediciones; no se investigó la causa porque no afecta a la métrica principal),
 primera corrida en frío tampoco. La pantalla útil sí quedó registrada en las **20
 corridas**.
 
-## Estimación en teléfono (Expo Go, modo desarrollo)
+## Medición en teléfono (Expo Go, modo desarrollo)
 
-| Escenario                                         | Tiempo | Repeticiones                           | Método                                              | Dispositivo                                         |
-| ------------------------------------------------- | -----: | -------------------------------------- | --------------------------------------------------- | --------------------------------------------------- |
-| Abrir la app en Expo Go escaneando el QR de Metro | ~7,5 s | 1 estimación informal (sin cronómetro) | escaneo del QR y apertura manual, a ojo del usuario | teléfono Android del integrante (modelo por anotar) |
+Mediana de la métrica **"ms desde que el teléfono pide el bundle de JS al servidor de
+Metro hasta que la portada está pintada y usable en pantalla"**, abriendo la app en
+**Expo Go** sobre Wi-Fi:
+
+| Modo                                                                             |      Mediana |    Media |      Mín |      Máx | Repeticiones (n) | Fallos |
+| -------------------------------------------------------------------------------- | -----------: | -------: | -------: | -------: | ---------------: | -----: |
+| Apertura en frío de Expo Go (modo desarrollo; bundle de JS de 8,97 MB por Wi-Fi) | **5 795 ms** | 5 956 ms | 5 555 ms | 6 519 ms |                3 |      0 |
+
+Contexto de esa tabla:
+
+- **Métrica**: instante en que la portada (`/portada`) queda pintada y usable en el
+  teléfono, con **el mismo criterio de "primera pantalla útil"** que la tabla web
+  (botones _Crear cuenta_ e _Iniciar sesión_ en pantalla). El cronómetro arranca cuando
+  el teléfono **pide el bundle de JS** al servidor de Metro (ver "Método").
+- **Dispositivo**: **Samsung Galaxy S20 FE** (2020). El integrante indicó "la última
+  versión de Android" de su teléfono; para ese modelo la última es **Android 13
+  (One UI 5.1)**. Cliente **Expo Go 57.0.9** (la última publicada para SDK 57 según
+  `api.expo.dev/v2/versions/latest`, consultada el 2026-10-18).
+- **Modo**: **desarrollo**, no producción. La app corre dentro de Expo Go: el código no
+  viene compilado dentro del APK, sino que Expo Go **descarga el bundle de JS desde
+  Metro por Wi-Fi** (**8 971 390 B ≈ 8,97 MB**) y lo interpreta con Hermes en el teléfono.
+- **Servidor**: Metro en la PC del integrante (Ethernet), con el teléfono en la misma red
+  local. Metro estaba **caliente**: el bundle ya estaba construido, así que los 5 795 ms
+  incluyen servirlo, descargarlo e interpretarlo, pero **no** el empaquetado inicial (que
+  la primera vez tardó ~22,5 s y se hizo antes de medir, a propósito).
+- **Repetibilidad**: **3 aperturas en frío** (se cerró Expo Go desde las apps recientes
+  antes de cada una). Es el mínimo acordado para reportar mediana; con 5-10 datos el
+  número quedaría más firme.
+- **Fecha**: 2026-10-18, entre las 19:46 y las 19:48 (hora local del equipo de medición).
+
+### Valores crudos
+
+Cada fila es una apertura. "Pedido del bundle" y "App ejecutándose" salen del log de
+Metro; "Portada usable" es la marca que envió el propio teléfono:
+
+|   # | Pedido del bundle | App ejecutándose | Portada usable |  **Δ total** | Δ hasta app viva | Último tramo (app viva → portada) |
+| --: | ----------------: | ---------------: | -------------: | -----------: | ---------------: | --------------------------------: |
+|   1 |       19:46:29,78 |      19:46:35,23 |    19:46:36,30 | **6 519 ms** |         5 449 ms |                          1 070 ms |
+|   2 |       19:46:57,57 |      19:47:02,14 |    19:47:03,12 | **5 555 ms** |         4 572 ms |                            983 ms |
+|   3 |       19:48:15,26 |      19:48:20,04 |    19:48:21,05 | **5 795 ms** |         4 780 ms |                          1 015 ms |
 
 Cómo leerla:
 
-- Es una **estimación informal aportada por un integrante**, no una medición
-  instrumentada: se tomó una vez, a ojo, sin cronómetro ni repeticiones. Por eso no
-  tiene mediana y no cumple por sí sola el criterio de la tarea; está acá porque es el
-  único dato disponible **de un teléfono real**.
-- **No es un arranque en modo producción.** En Expo Go el código no viene compilado
-  dentro de la app: Expo Go descarga el bundle JS desde el servidor de Metro por la
-  red (un bundle de tamaño comparable a los ~1,7 MB que se midieron en web, pero por
-  Wi-Fi y sin optimizar), y además arranca la cáscara de Expo Go. Eso explica que esté
-  **unas 55-60 veces** por encima de los 132/117 ms web, que se midieron con los
-  archivos ya en disco.
-- **No es comparable con la tabla web** ni con un APK de release: son tres caminos
-  distintos (web local, Expo Go dev por red, app nativa release). Cada uno necesita
-  su propia línea base.
-- Después de la primera apertura, Expo Go suele reusar el bundle ya descargado, así
-  que las aperturas siguientes son bastante más rápidas. Si los ~7,5 s son de la
-  primera apertura tras escanear el QR, corresponden al caso "frío en desarrollo".
+- **La mediana es 5 795 ms** (5,8 s). La media (5 956 ms) está algo por encima porque la
+  corrida 1 fue la más lenta.
+- **Los 3 intentos se parecen**: 5 555 a 6 519 ms (ventana de ~1 s). Un mismo camino, un
+  mismo dispositivo y una misma red: el número es estable dentro de lo esperable.
+- **Qué domina el tiempo**: casi todo es **descargar e interpretar el bundle de
+  desarrollo**. En los tres intentos, desde que el propio código de la app empieza a
+  ejecutarse hasta que la portada está pintada pasaron **1 070 / 983 / 1 015 ms** — es
+  decir **≈1,0 s constante**. El resto (4,6-5,4 s) es bajar los 8,97 MB por Wi-Fi y que
+  Hermes los parsee y ejecute.
+- **Contra la estimación informal previa (~7,5 s)**: los dos números son compatibles. A
+  estos 5,8 s hay que sumarles lo que pasa **antes** de pedir el bundle: abrir el proyecto
+  en Expo Go (por QR escaneado o desde la lista de recientes) y el pedido del _manifest_.
+  Ese tramo no está en la tabla porque no deja marca en el log; según el caso va desde
+  unas décimas hasta un par de segundos, que es justo lo que explica la diferencia entre
+  los 5,8 s medidos y los ~7,5 s percibidos a ojo. No se contradicen: miden extremos
+  distintos del mismo arranque.
+- **No es comparable con la tabla web** (132/117 ms) ni con un APK de release: son tres
+  caminos distintos (web local con archivos ya en disco, Expo Go dev por red, app nativa
+  release). Los 5,8 s miden, sobre todo, **el costo del modo desarrollo**, no un problema
+  de la app.
 
-Para convertirla en una medición en regla (opcional, 5 minutos, sin instalar nada):
+### Método
 
-1. Cerrar Expo Go desde las apps recientes del teléfono (para que la apertura sea en
-   frío).
-2. Abrir la app y cronometrar desde que se escanea el QR hasta que aparece la portada
-   con los botones _Crear cuenta_ e _Iniciar sesión_ (la misma definición de "primera
-   pantalla útil" de esta medición).
-3. Repetir **5 veces** (idealmente 10) y anotar cada tiempo; la línea base es la
-   **mediana**.
-4. Anotar el modelo del teléfono, la versión de Android y la versión de Expo Go, para
-   que el número sea reproducible.
+- **De dónde sale el inicio**: del propio log de Metro (`Android Bundled <ms> …`). La
+  hora de esa línea **menos** su duración da el instante en que el teléfono pidió el
+  bundle.
+- **De dónde sale el fin**: de una **instrumentación temporal** (una sola línea) en
+  `src/app/(auth)/portada.tsx`: un `console.warn('[INT4-113] PORTADA_USABLE')` dentro de
+  un `requestAnimationFrame` en un `useEffect` de montaje, o sea **después del primer
+  pintado** de la portada. El log del dispositivo llega al servidor de Metro, que lo
+  imprime con la hora de la PC.
+- **La instrumentación se revirtió**: terminada la medición, `portada.tsx` volvió a su
+  versión del repositorio (`git checkout`) y se verificó que no quedara ningún rastro del
+  marcador. **No se commiteó ningún cambio en el código de la app**: es una medición, no
+  una optimización.
+- **Cierre de la app**: el integrante cerró Expo Go desde las apps recientes antes de
+  cada apertura, para que cada una fuera en frío.
+- **Discriminación de eventos**: el log también registra recargas de _Fast Refresh_
+  (HMR), que repintan la portada sin que haya apertura. Solo se contaron las marcas
+  `PORTADA_USABLE` **posteriores a un pedido de bundle nuevo**. Se descartó, además, un
+  pedido de bundle a las 19:39:14 seguido por un intento de apertura que **no llegó a
+  ejecutar la app** (sin logs): no es una apertura válida.
+- **Precisión**: la hora del pedido del bundle es exacta (log del servidor). La marca de
+  fin arrastra el retardo de transporte del log del dispositivo al servidor (decenas de
+  ms) y el desfase entre el primer pintado y el `requestAnimationFrame` (un cuadro). En
+  una métrica de ~5,8 s, ese error (<~50 ms) es despreciable.
 
-Con precisión automática en lugar de cronómetro humano, la alternativa es conectar el
-teléfono por USB y usar los _timestamps_ de `adb logcat` para marcar el arranque y la
-aparición de la portada.
-
-## Lectura de los resultados
+## Lectura de los resultados (tabla web)
 
 - **La mediana es lo que vale**: 132 ms en frío y 117 ms en caliente. La media del
   modo frío (153 ms) está inflada por la **primera corrida (330 ms)**, que es un
@@ -193,9 +247,10 @@ aparición de la portada.
 
 - **Es la ruta web, no el arranque nativo.** Un teléfono real arranca el binario,
   carga el bundle Hermes y muestra el splash nativo antes de que exista la primera
-  pantalla útil. Nada de eso está en estos 132/117 ms. La única referencia de teléfono
-  que hay es la estimación de ~7,5 s en Expo Go (modo desarrollo), que mide otro
-  camino; la comparación nativa real queda pendiente (ver "Siguiente paso").
+  pantalla útil. Nada de eso está en estos 132/117 ms. La referencia de teléfono que hay
+  es la medición en **Expo Go** (modo desarrollo, mediana 5 795 ms), que mide otro
+  camino; la comparación nativa real (APK de release) queda pendiente (ver "Siguiente
+  paso").
 - **Es una línea base del commit `e892648`**: sirve para comparar contra sí misma
   (mismo método, mismo equipo, mismas condiciones) cuando alguien cambie algo que
   afecte el arranque. No es un valor absoluto de performance de la app.
@@ -205,18 +260,23 @@ aparición de la portada.
   `e892648`** (solo archivos versionados) y se midió esa. Ninguno de los archivos
   modificados locales pertenece a la ruta de arranque
   (`_layout.tsx`, `portada.tsx`, `AuthContext.tsx`, `sessionStorage.ts`).
+- La medición en teléfono (Expo Go) se hizo sobre el **árbol de trabajo** de ese momento
+  (commit `e892648` más los cambios locales de otros integrantes), no sobre una copia
+  limpia. Los archivos de la ruta de arranque sí eran los del commit (la instrumentación
+  temporal en `portada.tsx` se revirtió), y en modo desarrollo el tiempo está dominado por
+  la descarga e interpretación del bundle, no por detalles de la app.
 - El servidor es local: se elimina la latencia de red. En producción, un arranque
   web real es peor (descarga del bundle). La medición en frío con caché deshabilitada
   se acerca a ese escenario, pero no lo reproduce del todo.
 
 ## Siguiente paso
 
-Hay dos caminos, en orden de costo:
+La medición en teléfono (Expo Go) ya está hecha: mediana **5 795 ms**, n=3. Queda, en
+orden de costo:
 
-1. **Formalizar la estimación de Expo Go** (barato, sin instalar nada): seguir el
-   protocolo de 5-10 repeticiones de la sección "Estimación en teléfono", anotar el
-   modelo del teléfono y quedarse con la mediana. Da un número de teléfono real, pero
-   sigue siendo modo desarrollo.
+1. **Ampliar la muestra en Expo Go** (barato, sin instalar nada): repetir el mismo
+   protocolo hasta 5-10 aperturas para afianzar la mediana. El número seguiría siendo de
+   modo desarrollo.
 2. **Medir el arranque nativo de release** (es el número que de verdad interesa):
    instalar el APK (`preview` de EAS o `npx expo run:android --variant release`) en un
    teléfono o emulador y medir el arranque en frío, con el mismo criterio de "primera
@@ -228,6 +288,7 @@ Hay dos caminos, en orden de costo:
    - 10 repeticiones y mediana.
 
 Ese segundo camino requiere un JDK 17 y/o credenciales de Expo, que no estaban
-disponibles en la máquina donde se hizo esta medición. Mientras tanto, la tabla web de
-arriba es la línea base formal y es la que se debe repetir cuando se quiera saber si el
-arranque mejoró o empeoró.
+disponibles en la máquina donde se hizo esta medición. Mientras tanto quedan **dos líneas
+base medidas y trazables**: la web (132 / 117 ms) y la de Expo Go (5 795 ms). Cada una
+sirve para comparar **contra sí misma** (mismo método, mismo equipo) cuando alguien cambie
+algo que afecte el arranque; no son intercambiables entre sí.
