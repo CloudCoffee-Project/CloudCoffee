@@ -16,7 +16,7 @@ function defaultHost(): string {
 
 const GATEWAY_URL = `http://${defaultHost()}:${GATEWAY_PORT}`;
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? GATEWAY_URL;
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || GATEWAY_URL;
 
 // Endpoint STOMP/WebSocket, mismo host/patrón Platform-aware que el gateway
 // HTTP. El backend todavía no expone /ws: se centraliza acá para que el
@@ -25,6 +25,6 @@ const WS_PATH = '/ws';
 
 const GATEWAY_WS_URL = `http://${defaultHost()}:${GATEWAY_PORT}${WS_PATH}`;
 
-export const WS_BASE_URL = process.env.EXPO_PUBLIC_WS_URL ?? GATEWAY_WS_URL;
+export const WS_BASE_URL = process.env.EXPO_PUBLIC_WS_URL || GATEWAY_WS_URL;
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
