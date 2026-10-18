@@ -34,6 +34,9 @@ Contexto de esa tabla:
   escritorio. **No** son comparables con el arranque nativo en un teléfono (que
   además incluye el arranque de la app nativa, la carga del bundle Hermes y el
   splash). Ver "Alcance y limitaciones".
+- **Medición en teléfono**: existe además una estimación informal de ~7,5 s abriendo
+  la app en **Expo Go** (modo desarrollo). Está documentada aparte y tampoco es
+  comparable con esta tabla: ver "Estimación en teléfono (Expo Go, modo desarrollo)".
 
 ## Qué se midió exactamente
 
@@ -126,6 +129,47 @@ mediciones; no se investigó la causa porque no afecta a la métrica principal),
 primera corrida en frío tampoco. La pantalla útil sí quedó registrada en las **20
 corridas**.
 
+## Estimación en teléfono (Expo Go, modo desarrollo)
+
+| Escenario                                         | Tiempo | Repeticiones                           | Método                                              | Dispositivo                                         |
+| ------------------------------------------------- | -----: | -------------------------------------- | --------------------------------------------------- | --------------------------------------------------- |
+| Abrir la app en Expo Go escaneando el QR de Metro | ~7,5 s | 1 estimación informal (sin cronómetro) | escaneo del QR y apertura manual, a ojo del usuario | teléfono Android del integrante (modelo por anotar) |
+
+Cómo leerla:
+
+- Es una **estimación informal aportada por un integrante**, no una medición
+  instrumentada: se tomó una vez, a ojo, sin cronómetro ni repeticiones. Por eso no
+  tiene mediana y no cumple por sí sola el criterio de la tarea; está acá porque es el
+  único dato disponible **de un teléfono real**.
+- **No es un arranque en modo producción.** En Expo Go el código no viene compilado
+  dentro de la app: Expo Go descarga el bundle JS desde el servidor de Metro por la
+  red (un bundle de tamaño comparable a los ~1,7 MB que se midieron en web, pero por
+  Wi-Fi y sin optimizar), y además arranca la cáscara de Expo Go. Eso explica que esté
+  **unas 55-60 veces** por encima de los 132/117 ms web, que se midieron con los
+  archivos ya en disco.
+- **No es comparable con la tabla web** ni con un APK de release: son tres caminos
+  distintos (web local, Expo Go dev por red, app nativa release). Cada uno necesita
+  su propia línea base.
+- Después de la primera apertura, Expo Go suele reusar el bundle ya descargado, así
+  que las aperturas siguientes son bastante más rápidas. Si los ~7,5 s son de la
+  primera apertura tras escanear el QR, corresponden al caso "frío en desarrollo".
+
+Para convertirla en una medición en regla (opcional, 5 minutos, sin instalar nada):
+
+1. Cerrar Expo Go desde las apps recientes del teléfono (para que la apertura sea en
+   frío).
+2. Abrir la app y cronometrar desde que se escanea el QR hasta que aparece la portada
+   con los botones _Crear cuenta_ e _Iniciar sesión_ (la misma definición de "primera
+   pantalla útil" de esta medición).
+3. Repetir **5 veces** (idealmente 10) y anotar cada tiempo; la línea base es la
+   **mediana**.
+4. Anotar el modelo del teléfono, la versión de Android y la versión de Expo Go, para
+   que el número sea reproducible.
+
+Con precisión automática en lugar de cronómetro humano, la alternativa es conectar el
+teléfono por USB y usar los _timestamps_ de `adb logcat` para marcar el arranque y la
+aparición de la portada.
+
 ## Lectura de los resultados
 
 - **La mediana es lo que vale**: 132 ms en frío y 117 ms en caliente. La media del
@@ -149,8 +193,9 @@ corridas**.
 
 - **Es la ruta web, no el arranque nativo.** Un teléfono real arranca el binario,
   carga el bundle Hermes y muestra el splash nativo antes de que exista la primera
-  pantalla útil. Nada de eso está en estos 132/117 ms. La comparación con Android/iOS
-  queda pendiente (ver "Siguiente paso").
+  pantalla útil. Nada de eso está en estos 132/117 ms. La única referencia de teléfono
+  que hay es la estimación de ~7,5 s en Expo Go (modo desarrollo), que mide otro
+  camino; la comparación nativa real queda pendiente (ver "Siguiente paso").
 - **Es una línea base del commit `e892648`**: sirve para comparar contra sí misma
   (mismo método, mismo equipo, mismas condiciones) cuando alguien cambie algo que
   afecte el arranque. No es un valor absoluto de performance de la app.
@@ -166,16 +211,23 @@ corridas**.
 
 ## Siguiente paso
 
-Para tener el número "de la app en un teléfono" hace falta medir el arranque nativo
-en un dispositivo Android real (o emulador), con el mismo criterio de "primera
-pantalla útil", por ejemplo:
+Hay dos caminos, en orden de costo:
 
-1. Instalar el APK (`preview` de EAS o `npx expo run:android --variant release`).
-2. `adb shell am force-stop cl.cloudcoffee.mobile` entre corridas.
-3. Medir el arranque en frío (`adb shell am start -W`) **y** el momento en que la
-   portada ya responde, repitiendo 10 veces y usando la mediana.
+1. **Formalizar la estimación de Expo Go** (barato, sin instalar nada): seguir el
+   protocolo de 5-10 repeticiones de la sección "Estimación en teléfono", anotar el
+   modelo del teléfono y quedarse con la mediana. Da un número de teléfono real, pero
+   sigue siendo modo desarrollo.
+2. **Medir el arranque nativo de release** (es el número que de verdad interesa):
+   instalar el APK (`preview` de EAS o `npx expo run:android --variant release`) en un
+   teléfono o emulador y medir el arranque en frío, con el mismo criterio de "primera
+   pantalla útil":
 
-Eso requiere un JDK 17 y/o credenciales de Expo, que no estaban disponibles en la
-máquina donde se hizo esta medición. Mientras tanto, esta tabla es la línea base
-disponible y es la que se debe repetir cuando se quiera saber si el arranque mejoró
-o empeoró.
+   - `adb shell am force-stop cl.cloudcoffee.mobile` entre corridas.
+   - `adb shell am start -W` para el arranque nativo **y** el momento en que la portada
+     ya responde.
+   - 10 repeticiones y mediana.
+
+Ese segundo camino requiere un JDK 17 y/o credenciales de Expo, que no estaban
+disponibles en la máquina donde se hizo esta medición. Mientras tanto, la tabla web de
+arriba es la línea base formal y es la que se debe repetir cuando se quiera saber si el
+arranque mejoró o empeoró.
