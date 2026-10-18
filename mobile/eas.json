@@ -7,14 +7,12 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "environment": "development",
       "android": {
         "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
-      "environment": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -23,8 +21,6 @@
       }
     },
     "production": {
-      "environment": "production",
-      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       }

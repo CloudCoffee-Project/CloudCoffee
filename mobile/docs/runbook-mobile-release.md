@@ -20,9 +20,9 @@ Un build es reproducible si alguien repite estos pasos desde `main`:
   el workflow (fuera de `mobile/`).
 - El origen del número de versión (`cli.appVersionSource`) está fijado en `remote`
   (ver "Versiones de app").
-- Cada perfil de `mobile/eas.json` declara su `environment` de forma explícita
-  (`development`, `preview`, `production`): ese es el conjunto de variables de
-  entorno de EAS que el build va a usar.
+- El `environment` de cada perfil (la llave que decide qué variables de EAS aplican
+  al build) hoy lo infiere EAS automáticamente a partir del perfil; `mobile/eas.json`
+  no lo declara de forma explícita (ver "Observaciones conocidas").
 
 ## Requisitos
 
@@ -126,9 +126,11 @@ administra **EAS en sus servidores**, no el código del repo. Con eso, un build
 lanzado desde CI y uno lanzado desde la laptop de alguien usan la misma secuencia y
 no chocan por números repetidos.
 
-- El perfil `production` además fija `"autoIncrement": true`: **cada build de
-  producción sube el contador remoto en 1**. Sin eso, la primera subida a Play
-  funcionaría pero la segunda se rechazaría por `versionCode` duplicado. Los
+- El perfil `production` **no** tiene `autoIncrement`: todas las builds de
+  producción usan el mismo `versionCode` remoto. La primera subida a Play funciona,
+  pero la segunda se rechaza por `versionCode` duplicado. Hasta que el equipo decida
+  si agregar `autoIncrement` a `eas.json` (ver "Observaciones conocidas"), sube el
+  contador a mano antes de cada subida con `npx eas build:version:set`. Los
   perfiles comparten un único contador remoto por plataforma.
 - Para inicializar o corregir el número remoto (por ejemplo, si Google Play ya
   tiene un `versionCode` mayor): correr `npx eas build:version:set` desde `mobile/`
@@ -145,5 +147,36 @@ no chocan por números repetidos.
 | La app instalada en un celular apunta a `10.0.2.2` o `localhost` | Falta `EXPO_PUBLIC_API_URL` en EAS: sin ella la app usa el default de emulador. Verificar con `npx eas env:list`, darla de alta y **relanzar el build** (la URL va horneada en el bundle).                      |
 | La app apunta a la API equivocada                                | La URL vive en **EAS** (no en GitHub): actualizarla con `npx eas env:set` y relanzar el build; si cambia el dominio del gateway, actualizar también `vars.EXPO_PUBLIC_API_URL` (alimenta el export web del CI). |
 | Build de `production`/iOS falla en EAS por credenciales          | Nadie configuró las credenciales de Apple en EAS → https://expo.dev/accounts/cloudcoffee-team/projects/mobile/credentials (no aplica a `preview`/iOS, que es de simulador)                                      |
-| Play rechaza la subida: `version code ... already used`          | El perfil `production` debe mantener `"autoIncrement": true`; o subir el contador manualmente con `npx eas build:version:set`.                                                                                  |
+| Play rechaza la subida: `version code ... already used`          | `production` no tiene `autoIncrement`: subir el contador con `npx eas build:version:set` antes de volver a subir (ver "Versiones de app").                                                                      |
 | EAS rechaza el build por cuota                                   | Plan Free agotado el mes: esperar al reinicio de cuota o que un owner gestione la facturación.                                                                                                                  |
+
+## Observaciones conocidas (escritas, no accionadas)
+
+Hallazgos de la revisión de INT4-112 que **no se corrigieron a propósito**: son
+trabajo de otros integrantes o archivos fuera de `mobile/`, así que solo quedan
+documentados aquí para que quien los quiera retomar sepa el contexto.
+
+1. **`production` sin `autoIncrement`** (`mobile/eas.json`, perfil de otros): con
+   `appVersionSource: remote` todas las builds de producción usan el mismo
+   `versionCode`, y la **segunda** subida a Play se rechaza por duplicado. Mientras
+   tanto, el workaround es subir el contador a mano con
+   `npx eas build:version:set` antes de cada subida. Si el equipo lo aprueba, el
+   fix es una línea: `"autoIncrement": true` en `build.production`.
+2. **Perfiles sin `environment` explícito** (`mobile/eas.json`, perfil de otros):
+   hoy EAS infiere el ambiente de cada perfil y funciona, pero la recomendación
+   oficial es declararlo (`"environment": "development" | "preview" | "production"`
+   en cada perfil) para que un cambio futuro de un perfil no cambie en silencio el
+   conjunto de variables de EAS que aplica.
+3. **`EXPO_PUBLIC_API_URL` vacía no cae al default** (`mobile/src/config/api.ts`,
+   código de otros): se lee con `??`, que no reemplaza `""`. Si la variable existe
+   pero llega vacía, el bundle queda con `baseURL` vacío. Mitigación hoy: verificar
+   que `vars.EXPO_PUBLIC_API_URL` en GitHub tenga valor (ver Requisitos).
+4. **Workflow (fuera de `mobile/`, no tocable por esta ticket)**:
+   `mobile-release.yml` pasa `EXPO_PUBLIC_API_URL` como entorno de los steps de
+   `eas build`, pero eso **no llega** al builder de EAS (la fuente real son las
+   variables de EAS, ver Requisitos); además instala `eas-cli@latest` sin pinear.
+5. **`expo-doctor` con 2 checks en rojo (preexistentes)**: los paquetes `npm` e
+   `install` están instalados por error en `devDependencies`, y ~19 dependencias
+   están desalineadas respecto al SDK 57 (incluye `@types/jest` 30 vs. 29
+   esperado). Arreglarlo toca `package-lock.json` y puede romper tests: es un
+   ticket aparte (`npx expo install --check`).
