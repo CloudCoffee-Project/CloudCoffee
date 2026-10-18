@@ -8,6 +8,7 @@ import {
   getRefreshToken,
   httpClient,
   isAccessTokenExpired,
+  mensajeDeErrorApi,
   onTokensCambiados,
   refreshAccessToken,
   setAccessToken,
@@ -86,6 +87,64 @@ describe('httpClient base (INT4-16)', () => {
       expect(resultado).toBeInstanceOf(ApiError);
       expect(resultado.status).toBe(0);
       expect(resultado.message).toBe('Network Error');
+    });
+
+    it('429 incluye los segundos de Retry-After en el mensaje', () => {
+      const error = new Error('Too Many Requests') as any;
+      error.response = {
+        status: 429,
+        headers: { 'retry-after': '45' },
+        data: {
+          type: 'about:blank',
+          title: 'Demasiadas solicitudes',
+          status: 429,
+          detail: 'Demasiadas solicitudes. Inténtalo nuevamente.',
+        },
+      };
+
+      const resultado = toApiError(error);
+      expect(resultado.status).toBe(429);
+      expect(resultado.message).toBe('Demasiadas solicitudes. Intenta de nuevo en 45 segundos.');
+    });
+
+    it('429 sin Retry-After usa el detail del problem+json', () => {
+      const error = new Error('Too Many Requests') as any;
+      error.response = {
+        status: 429,
+        headers: {},
+        data: {
+          type: 'about:blank',
+          title: 'Demasiadas solicitudes',
+          status: 429,
+          detail: 'Demasiadas solicitudes. Inténtalo nuevamente.',
+        },
+      };
+
+      const resultado = toApiError(error);
+      expect(resultado.message).toBe('Demasiadas solicitudes. Inténtalo nuevamente.');
+    });
+
+    it('mensajeDeErrorApi prioriza el primer error de campo sobre el detail', () => {
+      const error = new Error('Bad Request') as any;
+      error.response = {
+        status: 400,
+        data: {
+          type: 'about:blank',
+          title: 'Error de validación',
+          status: 400,
+          detail: 'Validation failed for argument.',
+          errors: [{ field: 'password', message: 'Debe tener al menos 8 caracteres.' }],
+        },
+      };
+
+      expect(mensajeDeErrorApi(error)).toBe('Debe tener al menos 8 caracteres.');
+    });
+
+    it('mensajeDeErrorApi conserva el mensaje de un ApiError ya normalizado', () => {
+      const apiError = new ApiError('La contraseña actual es incorrecta.', 400);
+
+      expect(mensajeDeErrorApi(apiError)).toBe('La contraseña actual es incorrecta.');
+      expect(toApiError(apiError as never)).toBe(apiError);
     });
   });
 });

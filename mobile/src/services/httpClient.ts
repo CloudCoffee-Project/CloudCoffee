@@ -19,6 +19,13 @@ import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, DEFAULT_TIMEOUT_MS } from '../config/api';
 import { requestNewTokens } from './authRefresh';
 
+// Error por campo del RFC 9457: el backend lo agrega como extensión `errors`
+// cuando un 400 viene de validación de Bean Validation.
+export interface ApiFieldError {
+  field: string;
+  message: string;
+}
+
 // Cuerpo estándar de error RFC 9457 usado por el backend.
 export interface ApiProblem {
   type: string;
@@ -27,6 +34,7 @@ export interface ApiProblem {
   detail: string;
   instance?: string;
   timestamp?: string;
+  errors?: ApiFieldError[];
 }
 
 let accessToken: string | null = null;
@@ -117,14 +125,45 @@ export class ApiError extends Error {
 }
 
 export function toApiError(error: AxiosError<ApiProblem>): ApiError {
+  // Ya es un ApiError (el interceptor lo normalizó): conservar status y problem.
+  if (error instanceof ApiError) {
+    return error;
+  }
+
   // Sin respuesta (red caída, timeout, DNS): no hay problem+json que mostrar.
   if (!error.response) {
     return new ApiError(error.message, 0);
   }
 
   const { status, data } = error.response;
+
+  if (status === 429) {
+    return new ApiError(mensajeDeRateLimit(error.response), status, data);
+  }
+
   const detail = data?.detail ?? error.message;
   return new ApiError(detail, status, data);
+}
+
+// Mensaje del 429 del gateway: incluye los segundos del header Retry-After
+// cuando vienen, para que la pantalla pueda decir cuánto esperar.
+function mensajeDeRateLimit(response: {
+  headers?: Record<string, unknown>;
+  data?: ApiProblem;
+}): string {
+  const retryAfter = Number(response.headers?.['retry-after']);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return `Demasiadas solicitudes. Intenta de nuevo en ${retryAfter} segundos.`;
+  }
+  return response.data?.detail ?? 'Demasiadas solicitudes. Intenta de nuevo más tarde.';
+}
+
+// Mensaje para mostrar en pantalla: el primer error de campo si el backend
+// validó, si no el detail del problem+json.
+export function mensajeDeErrorApi(error: unknown): string {
+  const apiError = toApiError(error as AxiosError<ApiProblem>);
+  const campo = apiError.problem?.errors?.[0];
+  return campo ? campo.message : apiError.message;
 }
 
 // Decodifica la parte payload de un JWT (base64url) a un objeto plano.

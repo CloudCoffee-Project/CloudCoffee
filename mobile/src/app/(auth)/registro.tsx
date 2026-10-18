@@ -21,7 +21,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { toApiError } from '../../services/httpClient';
+import { mensajeDeErrorApi } from '../../services/httpClient';
 import { registrar } from '../../services/auth';
 
 const TELEFONO_REGEX = /^[0-9+ ()-]{6,20}$/;
@@ -116,7 +116,7 @@ export default function RegistroScreen() {
         params: { email: form.email.trim().toLowerCase() },
       });
     } catch (errorApiCatch) {
-      setErrorApi(toApiError(errorApiCatch as never).message);
+      setErrorApi(mensajeDeErrorApi(errorApiCatch));
       setCargando(false);
     }
   };
