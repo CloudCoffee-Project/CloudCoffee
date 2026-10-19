@@ -61,9 +61,37 @@ public abstract class ServiceJwtTests extends JwtTestSupport {
         securityMvc.perform(get("/jwt-test/identity")).andExpect(status().isUnauthorized());
     }
 
+    @Test
+    protected void internalServiceRoutesRequireTheInternalToken() throws Exception {
+        String ruta = "/internal/servicios/asignaciones/" + java.util.UUID.randomUUID();
+        securityMvc.perform(get(ruta)).andExpect(status().isUnauthorized());
+        securityMvc.perform(get(ruta).header("X-Internal-Service-Token", "otro-token-que-no-es-el-configurado"))
+                .andExpect(status().isUnauthorized());
+        // Un JWT de usuario, incluso SUPER_ADMIN, no es una credencial de servicio.
+        String superAdmin = sign(claims().claim("role", "SUPER_ADMIN").build(), KEYS,
+                com.nimbusds.jose.JWSAlgorithm.RS256);
+        securityMvc.perform(get(ruta).header(HttpHeaders.AUTHORIZATION, "Bearer " + superAdmin))
+                .andExpect(status().isForbidden());
+        // Con el token interno pasa la seguridad: sin asignación el recurso no existe.
+        securityMvc.perform(get(ruta).header("X-Internal-Service-Token", INTERNAL_TOKEN))
+                .andExpect(status().isNotFound());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
+    protected void staffJwtWithAssignedCafeteriaAuthenticates(String role) throws Exception {
+        String jwt = sign(claims().claim("role", role)
+                .claim("cafeteriaId", java.util.UUID.randomUUID().toString()).build(),
+                KEYS, com.nimbusds.jose.JWSAlgorithm.RS256);
+        securityMvc.perform(get("/jwt-test/identity").header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ROLE_" + role));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"malformed", "expired", "wrong-key", "wrong-algorithm", "missing-exp",
-            "missing-sub", "missing-role", "invalid-role", "future", "tampered", "hmac"})
+            "missing-sub", "missing-role", "invalid-role", "cafeteria-on-client", "cafeteria-not-uuid",
+            "future", "tampered", "hmac"})
     protected void invalidJwtIsRejectedLocally(String kind) throws Exception {
         securityMvc.perform(get("/jwt-test/identity")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + invalidToken(kind)))

@@ -84,6 +84,59 @@ no duplica filas. Los UUID del primer campus, categoría y producto coinciden co
 los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
 esperados de filtros, búsqueda y comparación de precios sobre estos datos.
 
+### Personal por cafetería y cuentas de prueba (INT2-65)
+
+Auth guarda la cafetería de cada `CAJERO` y `ADMIN_CAFETERIA` en
+`asignaciones_cafeteria`. `cafeteria_id` es el UUID de catalog-service guardado por
+valor: no hay FK ni tablas compartidas entre servicios.
+
+**Autorización (alineada con el contrato de INT2-50).** Los servicios no confían en
+claims de cafetería ni en datos de la UI. `CafeteriaAccess` (common-security) toma
+del JWT solo la identidad (`sub`) y el rol, y consulta la asignación persistida en
+Auth por un mecanismo interno autenticado:
+
+- `GET /internal/servicios/asignaciones/{usuarioId}` en auth-service: `200`
+  `{usuarioId, cafeteriaId}` para un `CAJERO` o `ADMIN_CAFETERIA` activo con
+  asignación; `404` en cualquier otro caso.
+- Solo acepta el encabezado `X-Internal-Service-Token` con el valor de
+  `INTERNAL_SERVICE_TOKEN` (mínimo 32 caracteres). Sin token responde `401`; un JWT
+  de usuario, incluso `SUPER_ADMIN`, recibe `403`. Sin token configurado, el
+  mecanismo queda cerrado para todos. Gateway no lo expone: solo enruta `/v1/**`.
+- No hay caché: quitar una asignación rige en la siguiente solicitud, sin esperar
+  que venza el JWT.
+- **Falla cerrado:** si Auth no responde, el acceso se niega (`403`).
+- Ningún rol hereda permisos de personal por su nombre: clientes y `SUPER_ADMIN`
+  reciben `403`.
+
+El access token del personal con asignación sigue trayendo el claim `cafeteriaId`,
+pero **solo como dato para la UI** (la app lo usa para mostrar su cafetería); no
+autoriza nada. Si viene, el decodificador exige que sea UUID y que el rol sea de
+personal. El registro público siempre crea un `CLIENTE` sin asignación e ignora
+`rol` o `cafeteriaId` enviados.
+
+Configuración: `INTERNAL_SERVICE_TOKEN` en auth-service y en cada servicio que
+consulta (hoy catalog-service, que además usa `AUTH_SERVICE_URL`). Docker Compose
+exige definirlo en `.env`; el valor de `.env.example` es solo para desarrollo.
+
+Primer uso: `GET /catalog/cafeterias/{cafeteriaId}/ofertas`, inventario completo
+de la cafetería (incluye ofertas agotadas).
+
+Con `AUTH_SPRING_PROFILES=docker,dev` (valor de `.env.example`), Auth carga estas
+cuentas verificadas, todas con contraseña `CafeDemo123!`:
+
+| Correo | Rol | Cafetería |
+|---|---|---|
+| `comprador@cloudcoffee.dev` | `CLIENTE` | — |
+| `cajero.central@cloudcoffee.dev` | `CAJERO` | Cafetería Central |
+| `admin.central@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Central |
+| `cajero.patio@cloudcoffee.dev` | `CAJERO` | Cafetería Patio Norte |
+| `admin.patio@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Patio Norte |
+| `cajero.sinasignar@cloudcoffee.dev` | `CAJERO` | sin asignación |
+
+Las cafeterías son las del seed de catálogo, así que conviene activar ambos perfiles
+`dev`. La asignación viaja en el access token: un cambio rige desde el siguiente
+login o refresh (máximo 15 minutos).
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El contrato objetivo del Sprint 2 está en
@@ -181,6 +234,7 @@ Todas las rutas siguientes incluyen el prefijo público `/v1` al usar Gateway.
 | `GET /catalog/categorias` | `200`, lista de categorías | No |
 | `GET /catalog/productos` | `200`, página de productos | Sí |
 | `GET /catalog/productos/{id}/ofertas` | `200`, lista por precio ascendente | Sí |
+| `GET /catalog/cafeterias/{cafeteriaId}/ofertas` | `200`, inventario de la cafetería asignada | Sí (personal) |
 
 Logout (INT2-23), perfil (INT2-24) y cambio de contraseña (INT2-25) ya están
 integrados en la base actual; no quedan endpoints pendientes de la lista mínima

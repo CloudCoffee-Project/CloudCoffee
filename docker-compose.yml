@@ -18,7 +18,10 @@ services:
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
             JWT_PRIVATE_KEY_LOCATION: file:/run/cloudcoffee-jwt/jwt_private_key
-            SPRING_PROFILES_ACTIVE: docker
+            # INT2-65/INT2-50: token para consultar asignaciones entre servicios.
+            INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
+            # INT2-65: "docker,dev" carga las cuentas de prueba; por defecto no se cargan.
+            SPRING_PROFILES_ACTIVE: ${AUTH_SPRING_PROFILES:-docker}
             SERVER_PORT: 8081
             DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME}
             DB_USER: ${AUTH_DB_USER}
@@ -70,6 +73,9 @@ services:
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+            # INT2-65/INT2-50: la asignación del personal se consulta en auth-service.
+            AUTH_SERVICE_URL: http://auth-service:8081
+            INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
             # INT2-36: "docker,dev" carga el catálogo de desarrollo; por defecto no se carga.
             SPRING_PROFILES_ACTIVE: ${CATALOG_SPRING_PROFILES:-docker}
             SERVER_PORT: 8082
