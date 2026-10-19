@@ -7,9 +7,6 @@
 // pantalla, que sigue trabajando con `nuevaPassword`.
 // Validaciones espejo del backend: la nueva pide 8 caracteres en la app y el
 // ChangePasswordRequest exige 6, así que la pantalla es la más estricta.
-// El endpoint responde 404 mientras UserController no corrija el prefijo /v1
-// duplicado; cuando lo haga, conecta sin tocar esta pantalla. Si falla, muestra
-// el error normalizado con botón de reintentar.
 
 import { useState } from 'react';
 import {
@@ -26,7 +23,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { toApiError } from '../../services/httpClient';
+import { mensajeDeErrorApi } from '../../services/httpClient';
 import { cambiarContrasena } from '../../services/auth';
 
 export const PASSWORD_MIN = 8;
@@ -100,7 +97,7 @@ export default function CambiarContrasenaScreen() {
       });
       setExito(true);
     } catch (errorCapturado) {
-      setErrorApi(toApiError(errorCapturado as never).message);
+      setErrorApi(mensajeDeErrorApi(errorCapturado));
     } finally {
       setCargando(false);
     }

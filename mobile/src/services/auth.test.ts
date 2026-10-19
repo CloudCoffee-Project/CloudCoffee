@@ -137,13 +137,19 @@ describe('registrar', () => {
       telefono: ' +56 9 1234 5678 ',
     });
 
-    expect(postSpy).toHaveBeenCalledWith('/v1/auth/register', {
-      email: 'usuario@uct.cl',
-      password: 'secreto123',
-      nombre: 'Ana',
-      apellido: 'Pérez',
-      telefono: '+56 9 1234 5678',
-    });
+    expect(postSpy).toHaveBeenCalledWith(
+      '/v1/auth/register',
+      {
+        email: 'usuario@uct.cl',
+        password: 'secreto123',
+        nombre: 'Ana',
+        apellido: 'Pérez',
+        telefono: '+56 9 1234 5678',
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Trace-Id': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual({
       id: 'uuid-1',
       email: 'usuario@uct.cl',
@@ -187,9 +193,15 @@ describe('reenviarVerificacion', () => {
 
     await reenviarVerificacion('  USUARIO@UCT.CL  ');
 
-    expect(postSpy).toHaveBeenCalledWith('/v1/auth/verificacion/reenviar', {
-      email: 'usuario@uct.cl',
-    });
+    expect(postSpy).toHaveBeenCalledWith(
+      '/v1/auth/verificacion/reenviar',
+      {
+        email: 'usuario@uct.cl',
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Trace-Id': expect.any(String) }),
+      })
+    );
   });
 });
 
@@ -204,9 +216,15 @@ describe('solicitarRecuperacion', () => {
 
     await solicitarRecuperacion('  USUARIO@UCT.CL  ');
 
-    expect(postSpy).toHaveBeenCalledWith('/v1/auth/password/recovery', {
-      email: 'usuario@uct.cl',
-    });
+    expect(postSpy).toHaveBeenCalledWith(
+      '/v1/auth/password/recovery',
+      {
+        email: 'usuario@uct.cl',
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Trace-Id': expect.any(String) }),
+      })
+    );
   });
 });
 

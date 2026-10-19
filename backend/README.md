@@ -88,16 +88,35 @@ esperados de filtros, búsqueda y comparación de precios sobre estos datos.
 
 Auth guarda la cafetería de cada `CAJERO` y `ADMIN_CAFETERIA` en
 `asignaciones_cafeteria`. `cafeteria_id` es el UUID de catalog-service guardado por
-valor: no hay FK ni tablas compartidas entre servicios. Al emitir el access token,
-Auth agrega el claim `cafeteriaId` solo al personal con asignación; clientes,
-super administradores y personal sin asignación no lo reciben.
+valor: no hay FK ni tablas compartidas entre servicios.
 
-Los servicios autorizan con `CafeteriaAccess` (common-security), que lee rol y
-cafetería solo del JWT firmado; encabezados, parámetros y cuerpos del frontend no
-cuentan. El personal opera únicamente su cafetería, `SUPER_ADMIN` opera cualquiera,
-y el resto recibe `403`. El decodificador rechaza con `401` un `cafeteriaId` que no
-sea UUID o que venga en un rol que no es de personal. El registro público siempre
-crea un `CLIENTE` sin asignación e ignora `rol` o `cafeteriaId` enviados.
+**Autorización (alineada con el contrato de INT2-50).** Los servicios no confían en
+claims de cafetería ni en datos de la UI. `CafeteriaAccess` (common-security) toma
+del JWT solo la identidad (`sub`) y el rol, y consulta la asignación persistida en
+Auth por un mecanismo interno autenticado:
+
+- `GET /internal/servicios/asignaciones/{usuarioId}` en auth-service: `200`
+  `{usuarioId, cafeteriaId}` para un `CAJERO` o `ADMIN_CAFETERIA` activo con
+  asignación; `404` en cualquier otro caso.
+- Solo acepta el encabezado `X-Internal-Service-Token` con el valor de
+  `INTERNAL_SERVICE_TOKEN` (mínimo 32 caracteres). Sin token responde `401`; un JWT
+  de usuario, incluso `SUPER_ADMIN`, recibe `403`. Sin token configurado, el
+  mecanismo queda cerrado para todos. Gateway no lo expone: solo enruta `/v1/**`.
+- No hay caché: quitar una asignación rige en la siguiente solicitud, sin esperar
+  que venza el JWT.
+- **Falla cerrado:** si Auth no responde, el acceso se niega (`403`).
+- Ningún rol hereda permisos de personal por su nombre: clientes y `SUPER_ADMIN`
+  reciben `403`.
+
+El access token del personal con asignación sigue trayendo el claim `cafeteriaId`,
+pero **solo como dato para la UI** (la app lo usa para mostrar su cafetería); no
+autoriza nada. Si viene, el decodificador exige que sea UUID y que el rol sea de
+personal. El registro público siempre crea un `CLIENTE` sin asignación e ignora
+`rol` o `cafeteriaId` enviados.
+
+Configuración: `INTERNAL_SERVICE_TOKEN` en auth-service y en cada servicio que
+consulta (hoy catalog-service, que además usa `AUTH_SERVICE_URL`). Docker Compose
+exige definirlo en `.env`; el valor de `.env.example` es solo para desarrollo.
 
 Primer uso: `GET /catalog/cafeterias/{cafeteriaId}/ofertas`, inventario completo
 de la cafetería (incluye ofertas agotadas).
@@ -123,13 +142,18 @@ login o refresh (máximo 15 minutos).
 La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
 `usuario_id` del JWT y `monto_total` calculado por el servidor) y `pagos`, vinculados
 por FK. La base restringe el estado a `PENDIENTE`, `APROBADO` o `RECHAZADO`, exige
-montos positivos y no admite referencias repetidas de un mismo proveedor.
+montos positivos, admite **un solo pago por compra** (`UNIQUE (compra_id)`) y no
+admite referencias repetidas de un mismo proveedor.
 
 Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
 no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
 un resultado contradictorio responde `409`. `@Version` impide que dos resultados
-concurrentes se sobrescriban. Una compra admite varios intentos de pago, pero nunca
-dos `PENDIENTE` o `APROBADO` a la vez: tras un rechazo se puede reintentar.
+concurrentes se sobrescriban.
+
+Conforme al contrato de INT2-50 (#112), una compra tiene como máximo un pago, que no
+se reemplaza ni se reinicia: iniciar otro pago responde `409 /problems/pago-existente`
+en cualquier estado, también tras un rechazo. Para volver a intentar hay que crear
+una compra nueva.
 
 `PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
 nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
@@ -170,6 +194,13 @@ compras de prueba para las cuentas de INT2-65:
 | `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
 
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
+
+El contrato objetivo del Sprint 2 está en
+[Compra, pago simulado y retiro (INT2-50)](docs/compra-pago-retiro.md), con
+[OpenAPI importable](docs/compra-pago-retiro.openapi.json) y
+[ejemplos de eventos](docs/compra-pago-retiro.eventos.json). Define rutas, estados,
+idempotencia, permisos y QR para las siguientes implementaciones; todavía no
+agrega endpoints de Order ni los incorpora al Swagger de Sprint 1.
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
 lo genera desde los controladores y DTO de Auth y Catalog; Swagger UI se sirve

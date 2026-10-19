@@ -61,6 +61,22 @@ public abstract class ServiceJwtTests extends JwtTestSupport {
         securityMvc.perform(get("/jwt-test/identity")).andExpect(status().isUnauthorized());
     }
 
+    @Test
+    protected void internalServiceRoutesRequireTheInternalToken() throws Exception {
+        String ruta = "/internal/servicios/asignaciones/" + java.util.UUID.randomUUID();
+        securityMvc.perform(get(ruta)).andExpect(status().isUnauthorized());
+        securityMvc.perform(get(ruta).header("X-Internal-Service-Token", "otro-token-que-no-es-el-configurado"))
+                .andExpect(status().isUnauthorized());
+        // Un JWT de usuario, incluso SUPER_ADMIN, no es una credencial de servicio.
+        String superAdmin = sign(claims().claim("role", "SUPER_ADMIN").build(), KEYS,
+                com.nimbusds.jose.JWSAlgorithm.RS256);
+        securityMvc.perform(get(ruta).header(HttpHeaders.AUTHORIZATION, "Bearer " + superAdmin))
+                .andExpect(status().isForbidden());
+        // Con el token interno pasa la seguridad: sin asignación el recurso no existe.
+        securityMvc.perform(get(ruta).header("X-Internal-Service-Token", INTERNAL_TOKEN))
+                .andExpect(status().isNotFound());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
     protected void staffJwtWithAssignedCafeteriaAuthenticates(String role) throws Exception {

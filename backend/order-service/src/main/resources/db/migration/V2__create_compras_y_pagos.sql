@@ -15,8 +15,8 @@ CREATE TABLE compras (
 
 CREATE INDEX idx_compras_usuario_id ON compras (usuario_id);
 
--- Una compra puede tener varios intentos de pago (p. ej. reintento tras un rechazo);
--- el servicio impide que coexistan dos pagos PENDIENTE o APROBADO para la misma compra.
+-- Contrato INT2-50 (#112): una compra tiene como máximo un pago. Aprobado y
+-- rechazado son terminales; para volver a intentar se crea una compra nueva.
 CREATE TABLE pagos (
     id                      UUID PRIMARY KEY,
     compra_id               UUID NOT NULL,
@@ -31,9 +31,8 @@ CREATE TABLE pagos (
     updated_at              TIMESTAMP,
 
     CONSTRAINT fk_pagos_compra FOREIGN KEY (compra_id) REFERENCES compras (id),
+    CONSTRAINT uk_pagos_compra UNIQUE (compra_id),
     CONSTRAINT chk_pagos_estado CHECK (estado IN ('PENDIENTE', 'APROBADO', 'RECHAZADO')),
     CONSTRAINT chk_pagos_monto CHECK (monto > 0),
     CONSTRAINT uk_pagos_proveedor_referencia UNIQUE (proveedor, referencia_proveedor)
 );
-
-CREATE INDEX idx_pagos_compra_id ON pagos (compra_id);

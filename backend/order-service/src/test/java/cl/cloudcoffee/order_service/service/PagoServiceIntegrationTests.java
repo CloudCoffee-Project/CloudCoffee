@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
@@ -58,31 +60,37 @@ class PagoServiceIntegrationTests extends JwtTestSupport {
                         error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
-    @Test
-    void noAbreUnSegundoPagoMientrasHayUnoPendienteOAprobado() {
+    @ParameterizedTest
+    @EnumSource(EstadoPago.class)
+    void unaCompraAdmiteUnSoloPagoEnCualquierEstado(EstadoPago estado) {
         Compra compra = compra("1500.00");
         Pago primero = pagoService.iniciarPago(compra.getId());
+        if (estado.esFinal()) {
+            pagoService.registrarResultado(primero.getId(), estado, "motivo");
+        }
 
-        assertConflicto(() -> pagoService.iniciarPago(compra.getId()));
-
-        pagoService.registrarResultado(primero.getId(), EstadoPago.APROBADO, null);
-        assertConflicto(() -> pagoService.iniciarPago(compra.getId()));
-        assertThat(pagos.findByCompraIdOrderByCreatedAtAsc(compra.getId())).hasSize(1);
+        assertThatThrownBy(() -> pagoService.iniciarPago(compra.getId()))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(error.getType().toString()).isEqualTo("/problems/pago-existente");
+                });
+        assertThat(pagos.findByCompraId(compra.getId())).get().extracting(Pago::getId, Pago::getEstado)
+                .containsExactly(primero.getId(), estado);
     }
 
     @Test
-    void permiteReintentarTrasUnRechazo() {
+    void unRechazoEsTerminalYReintentarExigeUnaCompraNueva() {
+        // Contrato INT2-50 (#112): el pago no se reemplaza ni se reinicia.
         Compra compra = compra("1500.00");
         Pago rechazado = pagoService.iniciarPago(compra.getId());
         pagoService.registrarResultado(rechazado.getId(), EstadoPago.RECHAZADO, "Tarjeta rechazada");
 
-        Pago reintento = pagoService.iniciarPago(compra.getId());
+        assertConflicto(() -> pagoService.iniciarPago(compra.getId()));
+        assertConflicto(() -> pagoService.registrarResultado(rechazado.getId(), EstadoPago.APROBADO, null));
+        assertThat(pagos.findById(rechazado.getId()).orElseThrow().getEstado()).isEqualTo(EstadoPago.RECHAZADO);
 
-        assertThat(pagos.findByCompraIdOrderByCreatedAtAsc(compra.getId()))
-                .extracting(Pago::getId, Pago::getEstado)
-                .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(rechazado.getId(), EstadoPago.RECHAZADO),
-                        org.assertj.core.groups.Tuple.tuple(reintento.getId(), EstadoPago.PENDIENTE));
+        Compra nueva = compra("1500.00");
+        assertThat(pagoService.iniciarPago(nueva.getId()).getEstado()).isEqualTo(EstadoPago.PENDIENTE);
     }
 
     @Test

@@ -1,0 +1,80 @@
+[
+  {
+    "eventId": "70000000-0000-4000-8000-000000000001",
+    "timestamp": "2026-10-15T18:00:00Z",
+    "traceId": "aabbccddeeff00112233445566778899",
+    "eventType": "order.compra.creada.v1",
+    "payload": {
+      "compraId": "30000000-0000-4000-8000-000000000001",
+      "clienteId": "10000000-0000-4000-8000-000000000001",
+      "estado": "pendiente_pago",
+      "montoTotal": 3600,
+      "moneda": "CLP",
+      "ordenIds": [
+        "40000000-0000-4000-8000-000000000001"
+      ],
+      "version": 1
+    }
+  },
+  {
+    "eventId": "70000000-0000-4000-8000-000000000002",
+    "timestamp": "2026-10-15T18:01:00Z",
+    "traceId": "aabbccddeeff00112233445566778899",
+    "eventType": "order.pago.resultado.v1",
+    "payload": {
+      "compraId": "30000000-0000-4000-8000-000000000001",
+      "clienteId": "10000000-0000-4000-8000-000000000001",
+      "pagoId": "90000000-0000-4000-8000-000000000001",
+      "estado": "rechazado",
+      "motivo": "rechazo_simulado",
+      "montoTotal": 3600,
+      "moneda": "CLP",
+      "simulado": true,
+      "version": 1
+    }
+  },
+  {
+    "eventId": "70000000-0000-4000-8000-000000000003",
+    "timestamp": "2026-10-15T18:01:00Z",
+    "traceId": "aabbccddeeff00112233445566778899",
+    "eventType": "order.compra.estado-cambiado.v1",
+    "payload": {
+      "compraId": "30000000-0000-4000-8000-000000000001",
+      "clienteId": "10000000-0000-4000-8000-000000000001",
+      "estadoAnterior": "pendiente_pago",
+      "estado": "cancelado",
+      "montoTotal": 0,
+      "moneda": "CLP",
+      "version": 2
+    }
+  },
+  {
+    "eventId": "70000000-0000-4000-8000-000000000004",
+    "timestamp": "2026-10-15T18:01:00Z",
+    "traceId": "aabbccddeeff00112233445566778899",
+    "eventType": "order.orden.estado-cambiado.v1",
+    "payload": {
+      "compraId": "30000000-0000-4000-8000-000000000001",
+      "clienteId": "10000000-0000-4000-8000-000000000001",
+      "ordenId": "40000000-0000-4000-8000-000000000001",
+      "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+      "estadoAnterior": "pendiente_pago",
+      "estado": "cancelado",
+      "version": 2
+    }
+  },
+  {
+    "eventId": "70000000-0000-4000-8000-000000000005",
+    "timestamp": "2026-10-15T18:01:00Z",
+    "traceId": "aabbccddeeff00112233445566778899",
+    "eventType": "catalog.stock.actualizado.v1",
+    "payload": {
+      "ofertaId": "50000000-0000-4000-8000-000000000001",
+      "productoId": "60000000-0000-4000-8000-000000000002",
+      "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+      "campusId": "20000000-0000-4000-8000-000000000002",
+      "stockActual": 10,
+      "version": 3
+    }
+  }
+]

@@ -1,8 +1,6 @@
 package cl.cloudcoffee.order_service.service;
 
 import java.net.URI;
-import java.util.EnumSet;
-import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -23,8 +21,6 @@ import cl.cloudcoffee.order_service.repository.PagoRepository;
 @Service
 public class PagoService {
 
-    private static final Set<EstadoPago> ACTIVOS = EnumSet.of(EstadoPago.PENDIENTE, EstadoPago.APROBADO);
-
     private final CompraRepository compraRepository;
     private final PagoRepository pagoRepository;
     private final PasarelaPago pasarela;
@@ -36,8 +32,9 @@ public class PagoService {
     }
 
     /**
-     * Abre un pago PENDIENTE por el monto total de la compra. Solo recibe la compra:
-     * el importe nunca proviene del cliente.
+     * Abre el único pago de la compra, PENDIENTE y por su monto total. Solo recibe la
+     * compra: el importe nunca proviene del cliente. Contrato INT2-50: el pago no se
+     * reemplaza ni se reinicia; tras un rechazo hay que crear una compra nueva.
      */
     @Transactional
     public Pago iniciarPago(UUID compraId) {
@@ -46,9 +43,11 @@ public class PagoService {
                         URI.create("/problems/compra-no-encontrada"), "Compra no encontrada",
                         "No existe una compra con el identificador indicado."));
 
-        if (pagoRepository.existsByCompraIdAndEstadoIn(compra.getId(), ACTIVOS)) {
-            throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/pago-en-curso"),
-                    "Pago en curso", "La compra ya tiene un pago pendiente o aprobado.");
+        // El bloqueo de la compra serializa inicios concurrentes; UNIQUE (compra_id) lo respalda.
+        if (pagoRepository.existsByCompraId(compra.getId())) {
+            throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/pago-existente"),
+                    "La compra ya tiene un pago",
+                    "Una compra admite un solo pago; para volver a intentarlo crea una compra nueva.");
         }
 
         RegistroPasarela registro = pasarela.registrar(new SolicitudPago(compra.getId(), compra.getMontoTotal()));
