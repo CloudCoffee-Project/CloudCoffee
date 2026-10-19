@@ -120,6 +120,13 @@ login o refresh (máximo 15 minutos).
 
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
+El contrato objetivo del Sprint 2 está en
+[Compra, pago simulado y retiro (INT2-50)](docs/compra-pago-retiro.md), con
+[OpenAPI importable](docs/compra-pago-retiro.openapi.json) y
+[ejemplos de eventos](docs/compra-pago-retiro.eventos.json). Define rutas, estados,
+idempotencia, permisos y QR para las siguientes implementaciones; todavía no
+agrega endpoints de Order ni los incorpora al Swagger de Sprint 1.
+
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
 lo genera desde los controladores y DTO de Auth y Catalog; Swagger UI se sirve
 solo desde API Gateway, con las definiciones **Auth** y **Catálogo**.

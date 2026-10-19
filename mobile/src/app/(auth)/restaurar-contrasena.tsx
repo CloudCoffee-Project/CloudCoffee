@@ -20,7 +20,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { toApiError } from '../../services/httpClient';
+import { mensajeDeErrorApi } from '../../services/httpClient';
 import { restablecerPassword } from '../../services/auth';
 
 const PASSWORD_MIN = 8;
@@ -57,7 +57,7 @@ export default function RestaurarContrasenaScreen() {
       await restablecerPassword(token, password);
       setExito(true);
     } catch (errorApi) {
-      setError(toApiError(errorApi as never).message);
+      setError(mensajeDeErrorApi(errorApi));
     } finally {
       setCargando(false);
     }

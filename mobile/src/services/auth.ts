@@ -11,14 +11,9 @@
 //   - PATCH /v1/auth/users/me        → actualiza nombre/apellido/teléfono (INT4-23).
 //   - PATCH /v1/auth/users/me/password → cambia la contraseña (INT4-24).
 //
-// NOTA: login, registro, verificación, recuperación y logout ya responden en el
-// auth-service. Los de perfil (INT4-23/24) tienen el contrato de `UserController`
-// de origin/main: viven bajo /v1/auth/users y el verbo de edición es PATCH, no
-// PUT. Quedan 404 por el gateway porque el controller se mapea a /v1/auth/users
-// mientras el gateway aplica StripPrefix=1 y le entrega /auth/users;AuthController
-// sí usa /auth y por eso ese funciona. Es un bug de backend: cuando se corrija el
-// prefijo, estas llamadas conectan sin tocar la app. Detalle en
-// docs/contratos-backend.md.
+// Todos los endpoints responden en el auth-service. El gateway aplica
+// StripPrefix=1 y entrega /auth/... y /auth/users/... a los controllers,
+// que mapean exactamente esos prefijos.
 
 import { decodeJwtPayload, httpClient } from './httpClient';
 import type {
@@ -35,9 +30,7 @@ import type {
   VerificarCorreoResponse,
 } from '../types/domain';
 
-// Rutas de perfil propio según `UserController` (INT4-23/24). El prefijo /v1 es el
-// que espera el gateway; internamente el servicio lo recibe sin él por el
-// StripPrefix=1, así que el mapeo del controller debería quedar en /auth/users.
+// Rutas de perfil propio según `UserController` (INT4-23/24).
 export const PERFIL_ENDPOINT = '/v1/auth/users/me';
 
 // Cambio de contraseña autenticado (INT4-24), mismo controller.
@@ -72,15 +65,29 @@ export async function login(credenciales: CredencialesLogin): Promise<LoginRespo
   return response.data;
 }
 
+// El backend acepta X-Trace-Id opcional en register, reenviar de verificación
+// y recuperación de contraseña para correlacionar los eventos que dispara.
+function generarTraceId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 /** Llama a POST /v1/auth/register y crea la cuenta del cliente. */
 export async function registrar(datos: RegistroClienteRequest): Promise<RegistroClienteResponse> {
-  const response = await httpClient.post<RegistroClienteResponse>('/v1/auth/register', {
-    email: datos.email.trim().toLowerCase(),
-    password: datos.password,
-    nombre: datos.nombre.trim(),
-    apellido: datos.apellido.trim(),
-    telefono: datos.telefono.trim(),
-  });
+  const response = await httpClient.post<RegistroClienteResponse>(
+    '/v1/auth/register',
+    {
+      email: datos.email.trim().toLowerCase(),
+      password: datos.password,
+      nombre: datos.nombre.trim(),
+      apellido: datos.apellido.trim(),
+      telefono: datos.telefono.trim(),
+    },
+    { headers: { 'X-Trace-Id': generarTraceId() } }
+  );
 
   return response.data;
 }
@@ -96,16 +103,24 @@ export async function verificarCorreo(token: string): Promise<VerificarCorreoRes
 
 /** Llama a POST /v1/auth/verificacion/reenviar para que el backend emita un token nuevo. */
 export async function reenviarVerificacion(email: string): Promise<void> {
-  await httpClient.post('/v1/auth/verificacion/reenviar', {
-    email: email.trim().toLowerCase(),
-  });
+  await httpClient.post(
+    '/v1/auth/verificacion/reenviar',
+    {
+      email: email.trim().toLowerCase(),
+    },
+    { headers: { 'X-Trace-Id': generarTraceId() } }
+  );
 }
 
 /** Llama a POST /v1/auth/password/recovery y solicita el enlace de restablecimiento. */
 export async function solicitarRecuperacion(email: string): Promise<void> {
-  await httpClient.post('/v1/auth/password/recovery', {
-    email: email.trim().toLowerCase(),
-  });
+  await httpClient.post(
+    '/v1/auth/password/recovery',
+    {
+      email: email.trim().toLowerCase(),
+    },
+    { headers: { 'X-Trace-Id': generarTraceId() } }
+  );
 }
 
 /** Llama a POST /v1/auth/password/reset con el token del correo y la clave nueva. */

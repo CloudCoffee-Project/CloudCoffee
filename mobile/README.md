@@ -4,6 +4,14 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ## Get started
 
+> **Release / builds:** para lanzar un build de producción o preview (EAS Build)
+> y saber dónde viven las credenciales de Android, seguir el runbook
+> [docs/runbook-mobile-release.md](docs/runbook-mobile-release.md).
+>
+> **Tiempo de arranque:** la línea base medida y cómo repetirla están en
+> [docs/linea-base-arranque.md](docs/linea-base-arranque.md)
+> (`node scripts/measure-startup-web.mjs`).
+
 1. Install dependencies
 
    ```bash
