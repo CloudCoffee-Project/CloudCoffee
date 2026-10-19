@@ -1,16 +1,15 @@
 package cl.cloudcoffee.order_service.repository;
 
-import cl.cloudcoffee.order_service.model.EstadoPago;
 import cl.cloudcoffee.order_service.model.Pago;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface PagoRepository extends JpaRepository<Pago, UUID> {
 
-    boolean existsByCompraIdAndEstadoIn(UUID compraId, Collection<EstadoPago> estados);
+    boolean existsByCompraId(UUID compraId);
 
-    List<Pago> findByCompraIdOrderByCreatedAtAsc(UUID compraId);
+    /** Una compra tiene como máximo un pago (UNIQUE compra_id). */
+    Optional<Pago> findByCompraId(UUID compraId);
 }

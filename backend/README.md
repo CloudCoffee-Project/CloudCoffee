@@ -142,13 +142,18 @@ login o refresh (máximo 15 minutos).
 La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
 `usuario_id` del JWT y `monto_total` calculado por el servidor) y `pagos`, vinculados
 por FK. La base restringe el estado a `PENDIENTE`, `APROBADO` o `RECHAZADO`, exige
-montos positivos y no admite referencias repetidas de un mismo proveedor.
+montos positivos, admite **un solo pago por compra** (`UNIQUE (compra_id)`) y no
+admite referencias repetidas de un mismo proveedor.
 
 Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
 no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
 un resultado contradictorio responde `409`. `@Version` impide que dos resultados
-concurrentes se sobrescriban. Una compra admite varios intentos de pago, pero nunca
-dos `PENDIENTE` o `APROBADO` a la vez: tras un rechazo se puede reintentar.
+concurrentes se sobrescriban.
+
+Conforme al contrato de INT2-50 (#112), una compra tiene como máximo un pago, que no
+se reemplaza ni se reinicia: iniciar otro pago responde `409 /problems/pago-existente`
+en cualquier estado, también tras un rechazo. Para volver a intentar hay que crear
+una compra nueva.
 
 `PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
 nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
