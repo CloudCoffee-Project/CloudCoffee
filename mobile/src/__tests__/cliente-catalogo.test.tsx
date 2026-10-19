@@ -7,6 +7,8 @@
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
+
 import CatalogoProductosScreen from '../app/(cliente)/index';
 // Desde INT4-25 la pantalla saca los datos de services/catalog, contra el
 // gateway (antes leía el snapshot local de src/datos-locales por medio de
@@ -43,27 +45,17 @@ jest.mock('../services/catalog', () => ({
 }));
 
 // AsyncStorage no existe como módulo nativo en Jest; se mockea su superficie.
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
-const mockRouter = { push: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-  useRouter: jest.fn(() => mockRouter),
-}));
-
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockLeerCampus = leerCampusSeleccionado as unknown as jest.Mock;
 const mockListarCategorias = listarCategorias as unknown as jest.Mock;
@@ -107,12 +99,6 @@ function producto(id: string, over: Partial<Producto> = {}): Producto {
 
 // Renderiza la pantalla y ejecuta el callback que el mock de useFocusEffect
 // capturó (equivale a que la pantalla gane foco y cargue el catálogo).
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 // Último árbol renderizado, para desmontarlo al final de cada test.
 let arbolActual: ReactTestRenderer | null = null;
 
@@ -153,7 +139,7 @@ beforeEach(() => {
   mockListarCategorias.mockReset();
   mockListarProductos.mockReset();
   mockUseFocusEffect.mockReset();
-  mockRouter.push.mockClear();
+  limpiarRouter();
   mockLeerCampus.mockResolvedValue(campusMock);
   mockListarCategorias.mockResolvedValue(categoriasMock);
   mockListarProductos.mockResolvedValue(productosBase());
@@ -245,7 +231,7 @@ describe('Catálogo del cliente', () => {
       tree.root.findByProps({ testID: 'catalogo-producto-p-1' }).props.onPress();
     });
 
-    expect(mockRouter.push).toHaveBeenCalledWith({
+    expect(routerMock.push).toHaveBeenCalledWith({
       pathname: '/(cliente)/producto/[id]',
       params: { id: 'p-1' },
     });

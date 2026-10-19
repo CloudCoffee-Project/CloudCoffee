@@ -24,13 +24,15 @@
 //     (?estado=realizada|revision_requerida|fallo), que son las que permiten
 //     demos y tests hoy (el backend aún no implementa el POST).
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 
 import CheckoutScreen from '../app/(cliente)/checkout';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
 import { abrirCheckoutMercadoPago, crearCompra, parsearRetornoPago } from '../services/pagos';
 import { getAccessToken } from '../services/httpClient';
+import { escribir, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
 import type { NuevoItemCarrito } from '../types/domain';
 
 // El provider se monta real (no mockeado) para que la pantalla vea de verdad
@@ -45,17 +47,9 @@ jest.mock('../context/AuthContext', () => ({
   })),
 }));
 
-const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
 const mockParams: Record<string, string | undefined> = {};
 
-jest.mock('expo-router', () => ({
-  get router() {
-    return mockRouter;
-  },
-  useRouter: jest.fn(() => mockRouter),
-  useLocalSearchParams: jest.fn(() => mockParams),
-  useFocusEffect: jest.fn(),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 // Los servicios de pago se mockean: la pantalla orquesta llamadas, no las
 // implementa. Los defaults permiten el camino feliz y cada test los afina.
@@ -86,19 +80,16 @@ jest.mock('../services/httpClient', () => {
   return { ...actual, getAccessToken: jest.fn(() => 'token-de-prueba') };
 });
 
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View: RNView } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(RNView, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockCrearCompra = crearCompra as unknown as jest.Mock;
 const mockAbrirCheckout = abrirCheckoutMercadoPago as unknown as jest.Mock;
 const mockParsearRetorno = parsearRetornoPago as unknown as jest.Mock;
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
+const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
 // Datos de entrega y facturación válidos, tal como el usuario los escribiría.
 const FORM_VALIDO = {
@@ -156,17 +147,6 @@ async function agregar(
   });
 }
 
-// Escribe un campo del formulario: el TextInput recibe el valor por onChangeText
-// (la pantalla es de estado controlado, no hay refs ni DOM en el test).
-async function escribir(tree: ReactTestRenderer, testID: string, valor: string): Promise<void> {
-  const campo = tree.root.findByProps({ testID });
-  await act(async () => {
-    campo.props.onChangeText(valor);
-  });
-}
-
-// Llena los tres campos obligatorios. Sin overrides el formulario queda válido:
-// CloudCoffee solo retira en cafetería, así que no hay dirección que escribir.
 async function llenarFormulario(
   tree: ReactTestRenderer,
   overrides: Partial<typeof FORM_VALIDO> = {}
@@ -177,41 +157,9 @@ async function llenarFormulario(
   await escribir(tree, 'checkout-telefono', datos.telefono);
 }
 
-async function pulsar(tree: ReactTestRenderer, testID: string): Promise<void> {
-  const boton = tree.root.findByProps({ testID });
-  // onPress de esta pantalla es una async function: se espera a que termine
-  // para que las llamadas encadenadas (crearCompra → abrirCheckout → replace)
-  // hayan corrido cuando el test mira el resultado.
-  await act(async () => {
-    await boton.props.onPress();
-  });
-}
-
-function textoDe(nodo: ReactTestInstance): string {
-  // Recorre los hijos en orden de render juntando los strings: sirve tanto para
-  // un Text directo como para una tarjeta entera.
-  const partes: string[] = [];
-  const recolectar = (n: ReactTestInstance): void => {
-    for (const hijo of n.children) {
-      if (typeof hijo === 'string' || typeof hijo === 'number') {
-        partes.push(String(hijo));
-      } else {
-        recolectar(hijo);
-      }
-    }
-  };
-  recolectar(nodo);
-  return partes.join('');
-}
-
-function texto(tree: ReactTestRenderer, testID: string): string {
-  return textoDe(tree.root.findByProps({ testID }));
-}
-
 beforeEach(() => {
-  mockRouter.push.mockClear();
-  mockRouter.back.mockClear();
-  mockRouter.replace.mockClear();
+  limpiarRouter();
+  mockUseLocalSearchParams.mockReturnValue(mockParams);
   mockCrearCompra.mockClear();
   mockAbrirCheckout.mockClear();
   mockParsearRetorno.mockClear();
@@ -245,7 +193,7 @@ describe('Checkout (INT4-35)', () => {
 
     await pulsar(tree, 'checkout-ir-catalogo');
 
-    expect(mockRouter.replace).toHaveBeenCalledWith('/(cliente)');
+    expect(routerMock.replace).toHaveBeenCalledWith('/(cliente)');
   });
 
   it('muestra la revisión con progreso, resumen, desglose, formulario y método de pago', async () => {
@@ -375,7 +323,7 @@ describe('Checkout (INT4-35)', () => {
     expect(mockParsearRetorno).toHaveBeenCalledWith(
       'cloudcoffee://pago/retorno?status=approved&payment_id=pay-1&external_reference=cmp-1'
     );
-    expect(mockRouter.replace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/resultado-pago',
       params: { estado: 'exitoso', compraId: 'cmp-1', paymentId: 'pay-1' },
     });
@@ -439,7 +387,7 @@ describe('Checkout (INT4-35)', () => {
     // pantalla lo confirma. No hay navegación, no se abre Mercado Pago y no
     // hay botón que vuelva a cobrar.
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-realizada-titulo')).toBe('¡Compra realizada!');
     expect(texto(tree, 'checkout-realizada-compra')).toBe('cmp-2');
     expect(texto(tree, 'checkout-realizada-total')).toBe('$1.800');
@@ -467,7 +415,7 @@ describe('Checkout (INT4-35)', () => {
     // "realizada" ni fallo, no se abre Mercado Pago, no se navega y no hay
     // botón que vuelva a cobrar.
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-revision-requerida-titulo')).toBe('Tu compra está en revisión');
     expect(texto(tree, 'checkout-revision-requerida-compra')).toBe('cmp-rev');
     expect(texto(tree, 'checkout-revision-requerida-total')).toBe('$1.800');
@@ -489,7 +437,7 @@ describe('Checkout (INT4-35)', () => {
 
     // La orden ya quedó creada (el carrito se vació al crearla): se avisa como
     // pendiente y no se vuelve al checkout a confirmar de nuevo.
-    expect(mockRouter.replace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/resultado-pago',
       params: { estado: 'pendiente', compraId: 'cmp-1', paymentId: '' },
     });
@@ -511,7 +459,7 @@ describe('Checkout (INT4-35)', () => {
     // vista de fallo (no hay navegación a una ruta aparte ni alerta), el
     // carrito queda intacto y no se abre el pago (no hay initPoint).
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-fallo-titulo')).toBe('No pudimos realizar tu compra');
     expect(texto(tree, 'checkout-fallo-mensaje')).toContain('boom');
     expect(texto(tree, 'checkout-fallo-aviso')).toContain('Nada se cobró');
@@ -573,10 +521,10 @@ describe('Checkout (INT4-35)', () => {
     expect(() => tree.root.findByProps({ testID: 'checkout-confirmar' })).toThrow();
 
     await pulsar(tree, 'checkout-realizada-ir-compras');
-    expect(mockRouter.replace).toHaveBeenCalledWith('/mis-compras');
+    expect(routerMock.replace).toHaveBeenCalledWith('/mis-compras');
 
     await pulsar(tree, 'checkout-realizada-volver-catalogo');
-    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    expect(routerMock.replace).toHaveBeenCalledWith('/');
   });
 
   it('vista en revisión por parámetro muestra la compra y permite ir a Mis compras', async () => {
@@ -594,14 +542,14 @@ describe('Checkout (INT4-35)', () => {
     expect(() => tree.root.findByProps({ testID: 'checkout-confirmar' })).toThrow();
 
     await pulsar(tree, 'checkout-revision-requerida-ir-compras');
-    expect(mockRouter.replace).toHaveBeenCalledWith('/mis-compras');
+    expect(routerMock.replace).toHaveBeenCalledWith('/mis-compras');
 
     mockParams.estado = 'revision_requerida';
     mockParams.compraId = 'cmp-rev';
     mockParams.montoTotal = '8400';
     const tree2 = montar();
     await pulsar(tree2, 'checkout-revision-requerida-volver-catalogo');
-    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    expect(routerMock.replace).toHaveBeenCalledWith('/');
   });
 
   it('vista fallo por parámetro permite reintentar (vuelve a la revisión) o volver al carrito', async () => {
@@ -624,6 +572,6 @@ describe('Checkout (INT4-35)', () => {
     mockParams.mensaje = 'se cayó la red';
     const tree2 = montar();
     await pulsar(tree2, 'checkout-fallo-volver-carrito');
-    expect(mockRouter.replace).toHaveBeenCalledWith('/carrito');
+    expect(routerMock.replace).toHaveBeenCalledWith('/carrito');
   });
 });

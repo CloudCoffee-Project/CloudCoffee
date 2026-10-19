@@ -69,10 +69,35 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
     "prepare": "cd .. && git config core.hooksPath mobile/.husky || true"
   },
   "private": true,
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "collectCoverage": true,
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.{ts,tsx}",
+      "!src/**/*.test.{ts,tsx}",
+      "!src/**/__tests__/**",
+      "!src/test-utils/**",
+      "!src/**/*.d.ts"
+    ],
+    "coverageReporters": [
+      "text-summary",
+      "lcov",
+      "html",
+      "json-summary"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 65,
+        "functions": 76,
+        "lines": 75,
+        "statements": 75
+      }
+    }
   }
 }

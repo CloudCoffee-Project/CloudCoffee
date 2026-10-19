@@ -1,82 +1,59 @@
 // src/__tests__/cliente-qr-retiro.test.tsx
 // Cubre el enlace "Ver Boleta en PDF" (INT4-48): el Código de Retiro navega al
 // detalle de la orden con el id y estado correctos para descargar la boleta.
-import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import { useLocalSearchParams } from 'expo-router';
 
 import QrRetiroScreen from '../app/(cliente)/qr-retiro';
-import { useLocalSearchParams } from 'expo-router';
+import { desmontar, limpiarRouter, pulsar, renderizar, routerMock, texto } from '../test-utils';
 
 jest.mock('react-native-qrcode-svg', () => 'QRCode');
 
-const mockRouter = { back: jest.fn(), push: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useLocalSearchParams: jest.fn(() => ({ id: 'orden-1', estado: 'listo_para_retiro' })),
-  useRouter: jest.fn(() => mockRouter),
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
-}));
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
+const PARAMS = { id: 'orden-1', estado: 'listo_para_retiro' };
 
 beforeEach(() => {
-  mockRouter.back.mockClear();
-  mockRouter.push.mockClear();
-  mockUseLocalSearchParams.mockReturnValue({ id: 'orden-1', estado: 'listo_para_retiro' });
+  limpiarRouter();
+  mockUseLocalSearchParams.mockReturnValue(PARAMS);
 });
 
 describe('pantalla de Código de Retiro (enlace a boleta)', () => {
   it('ofrece ver la boleta en PDF del pedido mostrado', async () => {
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<QrRetiroScreen />);
-    });
+    const tree = await renderizar(<QrRetiroScreen />);
 
-    const boton = tree.root.findByProps({ testID: 'abrir-boleta' });
-    expect(textoDe(boton)).toContain('Ver Boleta en PDF');
+    expect(texto(tree, 'abrir-boleta')).toContain('Ver Boleta en PDF');
 
-    act(() => tree.unmount());
+    desmontar(tree);
   });
 
   it('navega al detalle de la orden con el id y estado actuales', async () => {
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<QrRetiroScreen />);
-    });
+    const tree = await renderizar(<QrRetiroScreen />);
 
-    const boton = tree.root.findByProps({ testID: 'abrir-boleta' });
-    await act(async () => {
-      boton.props.onPress();
-    });
+    await pulsar(tree, 'abrir-boleta');
 
-    expect(mockRouter.push).toHaveBeenCalledWith({
+    expect(routerMock.push).toHaveBeenCalledWith({
       pathname: '/(cliente)/orden/[id]',
       params: { id: 'orden-1', estado: 'listo_para_retiro' },
     });
 
-    act(() => tree.unmount());
+    desmontar(tree);
   });
 
   it('no muestra el botón de boleta si no hay id de orden', async () => {
     mockUseLocalSearchParams.mockReturnValue({});
 
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<QrRetiroScreen />);
-    });
+    const tree = await renderizar(<QrRetiroScreen />);
 
     expect(tree.root.findAllByProps({ testID: 'abrir-boleta' })).toHaveLength(0);
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
 
-    act(() => tree.unmount());
+    desmontar(tree);
   });
 });

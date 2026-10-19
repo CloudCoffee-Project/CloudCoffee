@@ -1,35 +1,27 @@
 // src/__tests__/cliente-cambiar-contrasena.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import CambiarContrasenaScreen, {
   PASSWORD_MIN,
   validarCambioContrasena,
 } from '../app/(cliente)/cambiar-contrasena';
 import { cambiarContrasena } from '../services/auth';
-import { useRouter } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { textoDe } from '../test-utils';
 
 jest.mock('../services/auth', () => ({
   cambiarContrasena: jest.fn(),
 }));
 
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({ back: jest.fn(), push: jest.fn() })),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
-}));
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockCambiarContrasena = cambiarContrasena as unknown as jest.Mock;
-const mockUseRouter = useRouter as unknown as jest.Mock;
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 async function renderizarPantalla(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
@@ -113,7 +105,6 @@ describe('CambiarContrasenaScreen (INT4-24)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCambiarContrasena.mockResolvedValue(undefined);
-    mockUseRouter.mockReturnValue({ back: jest.fn(), push: jest.fn() });
   });
 
   it('muestra el header y el formulario', async () => {

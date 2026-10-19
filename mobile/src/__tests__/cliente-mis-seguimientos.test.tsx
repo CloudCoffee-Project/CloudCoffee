@@ -1,12 +1,13 @@
 // src/__tests__/cliente-mis-seguimientos.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { Alert } from 'react-native';
 
 import MisSeguimientosScreen from '../app/(cliente)/mis-seguimientos';
 import { eliminarSeguimiento, listarSeguimientos } from '../services/seguimientos';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { textoDe } from '../test-utils';
 import type { Seguimiento } from '../types/domain';
 
 const alertSpy = jest.spyOn(Alert, 'alert');
@@ -16,18 +17,12 @@ jest.mock('../services/seguimientos', () => ({
   eliminarSeguimiento: jest.fn(),
 }));
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockListar = listarSeguimientos as unknown as jest.Mock;
 const mockEliminar = eliminarSeguimiento as unknown as jest.Mock;
@@ -41,12 +36,6 @@ function seguimiento(id: string, sobre: Partial<Seguimiento> = {}): Seguimiento 
     cafeteriaId: null,
     ...sobre,
   };
-}
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
 }
 
 // Renderiza la pantalla y ejecuta el callback que el mock de useFocusEffect
