@@ -160,6 +160,50 @@ nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
 `PasarelaPagoSimulada` (`SIMULADO`) solo entrega una referencia, y la simulación
 del resultado y su consulta llegan con INT2-76.
 
+### Simulación de pago y consulta (INT2-76)
+
+Conforme al contrato de INT2-50 ([compra-pago-retiro.md](docs/compra-pago-retiro.md)):
+escenarios deterministas, sin proveedor externo, tarjeta, Mercado Pago, `initPoint`
+ni webhooks. Gateway enruta `/v1/compras/**` a order-service.
+
+| Endpoint | Respuesta |
+|---|---|
+| `POST /v1/compras/{compraId}/pago` | `201 Pago`, `Location: /v1/compras/{compraId}/pago`, `Cache-Control: no-store` |
+| `GET /v1/compras/{compraId}/pago` | `200 Pago` con `Cache-Control: no-store`; `404 PAGO_NO_ENCONTRADO` si aún no existe |
+
+El comando admite solo `{"escenario": "aprobar" | "rechazar" | "pendiente"}`;
+cualquier otro campo (tarjeta, importe, estado) o valor responde `400`. Requiere
+`Idempotency-Key` con un UUID por intención.
+
+| Escenario | `estado` | `motivo` |
+|---|---|---|
+| `aprobar` | `aprobado` | `aprobacion_simulada` |
+| `rechazar` | `rechazado` | `rechazo_simulado` |
+| `pendiente` | `pendiente` | `escenario_pendiente` |
+
+`Pago`: `pagoId, compraId, estado, motivo, montoTotal` (CLP entero)`, moneda: CLP,
+simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`.
+
+- **Solo el CLIENTE propietario:** el dueño se toma del `sub` del JWT. Una compra
+  ajena o inexistente responde `404`; otro rol, `403 ROL_NO_PERMITIDO`.
+- **Idempotencia** (tabla `idempotencia`, única por usuario, método, ruta y clave):
+  repetir la clave con el mismo cuerpo reproduce el código, el cuerpo y el `Location`
+  originales, con `Idempotency-Replayed: true`, sin crear nada. La misma clave con
+  otro escenario responde `409 IDEMPOTENCY_CONFLICT`.
+- **Un pago por compra:** otra clave nunca crea un segundo pago ni resuelve uno
+  pendiente; responde `409 PAGO_YA_INICIADO` y el pago no cambia. Un pendiente solo
+  termina al vencer su reserva (INT2-77). Reintentar tras un rechazo exige otra compra.
+- Los errores de dominio llevan las extensiones `code` y `traceId` del contrato.
+
+Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
+compras de prueba para las cuentas de INT2-65:
+
+| Compra | Dueño | Monto |
+|---|---|---|
+| `77777777-7777-4777-8777-777777777701` | `comprador@cloudcoffee.dev` | 3700 |
+| `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
+| `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El contrato objetivo del Sprint 2 está en
