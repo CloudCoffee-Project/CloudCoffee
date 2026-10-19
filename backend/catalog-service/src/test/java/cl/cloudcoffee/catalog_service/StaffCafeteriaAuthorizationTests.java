@@ -2,11 +2,17 @@ package cl.cloudcoffee.catalog_service;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -15,16 +21,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jwt.JWTClaimsSet;
 
+import cl.cloudcoffee.security.AsignacionNoVerificableException;
+import cl.cloudcoffee.security.AsignacionesCafeteria;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
 /**
- * INT2-65: el personal solo consulta la cafetería que Auth le asignó en el JWT.
+ * INT2-65 alineado con INT2-50: el personal solo consulta la cafetería que
+ * auth-service tiene persistida para él; el claim cafeteriaId del JWT no autoriza.
  * Usa el seed de catálogo (INT2-36), con la misma configuración que DevCatalogSeedIntegrationTests.
  */
 @SpringBootTest(properties = {
@@ -37,16 +47,29 @@ import cl.cloudcoffee.security.testing.JwtTestSupport;
 @ActiveProfiles("dev")
 class StaffCafeteriaAuthorizationTests extends JwtTestSupport {
 
-    static final String CENTRAL = "44444444-4444-4444-8444-444444444444";
-    static final String PATIO_NORTE = "44444444-4444-4444-8444-444444444447";
+    static final UUID CENTRAL = UUID.fromString("44444444-4444-4444-8444-444444444444");
+    static final UUID PATIO_NORTE = UUID.fromString("44444444-4444-4444-8444-444444444447");
+
+    static final UUID PERSONAL_CENTRAL = UUID.randomUUID();
+    static final UUID PERSONAL_SIN_ASIGNACION = UUID.randomUUID();
 
     @Autowired
     MockMvc mvc;
 
+    // auth-service simulado: fuente de verdad de la asignación.
+    @MockitoBean
+    AsignacionesCafeteria asignaciones;
+
+    @BeforeEach
+    void asignacionesPersistidas() {
+        when(asignaciones.cafeteriaDe(any())).thenReturn(Optional.empty());
+        when(asignaciones.cafeteriaDe(PERSONAL_CENTRAL)).thenReturn(Optional.of(CENTRAL));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
     void personalConsultaElInventarioDeSuCafeteria(String role) throws Exception {
-        inventario(CENTRAL, staff(role, CENTRAL))
+        inventario(CENTRAL, jwt(PERSONAL_CENTRAL, role, null))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(7)))
                 .andExpect(jsonPath("$[*].productoNombre", contains(
@@ -60,35 +83,46 @@ class StaffCafeteriaAuthorizationTests extends JwtTestSupport {
     @ParameterizedTest
     @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
     void personalNoConsultaUnaCafeteriaAjena(String role) throws Exception {
-        prohibido(inventario(PATIO_NORTE, staff(role, CENTRAL)));
+        prohibido(inventario(PATIO_NORTE, jwt(PERSONAL_CENTRAL, role, null)));
+    }
+
+    @Test
+    void elClaimDelJwtNoAmpliaNiReemplazaLaAsignacion() throws Exception {
+        // Token emitido con Patio Norte, pero Auth tiene persistida Central.
+        String token = jwt(PERSONAL_CENTRAL, "CAJERO", PATIO_NORTE);
+
+        prohibido(inventario(PATIO_NORTE, token));
+        inventario(CENTRAL, token).andExpect(status().isOk());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
-    void personalSinAsignacionNoConsultaNingunaCafeteria(String role) throws Exception {
-        prohibido(inventario(CENTRAL, sign(claims().claim("role", role).build())));
+    void personalSinAsignacionNoConsultaNingunaAunqueSuTokenTraigaCafeteria(String role) throws Exception {
+        prohibido(inventario(CENTRAL, jwt(PERSONAL_SIN_ASIGNACION, role, CENTRAL)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CLIENTE", "SUPER_ADMIN"})
+    void rolesQueNoSonPersonalNoConsultanInventarios(String role) throws Exception {
+        prohibido(inventario(CENTRAL, jwt(PERSONAL_CENTRAL, role, null)));
     }
 
     @Test
-    void clienteNoConsultaInventarios() throws Exception {
-        prohibido(inventario(CENTRAL, token()));
-    }
+    void siAuthNoRespondeFallaCerrado() throws Exception {
+        when(asignaciones.cafeteriaDe(PERSONAL_CENTRAL))
+                .thenThrow(new AsignacionNoVerificableException("auth-service no responde", null));
 
-    @Test
-    void superAdminConsultaCualquierCafeteria() throws Exception {
-        inventario(PATIO_NORTE, sign(claims().claim("role", "SUPER_ADMIN").build()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(5)));
+        prohibido(inventario(CENTRAL, jwt(PERSONAL_CENTRAL, "CAJERO", CENTRAL)));
     }
 
     @Test
     void ignoraCafeteriaYRolEnviadosPorElFrontend() throws Exception {
-        // Solo cuenta el JWT firmado: encabezados y parámetros no amplían permisos.
+        // Solo cuentan el JWT firmado y la asignación de Auth: encabezados y parámetros no amplían permisos.
         prohibido(mvc.perform(get("/catalog/cafeterias/{id}/ofertas", PATIO_NORTE)
-                .header("Authorization", "Bearer " + staff("CAJERO", CENTRAL))
-                .header("X-Cafeteria-Id", PATIO_NORTE)
+                .header("Authorization", "Bearer " + jwt(PERSONAL_CENTRAL, "CAJERO", null))
+                .header("X-Cafeteria-Id", PATIO_NORTE.toString())
                 .header("X-User-Role", "SUPER_ADMIN")
-                .param("cafeteriaId", PATIO_NORTE)
+                .param("cafeteriaId", PATIO_NORTE.toString())
                 .param("role", "SUPER_ADMIN")));
     }
 
@@ -98,7 +132,7 @@ class StaffCafeteriaAuthorizationTests extends JwtTestSupport {
                 .andExpect(status().isUnauthorized());
     }
 
-    private ResultActions inventario(String cafeteriaId, String jwt) throws Exception {
+    private ResultActions inventario(UUID cafeteriaId, String jwt) throws Exception {
         return mvc.perform(get("/catalog/cafeterias/{id}/ofertas", cafeteriaId)
                 .header("Authorization", "Bearer " + jwt));
     }
@@ -109,11 +143,11 @@ class StaffCafeteriaAuthorizationTests extends JwtTestSupport {
                 .andExpect(jsonPath("$.status").value(403));
     }
 
-    private static String staff(String role, String cafeteriaId) {
-        return sign(claims().claim("role", role).claim("cafeteriaId", cafeteriaId).build());
-    }
-
-    private static String sign(JWTClaimsSet claims) {
-        return JwtTestSupport.sign(claims, KEYS, JWSAlgorithm.RS256);
+    private static String jwt(UUID usuario, String role, UUID cafeteriaClaim) {
+        JWTClaimsSet.Builder claims = claims().subject(usuario.toString()).claim("role", role);
+        if (cafeteriaClaim != null) {
+            claims.claim("cafeteriaId", cafeteriaClaim.toString());
+        }
+        return sign(claims.build(), KEYS, JWSAlgorithm.RS256);
     }
 }

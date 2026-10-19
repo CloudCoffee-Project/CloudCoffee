@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -14,52 +16,75 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
+/** INT2-65 alineado con INT2-50: la asignación sale de auth-service, no del claim del JWT. */
 class CafeteriaAccessTests {
 
+    static final UUID USUARIO = UUID.randomUUID();
     static final UUID PROPIA = UUID.randomUUID();
     static final UUID AJENA = UUID.randomUUID();
 
-    final CafeteriaAccess access = new CafeteriaAccess();
+    // Auth-service simulado: USUARIO tiene asignada PROPIA.
+    final CafeteriaAccess access = new CafeteriaAccess(
+            usuario -> usuario.equals(USUARIO) ? Optional.of(PROPIA) : Optional.empty());
 
     @ParameterizedTest
     @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
-    void personalOperaSoloSuCafeteria(String role) {
-        var auth = token(role, PROPIA.toString());
+    void personalOperaSoloLaCafeteriaPersistida(String role) {
+        var auth = token(USUARIO, role, null);
 
         assertThat(access.puedeOperar(auth, PROPIA)).isTrue();
         assertThat(access.puedeOperar(auth, AJENA)).isFalse();
         assertThatThrownBy(() -> access.verificar(auth, AJENA)).isInstanceOf(AccessDeniedException.class);
     }
 
+    @Test
+    void ignoraElClaimDeCafeteriaDelJwt() {
+        // El token dice AJENA, pero Auth tiene persistida PROPIA: manda Auth.
+        var auth = token(USUARIO, "CAJERO", AJENA);
+
+        assertThat(access.puedeOperar(auth, AJENA)).isFalse();
+        assertThat(access.puedeOperar(auth, PROPIA)).isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA"})
-    void personalSinAsignacionNoOperaNinguna(String role) {
-        assertThat(access.puedeOperar(token(role, null), PROPIA)).isFalse();
+    void personalSinAsignacionNoOperaNingunaAunqueElTokenTraigaCafeteria(String role) {
+        assertThat(access.puedeOperar(token(UUID.randomUUID(), role, PROPIA), PROPIA)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CLIENTE", "SUPER_ADMIN"})
+    void rolesQueNoSonPersonalNoHeredanPermisos(String role) {
+        // Ni siquiera con una asignación persistida a su nombre.
+        assertThat(access.puedeOperar(token(USUARIO, role, null), PROPIA)).isFalse();
     }
 
     @Test
-    void clienteNoOperaCafeterias() {
-        assertThat(access.puedeOperar(token("CLIENTE", null), PROPIA)).isFalse();
+    void siNoSePuedeVerificarLaAsignacionFallaCerrado() {
+        CafeteriaAccess sinAuth = new CafeteriaAccess(usuario -> {
+            throw new AsignacionNoVerificableException("auth-service no responde", null);
+        });
+
+        assertThat(sinAuth.puedeOperar(token(USUARIO, "CAJERO", PROPIA), PROPIA)).isFalse();
     }
 
     @Test
-    void superAdminOperaCualquierCafeteria() {
-        assertThat(access.puedeOperar(token("SUPER_ADMIN", null), AJENA)).isTrue();
-    }
-
-    @Test
-    void sinJwtOSinCafeteriaNoAutoriza() {
-        assertThat(access.puedeOperar(new TestingAuthenticationToken("x", "y", "ROLE_SUPER_ADMIN"), PROPIA)).isFalse();
+    void sinJwtSinCafeteriaOConSubjectInvalidoNoAutoriza() {
+        assertThat(access.puedeOperar(new TestingAuthenticationToken("x", "y", "ROLE_CAJERO"), PROPIA)).isFalse();
         assertThat(access.puedeOperar(null, PROPIA)).isFalse();
-        assertThat(access.puedeOperar(token("SUPER_ADMIN", null), null)).isFalse();
+        assertThat(access.puedeOperar(token(USUARIO, "CAJERO", null), null)).isFalse();
+        var jwt = Jwt.withTokenValue("t").header("alg", "RS256").subject("no-es-uuid")
+                .claims(claims -> claims.putAll(Map.of("role", "CAJERO")))
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        assertThat(access.puedeOperar(new JwtAuthenticationToken(jwt), PROPIA)).isFalse();
     }
 
-    private static JwtAuthenticationToken token(String role, String cafeteriaId) {
+    private static JwtAuthenticationToken token(UUID usuario, String role, UUID cafeteriaClaim) {
         var jwt = Jwt.withTokenValue("token").header("alg", "RS256")
-                .subject(UUID.randomUUID().toString()).claim("role", role)
+                .subject(usuario.toString()).claim("role", role)
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60));
-        if (cafeteriaId != null) {
-            jwt.claim(CafeteriaAccess.CLAIM, cafeteriaId);
+        if (cafeteriaClaim != null) {
+            jwt.claim(CafeteriaAccess.CLAIM, cafeteriaClaim.toString());
         }
         return new JwtAuthenticationToken(jwt.build());
     }
