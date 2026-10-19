@@ -7,11 +7,6 @@
 //
 // Los datos salen de GET /v1/auth/users/me y la edición usa PATCH
 // /v1/auth/users/me (services/auth.ts), el contrato de `UserController`.
-// Hoy ambos responden 404 por el gateway: el controller está mapeado a
-// /v1/auth/users mientras el gateway aplica StripPrefix=1 y le entrega
-// /auth/users. Es un bug de backend; cuando se corrija el prefijo, esta pantalla
-// conecta sin cambios. Mientras tanto muestra el error normalizado con botón de
-// reintentar. Detalle en docs/contratos-backend.md.
 // Validaciones espejo del registro backend: nombre/apellido max 100 y
 // teléfono ^[0-9+ ()-]{6,20}$.
 
@@ -29,7 +24,7 @@ import { useRouter } from 'expo-router';
 import { AxiosError } from 'axios';
 
 import { actualizarPerfil, obtenerPerfil } from '../../services/auth';
-import { ApiProblem, toApiError } from '../../services/httpClient';
+import { ApiProblem, mensajeDeErrorApi, toApiError } from '../../services/httpClient';
 import { useAuth } from '../../context/AuthContext';
 import type { ActualizarPerfilRequest, PerfilUsuario } from '../../types/domain';
 
@@ -145,8 +140,7 @@ export default function PerfilScreen() {
       setEditando(false);
       setMensajeExito('Perfil actualizado correctamente.');
     } catch (error) {
-      const apiError = toApiError(error as AxiosError<ApiProblem>);
-      setErrorGuardar(apiError.message);
+      setErrorGuardar(mensajeDeErrorApi(error));
     } finally {
       setGuardando(false);
     }

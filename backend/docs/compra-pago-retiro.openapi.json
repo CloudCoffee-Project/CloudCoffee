@@ -1,0 +1,2685 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CloudCoffee · Compra, pago simulado y retiro",
+    "version": "1.0.0",
+    "description": "Contrato objetivo INT2-50; endpoints todavía pendientes de implementación. Reglas normativas en compra-pago-retiro.md. Pago simulado dentro de order-service; sin proveedor externo."
+  },
+  "servers": [
+    {
+      "url": "/v1",
+      "description": "API Gateway; elimina /v1 antes de reenviar a Order."
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Compras"
+    },
+    {
+      "name": "Órdenes y retiro"
+    }
+  ],
+  "paths": {
+    "/compras": {
+      "post": {
+        "operationId": "crearCompra",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Crear compra agrupada por cafetería",
+        "description": "Precios y propietario del servidor. Reserva completa por orden; falta de stock produce 201 con revisión requerida. Compensaciones técnicas pendientes devuelven 503 y conservan la intención.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "201": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                },
+                "description": "/v1/compras/{compraId}"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Compra"
+                },
+                "examples": {
+                  "reservada": {
+                    "value": {
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "clienteId": "10000000-0000-4000-8000-000000000001",
+                      "estado": "pendiente_pago",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "ordenes": [
+                        {
+                          "ordenId": "40000000-0000-4000-8000-000000000001",
+                          "compraId": "30000000-0000-4000-8000-000000000001",
+                          "codigoOrden": "CC-000001",
+                          "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                          "cafeteriaNombre": "Cafetería Central",
+                          "estado": "pendiente_pago",
+                          "montoTotal": 3600,
+                          "moneda": "CLP",
+                          "items": [
+                            {
+                              "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                              "ofertaId": "50000000-0000-4000-8000-000000000001",
+                              "productoId": "60000000-0000-4000-8000-000000000002",
+                              "productoNombre": "Café americano",
+                              "cantidad": 2,
+                              "precioUnitario": 1800,
+                              "subtotal": 3600
+                            }
+                          ],
+                          "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                          "retiroHasta": null,
+                          "entregadoAt": null,
+                          "creadoAt": "2026-10-15T18:00:00Z",
+                          "actualizadoAt": "2026-10-15T18:00:00Z",
+                          "version": 1
+                        }
+                      ],
+                      "pago": null,
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:00:00Z",
+                      "version": 1
+                    }
+                  },
+                  "revision": {
+                    "value": {
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "clienteId": "10000000-0000-4000-8000-000000000001",
+                      "estado": "revision_requerida",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "ordenes": [
+                        {
+                          "ordenId": "40000000-0000-4000-8000-000000000001",
+                          "compraId": "30000000-0000-4000-8000-000000000001",
+                          "codigoOrden": "CC-000001",
+                          "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                          "cafeteriaNombre": "Cafetería Central",
+                          "estado": "revision_requerida",
+                          "montoTotal": 3600,
+                          "moneda": "CLP",
+                          "items": [
+                            {
+                              "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                              "ofertaId": "50000000-0000-4000-8000-000000000001",
+                              "productoId": "60000000-0000-4000-8000-000000000002",
+                              "productoNombre": "Café americano",
+                              "cantidad": 2,
+                              "precioUnitario": 1800,
+                              "subtotal": 3600
+                            }
+                          ],
+                          "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                          "retiroHasta": null,
+                          "entregadoAt": null,
+                          "creadoAt": "2026-10-15T18:00:00Z",
+                          "actualizadoAt": "2026-10-15T18:00:00Z",
+                          "version": 1
+                        }
+                      ],
+                      "pago": null,
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:00:00Z",
+                      "version": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCompra"
+              },
+              "example": {
+                "items": [
+                  {
+                    "ofertaId": "50000000-0000-4000-8000-000000000001",
+                    "cantidad": 2
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listarCompras",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Consultar historial propio paginado",
+        "description": "Orden creadoAt DESC e ID DESC como desempate; sin coincidencias content vacío. No acepta propietario del frontend.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaCompras"
+                },
+                "example": {
+                  "content": [
+                    {
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "clienteId": "10000000-0000-4000-8000-000000000001",
+                      "estado": "pendiente_pago",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "ordenes": [
+                        {
+                          "ordenId": "40000000-0000-4000-8000-000000000001",
+                          "compraId": "30000000-0000-4000-8000-000000000001",
+                          "codigoOrden": "CC-000001",
+                          "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                          "cafeteriaNombre": "Cafetería Central",
+                          "estado": "pendiente_pago",
+                          "montoTotal": 3600,
+                          "moneda": "CLP",
+                          "items": [
+                            {
+                              "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                              "ofertaId": "50000000-0000-4000-8000-000000000001",
+                              "productoId": "60000000-0000-4000-8000-000000000002",
+                              "productoNombre": "Café americano",
+                              "cantidad": 2,
+                              "precioUnitario": 1800,
+                              "subtotal": 3600
+                            }
+                          ],
+                          "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                          "retiroHasta": null,
+                          "entregadoAt": null,
+                          "creadoAt": "2026-10-15T18:00:00Z",
+                          "actualizadoAt": "2026-10-15T18:00:00Z",
+                          "version": 1
+                        }
+                      ],
+                      "pago": null,
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:00:00Z",
+                      "version": 1
+                    }
+                  ],
+                  "number": 0,
+                  "size": 20,
+                  "totalElements": 1,
+                  "totalPages": 1,
+                  "first": true,
+                  "last": true,
+                  "empty": false
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ]
+      }
+    },
+    "/compras/{compraId}": {
+      "get": {
+        "operationId": "consultarCompra",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Consultar compra y órdenes propias",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Incluye pago o null y snapshots de todas las órdenes, incluso canceladas.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Compra"
+                },
+                "example": {
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "clienteId": "10000000-0000-4000-8000-000000000001",
+                  "estado": "pendiente_pago",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "ordenes": [
+                    {
+                      "ordenId": "40000000-0000-4000-8000-000000000001",
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "codigoOrden": "CC-000001",
+                      "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                      "cafeteriaNombre": "Cafetería Central",
+                      "estado": "pendiente_pago",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "items": [
+                        {
+                          "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                          "ofertaId": "50000000-0000-4000-8000-000000000001",
+                          "productoId": "60000000-0000-4000-8000-000000000002",
+                          "productoNombre": "Café americano",
+                          "cantidad": 2,
+                          "precioUnitario": 1800,
+                          "subtotal": 3600
+                        }
+                      ],
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "retiroHasta": null,
+                      "entregadoAt": null,
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:00:00Z",
+                      "version": 1
+                    }
+                  ],
+                  "pago": null,
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:00:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "compraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/compras/{compraId}/confirmar": {
+      "post": {
+        "operationId": "confirmarCompra",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Confirmar compra",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reservar todas las órdenes en revisión. Compensa nuevas reservas si alguna falla; PRECIO_CAMBIO incluye compra actualizada y exige nueva confirmación.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Compra"
+                },
+                "example": {
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "clienteId": "10000000-0000-4000-8000-000000000001",
+                  "estado": "pendiente_pago",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "ordenes": [
+                    {
+                      "ordenId": "40000000-0000-4000-8000-000000000001",
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "codigoOrden": "CC-000001",
+                      "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                      "cafeteriaNombre": "Cafetería Central",
+                      "estado": "pendiente_pago",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "items": [
+                        {
+                          "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                          "ofertaId": "50000000-0000-4000-8000-000000000001",
+                          "productoId": "60000000-0000-4000-8000-000000000002",
+                          "productoNombre": "Café americano",
+                          "cantidad": 2,
+                          "precioUnitario": 1800,
+                          "subtotal": 3600
+                        }
+                      ],
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "retiroHasta": null,
+                      "entregadoAt": null,
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:00:00Z",
+                      "version": 1
+                    }
+                  ],
+                  "pago": null,
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:00:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "compraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/compras/{compraId}/cancelar": {
+      "post": {
+        "operationId": "cancelarCompra",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Cancelar compra",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Cancela revisión o pendiente, rechaza pago pendiente y libera reservas. Si aprobación ya ganó, 409. Total cobrable resultante 0.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Compra"
+                },
+                "example": {
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "clienteId": "10000000-0000-4000-8000-000000000001",
+                  "estado": "cancelado",
+                  "montoTotal": 0,
+                  "moneda": "CLP",
+                  "ordenes": [
+                    {
+                      "ordenId": "40000000-0000-4000-8000-000000000001",
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "codigoOrden": "CC-000001",
+                      "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                      "cafeteriaNombre": "Cafetería Central",
+                      "estado": "cancelado",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "items": [
+                        {
+                          "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                          "ofertaId": "50000000-0000-4000-8000-000000000001",
+                          "productoId": "60000000-0000-4000-8000-000000000002",
+                          "productoNombre": "Café americano",
+                          "cantidad": 2,
+                          "precioUnitario": 1800,
+                          "subtotal": 3600
+                        }
+                      ],
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "retiroHasta": null,
+                      "entregadoAt": null,
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:01:00Z",
+                      "version": 2
+                    }
+                  ],
+                  "pago": null,
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:01:00Z",
+                  "version": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "compraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/compras/{compraId}/pago": {
+      "post": {
+        "operationId": "simularPago",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Iniciar pago simulado único",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Solo pendiente_pago, todas las reservas vigentes. Importe/estado derivados del servidor. aprobar confirma stock antes de aprobar; rechazar cancela; pendiente expira con reserva. Otra clave no crea otro pago.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "201": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string",
+                  "format": "uri-reference"
+                },
+                "description": "/v1/compras/{compraId}/pago"
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pago"
+                },
+                "example": {
+                  "pagoId": "90000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "estado": "aprobado",
+                  "motivo": "aprobacion_simulada",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "simulado": true,
+                  "proveedor": "simulado",
+                  "creadoAt": "2026-10-15T18:01:00Z",
+                  "actualizadoAt": "2026-10-15T18:01:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "parameters": [
+          {
+            "name": "compraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimularPago"
+              },
+              "example": {
+                "escenario": "aprobar"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "consultarPago",
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Consultar resultado del pago simulado",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. 404 si no existe. Lectura sin efectos; pendiente se consulta cada 2 s. No usa proveedor externo.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pago"
+                },
+                "example": {
+                  "pagoId": "90000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "estado": "aprobado",
+                  "motivo": "aprobacion_simulada",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "simulado": true,
+                  "proveedor": "simulado",
+                  "creadoAt": "2026-10-15T18:01:00Z",
+                  "actualizadoAt": "2026-10-15T18:01:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "compraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "listarOrdenesCajero",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Listar pedidos de la cafetería asignada",
+        "description": "Solo CAJERO con asignación persistida a la cafetería. 403 sin asignación y 404 para cafetería ajena. Orden creadoAt DESC e ID DESC como desempate. No admite cafeteriaId del frontend.",
+        "x-roles": [
+          "CAJERO"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaOrdenes"
+                },
+                "example": {
+                  "content": [
+                    {
+                      "ordenId": "40000000-0000-4000-8000-000000000001",
+                      "compraId": "30000000-0000-4000-8000-000000000001",
+                      "codigoOrden": "CC-000001",
+                      "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                      "cafeteriaNombre": "Cafetería Central",
+                      "estado": "pendiente_pago",
+                      "montoTotal": 3600,
+                      "moneda": "CLP",
+                      "items": [
+                        {
+                          "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                          "ofertaId": "50000000-0000-4000-8000-000000000001",
+                          "productoId": "60000000-0000-4000-8000-000000000002",
+                          "productoNombre": "Café americano",
+                          "cantidad": 2,
+                          "precioUnitario": 1800,
+                          "subtotal": 3600
+                        }
+                      ],
+                      "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                      "retiroHasta": null,
+                      "entregadoAt": null,
+                      "creadoAt": "2026-10-15T18:00:00Z",
+                      "actualizadoAt": "2026-10-15T18:00:00Z",
+                      "version": 1
+                    }
+                  ],
+                  "number": 0,
+                  "size": 20,
+                  "totalElements": 1,
+                  "totalPages": 1,
+                  "first": true,
+                  "last": true,
+                  "empty": false
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoOrden"
+            }
+          }
+        ]
+      }
+    },
+    "/orders/{ordenId}": {
+      "get": {
+        "operationId": "consultarOrden",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Consultar orden autorizada",
+        "description": "CLIENTE propietario o CAJERO de la cafetería. No expone tokens de retiro; recurso ajeno devuelve 404.",
+        "x-roles": [
+          "CLIENTE",
+          "CAJERO"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                },
+                "example": {
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "codigoOrden": "CC-000001",
+                  "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                  "cafeteriaNombre": "Cafetería Central",
+                  "estado": "pendiente_pago",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "items": [
+                    {
+                      "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                      "ofertaId": "50000000-0000-4000-8000-000000000001",
+                      "productoId": "60000000-0000-4000-8000-000000000002",
+                      "productoNombre": "Café americano",
+                      "cantidad": 2,
+                      "precioUnitario": 1800,
+                      "subtotal": 3600
+                    }
+                  ],
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "retiroHasta": null,
+                  "entregadoAt": null,
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:00:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/orders/{ordenId}/confirmar": {
+      "post": {
+        "operationId": "confirmarOrden",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Confirmar orden de una compra",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reserva de orden en revisión. Revalida cotización. Solo antes de iniciar pago. Actualiza también estado y versión de compra.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                },
+                "example": {
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "codigoOrden": "CC-000001",
+                  "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                  "cafeteriaNombre": "Cafetería Central",
+                  "estado": "pendiente_pago",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "items": [
+                    {
+                      "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                      "ofertaId": "50000000-0000-4000-8000-000000000001",
+                      "productoId": "60000000-0000-4000-8000-000000000002",
+                      "productoNombre": "Café americano",
+                      "cantidad": 2,
+                      "precioUnitario": 1800,
+                      "subtotal": 3600
+                    }
+                  ],
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "retiroHasta": null,
+                  "entregadoAt": null,
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:00:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/orders/{ordenId}/cancelar": {
+      "post": {
+        "operationId": "cancelarOrden",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Cancelar orden de una compra",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Libera reserva y actualiza total cobrable de compra; última orden activa cancela compra. Solo antes de iniciar pago. Actualiza también estado y versión de compra.",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                },
+                "example": {
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "codigoOrden": "CC-000001",
+                  "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                  "cafeteriaNombre": "Cafetería Central",
+                  "estado": "cancelado",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "items": [
+                    {
+                      "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                      "ofertaId": "50000000-0000-4000-8000-000000000001",
+                      "productoId": "60000000-0000-4000-8000-000000000002",
+                      "productoNombre": "Café americano",
+                      "cantidad": 2,
+                      "precioUnitario": 1800,
+                      "subtotal": 3600
+                    }
+                  ],
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "retiroHasta": null,
+                  "entregadoAt": null,
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:01:00Z",
+                  "version": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/orders/{ordenId}/listo": {
+      "post": {
+        "operationId": "marcarLista",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Marcar orden lista para retiro",
+        "description": "Solo CAJERO con asignación persistida a la cafetería. 403 sin asignación y 404 para cafetería ajena. Solo desde pagado antes de retiroHasta. Habilita token opaco; no extiende retiroHasta.",
+        "x-roles": [
+          "CAJERO"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                },
+                "example": {
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "codigoOrden": "CC-000001",
+                  "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                  "cafeteriaNombre": "Cafetería Central",
+                  "estado": "listo_para_retiro",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "items": [
+                    {
+                      "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                      "ofertaId": "50000000-0000-4000-8000-000000000001",
+                      "productoId": "60000000-0000-4000-8000-000000000002",
+                      "productoNombre": "Café americano",
+                      "cantidad": 2,
+                      "precioUnitario": 1800,
+                      "subtotal": 3600
+                    }
+                  ],
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "retiroHasta": "2026-10-15T20:01:00Z",
+                  "entregadoAt": null,
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:02:00Z",
+                  "version": 3
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/orders/{ordenId}/qr": {
+      "get": {
+        "operationId": "consultarQr",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Obtener credencial de retiro vigente",
+        "description": "Propietario o CAJERO asignado. Solo pago aprobado, orden lista y plazo vigente. Mismo código sin extender vencimiento; no incluir en logs/eventos.",
+        "x-roles": [
+          "CLIENTE",
+          "CAJERO"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QrRetiro"
+                },
+                "example": {
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "codigo": "ejemplo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "expiraAt": "2026-10-15T20:01:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/orders/validar-retiro": {
+      "post": {
+        "operationId": "validarRetiro",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Validar código sin registrar entrega",
+        "description": "Solo CAJERO con asignación persistida a la cafetería. 403 sin asignación y 404 para cafetería ajena. Comprueba pago, orden lista, token y vigencia. No consume código. Entregar deberá revalidar atómicamente.",
+        "x-roles": [
+          "CAJERO"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidacionRetiro"
+                },
+                "example": {
+                  "orden": {
+                    "ordenId": "40000000-0000-4000-8000-000000000001",
+                    "compraId": "30000000-0000-4000-8000-000000000001",
+                    "codigoOrden": "CC-000001",
+                    "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                    "cafeteriaNombre": "Cafetería Central",
+                    "estado": "listo_para_retiro",
+                    "montoTotal": 3600,
+                    "moneda": "CLP",
+                    "items": [
+                      {
+                        "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                        "ofertaId": "50000000-0000-4000-8000-000000000001",
+                        "productoId": "60000000-0000-4000-8000-000000000002",
+                        "productoNombre": "Café americano",
+                        "cantidad": 2,
+                        "precioUnitario": 1800,
+                        "subtotal": 3600
+                      }
+                    ],
+                    "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                    "retiroHasta": "2026-10-15T20:01:00Z",
+                    "entregadoAt": null,
+                    "creadoAt": "2026-10-15T18:00:00Z",
+                    "actualizadoAt": "2026-10-15T18:02:00Z",
+                    "version": 3
+                  },
+                  "expiraAt": "2026-10-15T20:01:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodigoRetiro"
+              },
+              "example": {
+                "codigo": "ejemplo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{ordenId}/entregar": {
+      "post": {
+        "operationId": "entregarOrden",
+        "tags": [
+          "Órdenes y retiro"
+        ],
+        "summary": "Registrar una entrega única",
+        "description": "Solo CAJERO con asignación persistida a la cafetería. 403 sin asignación y 404 para cafetería ajena. Valida código contra orden de URL, pago, estado y vencimiento. Misma clave reproduce éxito; otra lectura tras entrega devuelve QR_UTILIZADO. No vuelve a descontar stock.",
+        "x-roles": [
+          "CAJERO"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado de la operación.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                },
+                "description": "Evita almacenar datos privados en caché."
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "true si reproduce la respuesta terminada de la misma intención."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                },
+                "example": {
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "codigoOrden": "CC-000001",
+                  "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                  "cafeteriaNombre": "Cafetería Central",
+                  "estado": "entregado",
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "items": [
+                    {
+                      "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                      "ofertaId": "50000000-0000-4000-8000-000000000001",
+                      "productoId": "60000000-0000-4000-8000-000000000002",
+                      "productoNombre": "Café americano",
+                      "cantidad": 2,
+                      "precioUnitario": 1800,
+                      "subtotal": 3600
+                    }
+                  ],
+                  "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                  "retiroHasta": "2026-10-15T20:01:00Z",
+                  "entregadoAt": "2026-10-15T18:03:00Z",
+                  "creadoAt": "2026-10-15T18:00:00Z",
+                  "actualizadoAt": "2026-10-15T18:03:00Z",
+                  "version": 4
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodigoRetiro"
+              },
+              "example": {
+                "codigo": "ejemplo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT RS256"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "UUID por intención; misma clave/carga reproduce resultado durante al menos 24 h desde finalizar. Otra carga entra en conflicto. Ver reglas de concurrencia en el documento.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "Size": {
+        "name": "size",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      }
+    },
+    "schemas": {
+      "EstadoCompra": {
+        "type": "string",
+        "enum": [
+          "revision_requerida",
+          "pendiente_pago",
+          "pagado",
+          "cancelado"
+        ]
+      },
+      "EstadoOrden": {
+        "type": "string",
+        "enum": [
+          "revision_requerida",
+          "pendiente_pago",
+          "pagado",
+          "listo_para_retiro",
+          "entregado",
+          "no_retirado_pendiente_revision",
+          "no_retirado_final",
+          "cancelado"
+        ]
+      },
+      "EstadoPago": {
+        "type": "string",
+        "enum": [
+          "pendiente",
+          "aprobado",
+          "rechazado"
+        ]
+      },
+      "CrearCompra": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ItemCompra"
+            },
+            "description": "Ofertas distintas de un único campus; duplicados se rechazan."
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "examples": [
+          {
+            "items": [
+              {
+                "ofertaId": "50000000-0000-4000-8000-000000000001",
+                "cantidad": 2
+              }
+            ]
+          }
+        ]
+      },
+      "ItemCompra": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ofertaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cantidad": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "ofertaId",
+          "cantidad"
+        ]
+      },
+      "SimularPago": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "escenario": {
+            "type": "string",
+            "enum": [
+              "aprobar",
+              "rechazar",
+              "pendiente"
+            ]
+          }
+        },
+        "required": [
+          "escenario"
+        ],
+        "examples": [
+          {
+            "escenario": "aprobar"
+          }
+        ]
+      },
+      "CodigoRetiro": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Token opaco emitido por Order, nunca un JSON de orden/estado."
+          }
+        },
+        "required": [
+          "codigo"
+        ],
+        "examples": [
+          {
+            "codigo": "ejemplo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        ]
+      },
+      "OrdenItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ordenItemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ofertaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productoNombre": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cantidad": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "precioUnitario": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000000000,
+            "description": "Pesos CLP enteros; precio final con impuestos incluidos."
+          },
+          "subtotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000000000,
+            "description": "Pesos CLP enteros; precio final con impuestos incluidos."
+          }
+        },
+        "required": [
+          "ordenItemId",
+          "ofertaId",
+          "productoId",
+          "productoNombre",
+          "cantidad",
+          "precioUnitario",
+          "subtotal"
+        ]
+      },
+      "Pago": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pagoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoPago"
+          },
+          "motivo": {
+            "type": "string",
+            "enum": [
+              "aprobacion_simulada",
+              "rechazo_simulado",
+              "escenario_pendiente",
+              "procesando_stock",
+              "reserva_vencida",
+              "compra_cancelada"
+            ]
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000000000,
+            "description": "Pesos CLP enteros; precio final con impuestos incluidos."
+          },
+          "moneda": {
+            "type": "string",
+            "enum": [
+              "CLP"
+            ]
+          },
+          "simulado": {
+            "type": "boolean",
+            "const": true
+          },
+          "proveedor": {
+            "type": "string",
+            "enum": [
+              "simulado"
+            ]
+          },
+          "creadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "pagoId",
+          "compraId",
+          "estado",
+          "motivo",
+          "montoTotal",
+          "moneda",
+          "simulado",
+          "proveedor",
+          "creadoAt",
+          "actualizadoAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "pagoId": "90000000-0000-4000-8000-000000000001",
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "estado": "aprobado",
+            "motivo": "aprobacion_simulada",
+            "montoTotal": 3600,
+            "moneda": "CLP",
+            "simulado": true,
+            "proveedor": "simulado",
+            "creadoAt": "2026-10-15T18:01:00Z",
+            "actualizadoAt": "2026-10-15T18:01:00Z",
+            "version": 1
+          }
+        ]
+      },
+      "Orden": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ordenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigoOrden": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cafeteriaNombre": {
+            "type": "string",
+            "minLength": 1
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoOrden"
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000000000,
+            "description": "Pesos CLP enteros; precio final con impuestos incluidos."
+          },
+          "moneda": {
+            "type": "string",
+            "enum": [
+              "CLP"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/OrdenItem"
+            }
+          },
+          "reservaExpiraAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "retiroHasta": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "entregadoAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "creadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "ordenId",
+          "compraId",
+          "codigoOrden",
+          "cafeteriaId",
+          "cafeteriaNombre",
+          "estado",
+          "montoTotal",
+          "moneda",
+          "items",
+          "reservaExpiraAt",
+          "retiroHasta",
+          "entregadoAt",
+          "creadoAt",
+          "actualizadoAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "ordenId": "40000000-0000-4000-8000-000000000001",
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "codigoOrden": "CC-000001",
+            "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+            "cafeteriaNombre": "Cafetería Central",
+            "estado": "pendiente_pago",
+            "montoTotal": 3600,
+            "moneda": "CLP",
+            "items": [
+              {
+                "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                "ofertaId": "50000000-0000-4000-8000-000000000001",
+                "productoId": "60000000-0000-4000-8000-000000000002",
+                "productoNombre": "Café americano",
+                "cantidad": 2,
+                "precioUnitario": 1800,
+                "subtotal": 3600
+              }
+            ],
+            "reservaExpiraAt": "2026-10-15T18:15:00Z",
+            "retiroHasta": null,
+            "entregadoAt": null,
+            "creadoAt": "2026-10-15T18:00:00Z",
+            "actualizadoAt": "2026-10-15T18:00:00Z",
+            "version": 1
+          }
+        ]
+      },
+      "Compra": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clienteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoCompra"
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000000000,
+            "description": "Pesos CLP enteros; precio final con impuestos incluidos."
+          },
+          "moneda": {
+            "type": "string",
+            "enum": [
+              "CLP"
+            ]
+          },
+          "ordenes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Orden"
+            }
+          },
+          "pago": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Pago"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reservaExpiraAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "compraId",
+          "clienteId",
+          "estado",
+          "montoTotal",
+          "moneda",
+          "ordenes",
+          "pago",
+          "reservaExpiraAt",
+          "creadoAt",
+          "actualizadoAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "clienteId": "10000000-0000-4000-8000-000000000001",
+            "estado": "pendiente_pago",
+            "montoTotal": 3600,
+            "moneda": "CLP",
+            "ordenes": [
+              {
+                "ordenId": "40000000-0000-4000-8000-000000000001",
+                "compraId": "30000000-0000-4000-8000-000000000001",
+                "codigoOrden": "CC-000001",
+                "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                "cafeteriaNombre": "Cafetería Central",
+                "estado": "pendiente_pago",
+                "montoTotal": 3600,
+                "moneda": "CLP",
+                "items": [
+                  {
+                    "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                    "ofertaId": "50000000-0000-4000-8000-000000000001",
+                    "productoId": "60000000-0000-4000-8000-000000000002",
+                    "productoNombre": "Café americano",
+                    "cantidad": 2,
+                    "precioUnitario": 1800,
+                    "subtotal": 3600
+                  }
+                ],
+                "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                "retiroHasta": null,
+                "entregadoAt": null,
+                "creadoAt": "2026-10-15T18:00:00Z",
+                "actualizadoAt": "2026-10-15T18:00:00Z",
+                "version": 1
+              }
+            ],
+            "pago": null,
+            "reservaExpiraAt": "2026-10-15T18:15:00Z",
+            "creadoAt": "2026-10-15T18:00:00Z",
+            "actualizadoAt": "2026-10-15T18:00:00Z",
+            "version": 1
+          },
+          {
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "clienteId": "10000000-0000-4000-8000-000000000001",
+            "estado": "revision_requerida",
+            "montoTotal": 3600,
+            "moneda": "CLP",
+            "ordenes": [
+              {
+                "ordenId": "40000000-0000-4000-8000-000000000001",
+                "compraId": "30000000-0000-4000-8000-000000000001",
+                "codigoOrden": "CC-000001",
+                "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                "cafeteriaNombre": "Cafetería Central",
+                "estado": "revision_requerida",
+                "montoTotal": 3600,
+                "moneda": "CLP",
+                "items": [
+                  {
+                    "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                    "ofertaId": "50000000-0000-4000-8000-000000000001",
+                    "productoId": "60000000-0000-4000-8000-000000000002",
+                    "productoNombre": "Café americano",
+                    "cantidad": 2,
+                    "precioUnitario": 1800,
+                    "subtotal": 3600
+                  }
+                ],
+                "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                "retiroHasta": null,
+                "entregadoAt": null,
+                "creadoAt": "2026-10-15T18:00:00Z",
+                "actualizadoAt": "2026-10-15T18:00:00Z",
+                "version": 1
+              }
+            ],
+            "pago": null,
+            "reservaExpiraAt": "2026-10-15T18:15:00Z",
+            "creadoAt": "2026-10-15T18:00:00Z",
+            "actualizadoAt": "2026-10-15T18:00:00Z",
+            "version": 1
+          }
+        ]
+      },
+      "QrRetiro": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ordenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigo": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "expiraAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ordenId",
+          "codigo",
+          "expiraAt"
+        ],
+        "examples": [
+          {
+            "ordenId": "40000000-0000-4000-8000-000000000001",
+            "codigo": "ejemplo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "expiraAt": "2026-10-15T20:01:00Z"
+          }
+        ]
+      },
+      "ValidacionRetiro": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "orden": {
+            "$ref": "#/components/schemas/Orden"
+          },
+          "expiraAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "orden",
+          "expiraAt"
+        ],
+        "examples": [
+          {
+            "orden": {
+              "ordenId": "40000000-0000-4000-8000-000000000001",
+              "compraId": "30000000-0000-4000-8000-000000000001",
+              "codigoOrden": "CC-000001",
+              "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+              "cafeteriaNombre": "Cafetería Central",
+              "estado": "listo_para_retiro",
+              "montoTotal": 3600,
+              "moneda": "CLP",
+              "items": [
+                {
+                  "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                  "ofertaId": "50000000-0000-4000-8000-000000000001",
+                  "productoId": "60000000-0000-4000-8000-000000000002",
+                  "productoNombre": "Café americano",
+                  "cantidad": 2,
+                  "precioUnitario": 1800,
+                  "subtotal": 3600
+                }
+              ],
+              "reservaExpiraAt": "2026-10-15T18:15:00Z",
+              "retiroHasta": "2026-10-15T20:01:00Z",
+              "entregadoAt": null,
+              "creadoAt": "2026-10-15T18:00:00Z",
+              "actualizadoAt": "2026-10-15T18:02:00Z",
+              "version": 3
+            },
+            "expiraAt": "2026-10-15T20:01:00Z"
+          }
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "timestamp"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Extensión de dominio; ausente en errores de seguridad o Gateway."
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "message"
+              ]
+            }
+          },
+          "compra": {
+            "$ref": "#/components/schemas/Compra"
+          }
+        },
+        "description": "Problem Details común; PRECIO_CAMBIO incluye compra con la cotización actualizada. Extensiones adicionales permitidas.",
+        "examples": [
+          {
+            "type": "about:blank",
+            "title": "Conflict",
+            "status": 409,
+            "detail": "No hay stock suficiente para reservar la orden completa.",
+            "instance": "/orders/40000000-0000-4000-8000-000000000001/confirmar",
+            "timestamp": "2026-10-15T18:01:00Z",
+            "code": "STOCK_INSUFICIENTE",
+            "traceId": "aabbccddeeff00112233445566778899"
+          }
+        ]
+      },
+      "PaginaCompras": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Compra"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ],
+        "examples": [
+          {
+            "content": [
+              {
+                "compraId": "30000000-0000-4000-8000-000000000001",
+                "clienteId": "10000000-0000-4000-8000-000000000001",
+                "estado": "pendiente_pago",
+                "montoTotal": 3600,
+                "moneda": "CLP",
+                "ordenes": [
+                  {
+                    "ordenId": "40000000-0000-4000-8000-000000000001",
+                    "compraId": "30000000-0000-4000-8000-000000000001",
+                    "codigoOrden": "CC-000001",
+                    "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                    "cafeteriaNombre": "Cafetería Central",
+                    "estado": "pendiente_pago",
+                    "montoTotal": 3600,
+                    "moneda": "CLP",
+                    "items": [
+                      {
+                        "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                        "ofertaId": "50000000-0000-4000-8000-000000000001",
+                        "productoId": "60000000-0000-4000-8000-000000000002",
+                        "productoNombre": "Café americano",
+                        "cantidad": 2,
+                        "precioUnitario": 1800,
+                        "subtotal": 3600
+                      }
+                    ],
+                    "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                    "retiroHasta": null,
+                    "entregadoAt": null,
+                    "creadoAt": "2026-10-15T18:00:00Z",
+                    "actualizadoAt": "2026-10-15T18:00:00Z",
+                    "version": 1
+                  }
+                ],
+                "pago": null,
+                "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                "creadoAt": "2026-10-15T18:00:00Z",
+                "actualizadoAt": "2026-10-15T18:00:00Z",
+                "version": 1
+              }
+            ],
+            "number": 0,
+            "size": 20,
+            "totalElements": 1,
+            "totalPages": 1,
+            "first": true,
+            "last": true,
+            "empty": false
+          }
+        ]
+      },
+      "PaginaOrdenes": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Orden"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ],
+        "examples": [
+          {
+            "content": [
+              {
+                "ordenId": "40000000-0000-4000-8000-000000000001",
+                "compraId": "30000000-0000-4000-8000-000000000001",
+                "codigoOrden": "CC-000001",
+                "cafeteriaId": "20000000-0000-4000-8000-000000000001",
+                "cafeteriaNombre": "Cafetería Central",
+                "estado": "pendiente_pago",
+                "montoTotal": 3600,
+                "moneda": "CLP",
+                "items": [
+                  {
+                    "ordenItemId": "60000000-0000-4000-8000-000000000001",
+                    "ofertaId": "50000000-0000-4000-8000-000000000001",
+                    "productoId": "60000000-0000-4000-8000-000000000002",
+                    "productoNombre": "Café americano",
+                    "cantidad": 2,
+                    "precioUnitario": 1800,
+                    "subtotal": 3600
+                  }
+                ],
+                "reservaExpiraAt": "2026-10-15T18:15:00Z",
+                "retiroHasta": null,
+                "entregadoAt": null,
+                "creadoAt": "2026-10-15T18:00:00Z",
+                "actualizadoAt": "2026-10-15T18:00:00Z",
+                "version": 1
+              }
+            ],
+            "number": 0,
+            "size": 20,
+            "totalElements": 1,
+            "totalPages": 1,
+            "first": true,
+            "last": true,
+            "empty": false
+          }
+        ]
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Entrada, clave idempotente o código de retiro inválidos.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "JWT ausente, inválido o vencido.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Rol no permitido o cajero sin asignación.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Recurso inexistente, ajeno o pago aún no creado.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Conflicto de disponibilidad, estado, idempotencia o retiro.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "2 segundos para IDEMPOTENCY_IN_PROGRESS / OPERACION_PENDIENTE; ausente en conflictos definitivos."
+          }
+        }
+      },
+      "Error415": {
+        "description": "Se requiere application/json.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error500": {
+        "description": "Error interno sin detalles sensibles.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "Dependencia no disponible u operación pendiente de recuperación.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "2 segundos para IDEMPOTENCY_IN_PROGRESS / OPERACION_PENDIENTE; ausente en conflictos definitivos."
+          }
+        }
+      }
+    }
+  }
+}
