@@ -3,7 +3,10 @@ package cl.cloudcoffee.order_service.controller;
 import java.net.URI;
 import java.util.UUID;
 
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,17 +20,21 @@ import org.springframework.web.bind.annotation.RestController;
 
 import cl.cloudcoffee.errors.BusinessException;
 import cl.cloudcoffee.order_service.dto.PagoResponse;
-import cl.cloudcoffee.order_service.dto.SimulacionPagoRequest;
+import cl.cloudcoffee.order_service.dto.SimularPagoRequest;
 import cl.cloudcoffee.order_service.service.SimulacionPagoService;
-import cl.cloudcoffee.order_service.service.SimulacionPagoService.ResultadoSimulacion;
+import cl.cloudcoffee.order_service.service.SimulacionPagoService.Respuesta;
 import jakarta.validation.Valid;
 
+/**
+ * Pago simulado de una compra (contrato INT2-50, #112). Gateway publica estas rutas
+ * como {@code /v1/compras/{compraId}/pago}.
+ */
 @RestController
-@RequestMapping("/compras/{compraId}")
+@RequestMapping("/compras/{compraId}/pago")
 public class PagoSimuladoController {
 
     static final String IDEMPOTENCY_KEY = "Idempotency-Key";
-    private static final java.util.regex.Pattern CLAVE_VALIDA = java.util.regex.Pattern.compile("^[A-Za-z0-9._:-]{1,100}$");
+    static final String IDEMPOTENCY_REPLAYED = "Idempotency-Replayed";
 
     private final SimulacionPagoService simulacionPagoService;
 
@@ -35,36 +42,60 @@ public class PagoSimuladoController {
         this.simulacionPagoService = simulacionPagoService;
     }
 
-    /** 201 si abrió un intento nuevo; 200 si resolvió uno pendiente o repitió la misma clave. */
-    @PostMapping("/pago/simulacion")
-    public ResponseEntity<PagoResponse> simular(
+    /** 201 con el pago creado; repetir la misma clave y cuerpo reproduce esa respuesta. */
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> simular(
             @PathVariable UUID compraId,
             @RequestHeader(IDEMPOTENCY_KEY) String clave,
-            @Valid @RequestBody SimulacionPagoRequest request,
+            @Valid @RequestBody SimularPagoRequest request,
             @AuthenticationPrincipal Jwt jwt) {
-        if (!CLAVE_VALIDA.matcher(clave).matches()) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, URI.create("/problems/idempotency-key-invalida"),
-                    "Idempotency-Key inválida",
-                    "Idempotency-Key debe tener entre 1 y 100 caracteres alfanuméricos, '.', '_', ':' o '-'.");
+        Respuesta respuesta = simulacionPagoService.simular(cliente(jwt), compraId, claveUuid(clave),
+                request.getEscenario());
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(respuesta.status())
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.APPLICATION_JSON);
+        if (respuesta.location() != null) {
+            builder.header(HttpHeaders.LOCATION, respuesta.location());
         }
-        ResultadoSimulacion resultado = simulacionPagoService.simular(
-                usuario(jwt), compraId, clave, request.escenario());
-        return ResponseEntity.status(resultado.creado() ? HttpStatus.CREATED : HttpStatus.OK)
-                .body(PagoResponse.from(resultado.pago()));
+        if (respuesta.replay()) {
+            builder.header(IDEMPOTENCY_REPLAYED, "true");
+        }
+        return builder.body(respuesta.cuerpo());
     }
 
-    @GetMapping("/pago")
-    public PagoResponse consultar(@PathVariable UUID compraId, @AuthenticationPrincipal Jwt jwt) {
-        return PagoResponse.from(simulacionPagoService.consultar(usuario(jwt), compraId));
+    /** Estado actual del pago; lectura sin efectos. */
+    @GetMapping
+    public ResponseEntity<PagoResponse> consultar(@PathVariable UUID compraId, @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(PagoResponse.from(simulacionPagoService.consultar(cliente(jwt), compraId)));
     }
 
-    // El dueño se toma solo del JWT firmado, nunca de parámetros del cliente.
-    private static UUID usuario(Jwt jwt) {
+    // Solo CLIENTE; el dueño se toma del JWT firmado, nunca de parámetros del cliente.
+    private static UUID cliente(Jwt jwt) {
+        if (!"CLIENTE".equals(jwt.getClaimAsString("role"))) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, URI.create("/problems/rol-no-permitido"),
+                    "Rol no permitido", "Solo un cliente puede pagar o consultar sus compras.", "ROL_NO_PERMITIDO");
+        }
         try {
             return UUID.fromString(jwt.getSubject());
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(HttpStatus.FORBIDDEN, URI.create("/problems/usuario-invalido"),
-                    "Usuario inválido", "El token no identifica a un usuario válido.");
+                    "Usuario inválido", "El token no identifica a un usuario válido.", "USUARIO_INVALIDO");
         }
+    }
+
+    // Contrato: Idempotency-Key es un UUID por intención.
+    private static UUID claveUuid(String clave) {
+        try {
+            UUID uuid = UUID.fromString(clave);
+            if (uuid.toString().equalsIgnoreCase(clave)) {
+                return uuid;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Se responde 400 abajo.
+        }
+        throw new BusinessException(HttpStatus.BAD_REQUEST, URI.create("/problems/idempotency-key-invalida"),
+                "Idempotency-Key inválida", "Idempotency-Key debe ser un UUID.", "IDEMPOTENCY_KEY_INVALIDA");
     }
 }

@@ -23,6 +23,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(exception.getStatus(), exception.getMessage());
         problem.setType(exception.getType());
         problem.setTitle(exception.getTitle());
+        // Extensiones de dominio del contrato INT2-50: code y traceId (si hay traza activa).
+        if (exception.getCode() != null) {
+            problem.setProperty("code", exception.getCode());
+            String traceId = org.slf4j.MDC.get("traceId");
+            if (traceId != null && !traceId.isBlank()) {
+                problem.setProperty("traceId", traceId);
+            }
+        }
         return createResponseEntity(problem, new HttpHeaders(), exception.getStatus(), request);
     }
 

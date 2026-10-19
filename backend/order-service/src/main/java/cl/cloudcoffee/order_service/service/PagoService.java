@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cl.cloudcoffee.errors.BusinessException;
 import cl.cloudcoffee.order_service.model.Compra;
 import cl.cloudcoffee.order_service.model.EstadoPago;
+import cl.cloudcoffee.order_service.model.MotivoPago;
 import cl.cloudcoffee.order_service.model.Pago;
 import cl.cloudcoffee.order_service.model.TransicionPagoInvalidaException;
 import cl.cloudcoffee.order_service.pasarela.PasarelaPago;
@@ -38,6 +39,15 @@ public class PagoService {
      */
     @Transactional
     public Pago iniciarPago(UUID compraId) {
+        return iniciarPago(compraId, null);
+    }
+
+    /**
+     * Igual que {@link #iniciarPago(UUID)}, fijando el motivo antes de guardar para que
+     * el pago se inserte de una vez (sin un UPDATE que incremente su versión).
+     */
+    @Transactional
+    public Pago iniciarPago(UUID compraId, MotivoPago motivo) {
         Compra compra = compraRepository.findForUpdate(compraId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND,
                         URI.create("/problems/compra-no-encontrada"), "Compra no encontrada",
@@ -51,7 +61,11 @@ public class PagoService {
         }
 
         RegistroPasarela registro = pasarela.registrar(new SolicitudPago(compra.getId(), compra.getMontoTotal()));
-        return pagoRepository.save(new Pago(compra, pasarela.proveedor(), registro.referencia()));
+        Pago pago = new Pago(compra, pasarela.proveedor(), registro.referencia());
+        if (motivo != null) {
+            pago.registrarMotivo(motivo);
+        }
+        return pagoRepository.save(pago);
     }
 
     /** Aplica el resultado del proveedor respetando las transiciones válidas. */

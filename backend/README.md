@@ -162,27 +162,38 @@ del resultado y su consulta llegan con INT2-76.
 
 ### Simulación de pago y consulta (INT2-76)
 
-Escenarios deterministas, sin proveedor externo: no se piden datos de tarjeta ni se
-usan Mercado Pago, `initPoint` o webhooks. Gateway enruta `/v1/compras/**` a
-order-service.
+Conforme al contrato de INT2-50 ([compra-pago-retiro.md](docs/compra-pago-retiro.md)):
+escenarios deterministas, sin proveedor externo, tarjeta, Mercado Pago, `initPoint`
+ni webhooks. Gateway enruta `/v1/compras/**` a order-service.
 
 | Endpoint | Respuesta |
 |---|---|
-| `POST /v1/compras/{compraId}/pago/simulacion` | `201` intento nuevo; `200` pendiente resuelto o clave repetida |
-| `GET /v1/compras/{compraId}/pago` | `200` último intento; `404` si no hay pagos |
+| `POST /v1/compras/{compraId}/pago` | `201 Pago`, `Location: /v1/compras/{compraId}/pago`, `Cache-Control: no-store` |
+| `GET /v1/compras/{compraId}/pago` | `200 Pago` con `Cache-Control: no-store`; `404 PAGO_NO_ENCONTRADO` si aún no existe |
 
-El comando recibe `{"escenario": "APROBADO" | "RECHAZADO" | "PENDIENTE"}` y el
-encabezado obligatorio `Idempotency-Key` (1-100 caracteres `A-Z a-z 0-9 . _ : -`).
-Cualquier otro campo, como tarjeta o importe, se ignora: el monto sale de la compra.
+El comando admite solo `{"escenario": "aprobar" | "rechazar" | "pendiente"}`;
+cualquier otro campo (tarjeta, importe, estado) o valor responde `400`. Requiere
+`Idempotency-Key` con un UUID por intención.
 
-- **Propietario:** solo el `sub` del JWT dueño de la compra puede simular o consultar.
-  Una compra ajena responde `404`, igual que una inexistente.
-- **Sin duplicados:** cada comando queda registrado por `(compra, clave)`. Repetir la
-  clave devuelve el mismo pago sin volver a ejecutarlo; la misma clave con otro
-  escenario responde `409`.
-- Un pago `PENDIENTE` se resuelve en el mismo registro. Solo se abre un intento nuevo
-  si la compra no tiene pagos o el último fue rechazado; una compra ya aprobada
-  responde `409`.
+| Escenario | `estado` | `motivo` |
+|---|---|---|
+| `aprobar` | `aprobado` | `aprobacion_simulada` |
+| `rechazar` | `rechazado` | `rechazo_simulado` |
+| `pendiente` | `pendiente` | `escenario_pendiente` |
+
+`Pago`: `pagoId, compraId, estado, motivo, montoTotal` (CLP entero)`, moneda: CLP,
+simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`.
+
+- **Solo el CLIENTE propietario:** el dueño se toma del `sub` del JWT. Una compra
+  ajena o inexistente responde `404`; otro rol, `403 ROL_NO_PERMITIDO`.
+- **Idempotencia** (tabla `idempotencia`, única por usuario, método, ruta y clave):
+  repetir la clave con el mismo cuerpo reproduce el código, el cuerpo y el `Location`
+  originales, con `Idempotency-Replayed: true`, sin crear nada. La misma clave con
+  otro escenario responde `409 IDEMPOTENCY_CONFLICT`.
+- **Un pago por compra:** otra clave nunca crea un segundo pago ni resuelve uno
+  pendiente; responde `409 PAGO_YA_INICIADO` y el pago no cambia. Un pendiente solo
+  termina al vencer su reserva (INT2-77). Reintentar tras un rechazo exige otra compra.
+- Los errores de dominio llevan las extensiones `code` y `traceId` del contrato.
 
 Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
 compras de prueba para las cuentas de INT2-65:
