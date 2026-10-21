@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toApiError } from '../../services/httpClient';
 import { login } from '../../services/auth';
 import { useAuth } from '../../context/AuthContext';
+import { tokens } from '../../theme/tokens';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -70,14 +71,17 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={[styles.screen, { paddingTop: 32 + insets.top }]}
+        contentContainerStyle={[
+          styles.screen,
+          { paddingTop: tokens.espaciado['5xl'] + insets.top },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <Pressable
           onPress={() => router.replace('/(auth)/portada')}
           style={styles.backButton}
-          hitSlop={8}
+          hitSlop={tokens.espaciado.md}
         >
           <Text style={styles.backText}>← Volver</Text>
         </Pressable>
@@ -97,7 +101,7 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="ejemplo@ca.cloudcoffee.cl / @uct.cl / @alu.uct.cl"
-                placeholderTextColor="#A89F95"
+                placeholderTextColor={tokens.colores.placeholder}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -111,7 +115,7 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#A89F95"
+                placeholderTextColor={tokens.colores.placeholder}
                 secureTextEntry
                 autoCapitalize="none"
                 autoComplete="password"
@@ -120,7 +124,10 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.forgotRow}>
-              <Pressable onPress={() => router.push('/(auth)/olvidaste-contrasena')} hitSlop={8}>
+              <Pressable
+                onPress={() => router.push('/(auth)/olvidaste-contrasena')}
+                hitSlop={tokens.espaciado.md}
+              >
                 <Text style={styles.forgotLink}>¿Olvidaste tu contraseña?</Text>
               </Pressable>
             </View>
@@ -133,7 +140,7 @@ export default function LoginScreen() {
               style={[styles.primaryButton, cargando && styles.primaryButtonDisabled]}
             >
               {cargando ? (
-                <ActivityIndicator color="#FAF6F0" />
+                <ActivityIndicator color={tokens.colores.crema} />
               ) : (
                 <Text style={styles.primaryButtonText}>Ingresar</Text>
               )}
@@ -143,7 +150,10 @@ export default function LoginScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               ¿No tienes una cuenta?{' '}
-              <Pressable onPress={() => router.push('/(auth)/registro')} hitSlop={8}>
+              <Pressable
+                onPress={() => router.push('/(auth)/registro')}
+                hitSlop={tokens.espaciado.md}
+              >
                 <Text style={styles.footerLink}>Regístrate gratis</Text>
               </Pressable>
             </Text>
@@ -154,120 +164,112 @@ export default function LoginScreen() {
   );
 }
 
+// Los anchos máximos de texto y medidas puntuales de layout se mantienen a
+// mano: ver regla 3 en src/theme/tokens.ts.
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#F5EFE6',
+    backgroundColor: tokens.colores.fondoAuth,
   },
   screen: {
     flexGrow: 1,
-    backgroundColor: '#F5EFE6',
-    paddingHorizontal: 28,
-    paddingVertical: 32,
+    backgroundColor: tokens.colores.fondoAuth,
+    paddingHorizontal: tokens.espaciado['4xl'],
+    paddingVertical: tokens.espaciado['5xl'],
   },
   backButton: {
     alignSelf: 'flex-start',
-    marginBottom: 14,
+    marginBottom: tokens.espaciado.xxl,
   },
   backText: {
-    color: '#2D1B14',
-    fontSize: 13,
-    fontWeight: '700',
+    color: tokens.colores.tinta,
+    fontSize: tokens.tipografia.tamano.cuerpo,
+    fontWeight: tokens.tipografia.peso.negrita,
   },
   loginContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    gap: 22,
-    marginVertical: 12,
+    gap: tokens.espaciado['22'],
+    marginVertical: tokens.espaciado.xl,
   },
   header: {
     alignItems: 'center',
-    gap: 6,
+    gap: tokens.espaciado.sm,
   },
   title: {
-    color: '#2D1B14',
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-    lineHeight: 38,
+    ...tokens.tipografia.texto.tituloAcceso,
+    color: tokens.colores.tinta,
     textAlign: 'center',
   },
   highlightText: {
-    color: '#0284C7',
+    color: tokens.colores.marca,
   },
   subtitle: {
-    color: '#7A7067',
-    fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 20,
+    ...tokens.tipografia.texto.cuerpo,
+    color: tokens.colores.textoSecundario,
     textAlign: 'center',
     maxWidth: 300,
   },
   form: {
-    gap: 14,
+    gap: tokens.espaciado.xxl,
   },
   inputGroup: {
-    gap: 6,
+    gap: tokens.espaciado.sm,
   },
   label: {
-    color: '#2D1B14',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    ...tokens.tipografia.texto.etiqueta,
+    color: tokens.colores.tinta,
     textTransform: 'uppercase',
   },
   input: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5DDD3',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#26211D',
-    fontSize: 14,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.input,
+    borderColor: tokens.colores.bordeAuth,
+    borderRadius: tokens.radios.lg,
+    paddingHorizontal: tokens.espaciado.xxl,
+    paddingVertical: tokens.espaciado.xl,
+    color: tokens.colores.tintaSuave,
+    fontSize: tokens.tipografia.tamano.cuerpoMedio,
   },
   forgotRow: {
     alignItems: 'flex-end',
   },
   forgotLink: {
-    color: '#7A7067',
-    fontSize: 12,
-    fontWeight: '600',
+    color: tokens.colores.textoSecundario,
+    fontSize: tokens.tipografia.tamano.detalle,
+    fontWeight: tokens.tipografia.peso.semibold,
   },
   errorText: {
-    color: '#B25329',
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
+    ...tokens.tipografia.texto.cuerpoChico,
+    color: tokens.colores.errorAcceso,
   },
   primaryButton: {
     width: '100%',
-    backgroundColor: '#2D1B14',
-    borderRadius: 14,
-    paddingVertical: 14,
+    backgroundColor: tokens.colores.tinta,
+    borderRadius: tokens.radios.xl,
+    paddingVertical: tokens.espaciado.xxl,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: tokens.espaciado.sm,
   },
   primaryButtonDisabled: {
-    opacity: 0.7,
+    opacity: tokens.estados.deshabilitado,
   },
   primaryButtonText: {
-    color: '#FAF6F0',
-    fontSize: 15,
-    fontWeight: '700',
+    ...tokens.tipografia.texto.boton,
+    color: tokens.colores.crema,
   },
   footer: {
     alignItems: 'center',
   },
   footerText: {
-    color: '#7A7067',
-    fontSize: 13,
-    fontWeight: '500',
+    color: tokens.colores.textoSecundario,
+    fontSize: tokens.tipografia.tamano.cuerpo,
+    fontWeight: tokens.tipografia.peso.medio,
   },
   footerLink: {
-    color: '#0284C7',
-    fontWeight: '700',
-    fontSize: 13,
+    color: tokens.colores.marca,
+    fontWeight: tokens.tipografia.peso.negrita,
+    fontSize: tokens.tipografia.tamano.cuerpo,
   },
 });
