@@ -9,13 +9,14 @@
 // acción en vuelo deshabilita los botones para no repetirse; y el resultado
 // (éxito con recarga del historial, o error del backend) se muestra en pantalla.
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import MisComprasScreen from '../app/(cliente)/mis-compras';
 import { cancelarCompra, confirmarCompra, listarCompras } from '../services/compras';
 import { cancelarOrden, confirmarOrden } from '../services/ordenes';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Compra, Orden } from '../types/domain';
 
 jest.mock('../services/compras', () => ({
@@ -29,21 +30,12 @@ jest.mock('../services/ordenes', () => ({
   cancelarOrden: jest.fn(),
 }));
 
-const mockRouter = { push: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-  useRouter: jest.fn(() => mockRouter),
-}));
-
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockListar = listarCompras as unknown as jest.Mock;
 const mockConfirmarCompra = confirmarCompra as unknown as jest.Mock;
@@ -75,12 +67,6 @@ function compra(id: string, sobre: Partial<Compra> = {}): Compra {
   };
 }
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 // Renderiza la pantalla y ejecuta el callback que el mock de useFocusEffect
 // capturó (equivale a que la pantalla gane foco y cargue el historial).
 async function renderizarMisCompras(): Promise<ReactTestRenderer> {
@@ -105,7 +91,7 @@ beforeEach(() => {
   mockConfirmarOrden.mockReset();
   mockCancelarOrden.mockReset();
   mockUseFocusEffect.mockReset();
-  mockRouter.push.mockClear();
+  limpiarRouter();
   mockConfirmarCompra.mockResolvedValue({});
   mockCancelarCompra.mockResolvedValue({});
   mockConfirmarOrden.mockResolvedValue({});
@@ -184,7 +170,7 @@ describe('pantalla de Mis Compras', () => {
       boton.props.onPress();
     });
 
-    expect(mockRouter.push).toHaveBeenCalledWith({
+    expect(routerMock.push).toHaveBeenCalledWith({
       pathname: '/(cliente)/orden/[id]',
       params: { id: 'orden-c1', estado: 'entregado' },
     });
@@ -198,7 +184,7 @@ describe('pantalla de Mis Compras', () => {
     const tree = await renderizarMisCompras();
 
     expect(tree.root.findAllByProps({ testID: 'boleta-orden-orden-c1' })).toHaveLength(0);
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
 
     act(() => tree.unmount());
   });

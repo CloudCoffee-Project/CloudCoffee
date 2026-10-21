@@ -1,12 +1,13 @@
 // src/__tests__/cajero-no-retirados.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 
 import NoRetiradosScreen from '../app/(cajero)/no-retirados';
 import { fetchPedidosEntrantes, resolverOrdenNoRetirada } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
+import { textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
 
 jest.mock('../services/ordenes', () => ({
@@ -100,12 +101,6 @@ const ordenesMock: Orden[] = [
     ],
   },
 ];
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 function dataDe(tree: ReactTestRenderer): Orden[] {
   const lista = tree.root.findByType(FlatList);

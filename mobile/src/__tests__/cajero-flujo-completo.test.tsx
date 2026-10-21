@@ -1,6 +1,6 @@
 // src/__tests__/cajero-flujo-completo.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 import type { ReactElement } from 'react';
 
@@ -16,8 +16,9 @@ import {
 import { getAccessToken } from '../services/httpClient';
 import { serializarQrRetiro } from '../services/qrRetiro';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
-import { useIsFocused } from 'expo-router';
+import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useCameraPermissions } from 'expo-camera';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
 
 // Pruebas end-to-end del flujo completo del cajero (INT4-13). Recorren el
@@ -34,7 +35,6 @@ import type { Orden } from '../types/domain';
 // pantallas se simula con los mocks de expo-router: el router.replace captura
 // la ruta destino y el test sigue el recorrido renderizando la pantalla
 // siguiente con los params que expo-router le habría pasado.
-const mockReplace = jest.fn();
 const mockParams: Record<string, string | string[]> = {};
 
 jest.mock('../services/ordenes', () => ({
@@ -52,12 +52,7 @@ jest.mock('../hooks/useOrdenEstado', () => ({
   useOrdenEstado: jest.fn(() => null),
 }));
 
-jest.mock('expo-router', () => ({
-  useIsFocused: jest.fn(() => true),
-  useRouter: jest.fn(() => ({ replace: mockReplace })),
-  useFocusEffect: jest.fn(),
-  useLocalSearchParams: jest.fn(() => mockParams),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 // expo-camera es un módulo nativo: en los tests se reemplaza por un View que
 // expone onBarcodeScanned para simular un escaneo, y el permiso queda mockeado.
@@ -86,6 +81,7 @@ const mockResolver = resolverOrdenNoRetirada as unknown as jest.Mock;
 const mockUseOrdenEstado = useOrdenEstado as unknown as jest.Mock;
 const mockUseIsFocused = useIsFocused as unknown as jest.Mock;
 const mockUseCameraPermissions = useCameraPermissions as unknown as jest.Mock;
+const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
 // --- Backend simulado compartido por todo el flujo ---
 // Mezcla de estados del union EstadoOrden igual a la que vería el cajero:
@@ -163,12 +159,6 @@ function reiniciarBackend(): void {
   backend = [ordenEntregable, ordenPendienteRevision, ordenNoRetiradaFinal];
 }
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 function dataDe(tree: ReactTestRenderer): Orden[] {
   const lista = tree.root.findByType(FlatList);
   return lista.props.data as Orden[];
@@ -231,7 +221,8 @@ describe('Flujo completo del cajero (INT4-13)', () => {
     mockUseCameraPermissions.mockReset();
     mockUseCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
 
-    mockReplace.mockClear();
+    limpiarRouter();
+    mockUseLocalSearchParams.mockReturnValue(mockParams);
     delete mockParams.pedido;
     delete mockParams.estado;
   });
@@ -254,7 +245,7 @@ describe('Flujo completo del cajero (INT4-13)', () => {
     });
 
     // Navega a la confirmación con el estado de la orden encontrada.
-    expect(mockReplace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
       params: { pedido: 'o-1', estado: 'listo_para_retiro' },
     });
@@ -291,7 +282,7 @@ describe('Flujo completo del cajero (INT4-13)', () => {
     // helper que usa el cliente) se valida y navega a la confirmación.
     await escanear(escaner, serializarQrRetiro({ pedido: 'o-1', estado: 'listo_para_retiro' }));
 
-    expect(mockReplace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
       params: { pedido: 'o-1', estado: 'listo_para_retiro' },
     });

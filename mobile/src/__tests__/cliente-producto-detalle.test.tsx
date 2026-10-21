@@ -14,6 +14,7 @@ import { leerCampusSeleccionado, listarCategorias, obtenerProducto } from '../se
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ApiError } from '../services/httpClient';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 // INT4-32: la pantalla ya no navega al carrito al agregar, lo escribe en el
@@ -39,28 +40,17 @@ jest.mock('../services/catalog', () => ({
   obtenerProducto: jest.fn(),
 }));
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
-const mockRouter = { push: jest.fn(), back: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-  useRouter: jest.fn(() => mockRouter),
-  useLocalSearchParams: jest.fn(() => ({ id: 'prod-1' })),
-}));
-
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockLeerCampus = leerCampusSeleccionado as unknown as jest.Mock;
 const mockListarCategorias = listarCategorias as unknown as jest.Mock;
@@ -100,12 +90,6 @@ function producto(over: Partial<Producto> = {}): Producto {
     offers: [oferta()],
     ...over,
   };
-}
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
 }
 
 let arbolActual: ReactTestRenderer | null = null;
@@ -152,8 +136,7 @@ beforeEach(() => {
   mockObtenerProducto.mockReset();
   mockUseFocusEffect.mockReset();
   mockParams.mockReset();
-  mockRouter.push.mockClear();
-  mockRouter.back.mockClear();
+  limpiarRouter();
   mockParams.mockReturnValue({ id: 'prod-1' });
   mockLeerCampus.mockResolvedValue(campusMock);
   mockListarCategorias.mockResolvedValue(categoriasMock);
@@ -468,7 +451,7 @@ describe('Detalle de producto', () => {
       },
     ]);
     expect(leerCarrito(tree).total).toBe(2100);
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
   });
 
   it('agrega la cantidad que se está mirando, no siempre una', async () => {
@@ -522,7 +505,7 @@ describe('Detalle de producto', () => {
       tree.root.findByProps({ testID: 'producto-detalle-volver' }).props.onPress();
     });
 
-    expect(mockRouter.back).toHaveBeenCalled();
+    expect(routerMock.back).toHaveBeenCalled();
   });
 
   it('pide elegir sede cuando no hay campus activo', async () => {
@@ -543,7 +526,7 @@ describe('Detalle de producto', () => {
       tree.root.findByProps({ testID: 'producto-detalle-ir-campus' }).props.onPress();
     });
 
-    expect(mockRouter.push).toHaveBeenCalledWith('/(cliente)/campus');
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/campus');
   });
 
   it('avisa cuando el producto no tiene ofertas en el campus', async () => {
