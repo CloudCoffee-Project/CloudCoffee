@@ -27,9 +27,15 @@ import { reenviarVerificacion, verificarCorreo } from '../../services/auth';
 export default function VerificarCorreoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { email } = useLocalSearchParams<{ email?: string }>();
+  const { email, token: tokenParam } = useLocalSearchParams<{
+    email?: string;
+    token?: string | string[];
+  }>();
 
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => {
+    const tokenValue = Array.isArray(tokenParam) ? tokenParam[0] : tokenParam;
+    return typeof tokenValue === 'string' ? tokenValue.trim() : '';
+  });
   const [cargando, setCargando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [verificado, setVerificado] = useState(false);
@@ -143,6 +149,7 @@ export default function VerificarCorreoScreen() {
                   placeholderTextColor="#A89F95"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  testID="token-verificacion"
                   style={styles.input}
                   editable={!cargando && !reenviando}
                 />
