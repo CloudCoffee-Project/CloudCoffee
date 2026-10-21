@@ -84,7 +84,134 @@ no duplica filas. Los UUID del primer campus, categoría y producto coinciden co
 los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
 esperados de filtros, búsqueda y comparación de precios sobre estos datos.
 
+### Personal por cafetería y cuentas de prueba (INT2-65)
+
+Auth guarda la cafetería de cada `CAJERO` y `ADMIN_CAFETERIA` en
+`asignaciones_cafeteria`. `cafeteria_id` es el UUID de catalog-service guardado por
+valor: no hay FK ni tablas compartidas entre servicios.
+
+**Autorización (alineada con el contrato de INT2-50).** Los servicios no confían en
+claims de cafetería ni en datos de la UI. `CafeteriaAccess` (common-security) toma
+del JWT solo la identidad (`sub`) y el rol, y consulta la asignación persistida en
+Auth por un mecanismo interno autenticado:
+
+- `GET /internal/servicios/asignaciones/{usuarioId}` en auth-service: `200`
+  `{usuarioId, cafeteriaId}` para un `CAJERO` o `ADMIN_CAFETERIA` activo con
+  asignación; `404` en cualquier otro caso.
+- Solo acepta el encabezado `X-Internal-Service-Token` con el valor de
+  `INTERNAL_SERVICE_TOKEN` (mínimo 32 caracteres). Sin token responde `401`; un JWT
+  de usuario, incluso `SUPER_ADMIN`, recibe `403`. Sin token configurado, el
+  mecanismo queda cerrado para todos. Gateway no lo expone: solo enruta `/v1/**`.
+- No hay caché: quitar una asignación rige en la siguiente solicitud, sin esperar
+  que venza el JWT.
+- **Falla cerrado:** si Auth no responde, el acceso se niega (`403`).
+- Ningún rol hereda permisos de personal por su nombre: clientes y `SUPER_ADMIN`
+  reciben `403`.
+
+El access token del personal con asignación sigue trayendo el claim `cafeteriaId`,
+pero **solo como dato para la UI** (la app lo usa para mostrar su cafetería); no
+autoriza nada. Si viene, el decodificador exige que sea UUID y que el rol sea de
+personal. El registro público siempre crea un `CLIENTE` sin asignación e ignora
+`rol` o `cafeteriaId` enviados.
+
+Configuración: `INTERNAL_SERVICE_TOKEN` en auth-service y en cada servicio que
+consulta (hoy catalog-service, que además usa `AUTH_SERVICE_URL`). Docker Compose
+exige definirlo en `.env`; el valor de `.env.example` es solo para desarrollo.
+
+Primer uso: `GET /catalog/cafeterias/{cafeteriaId}/ofertas`, inventario completo
+de la cafetería (incluye ofertas agotadas).
+
+Con `AUTH_SPRING_PROFILES=docker,dev` (valor de `.env.example`), Auth carga estas
+cuentas verificadas, todas con contraseña `CafeDemo123!`:
+
+| Correo | Rol | Cafetería |
+|---|---|---|
+| `comprador@cloudcoffee.dev` | `CLIENTE` | — |
+| `cajero.central@cloudcoffee.dev` | `CAJERO` | Cafetería Central |
+| `admin.central@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Central |
+| `cajero.patio@cloudcoffee.dev` | `CAJERO` | Cafetería Patio Norte |
+| `admin.patio@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Patio Norte |
+| `cajero.sinasignar@cloudcoffee.dev` | `CAJERO` | sin asignación |
+
+Las cafeterías son las del seed de catálogo, así que conviene activar ambos perfiles
+`dev`. La asignación viaja en el access token: un cambio rige desde el siguiente
+login o refresh (máximo 15 minutos).
+
+### Pagos simulados en order-service (INT2-53)
+
+La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
+`usuario_id` del JWT y `monto_total` calculado por el servidor) y `pagos`, vinculados
+por FK. La base restringe el estado a `PENDIENTE`, `APROBADO` o `RECHAZADO`, exige
+montos positivos, admite **un solo pago por compra** (`UNIQUE (compra_id)`) y no
+admite referencias repetidas de un mismo proveedor.
+
+Transiciones válidas: solo `PENDIENTE → APROBADO | RECHAZADO`; los estados finales
+no cambian. Repetir el mismo resultado no tiene efecto (reintentos del proveedor) y
+un resultado contradictorio responde `409`. `@Version` impide que dos resultados
+concurrentes se sobrescriban.
+
+Conforme al contrato de INT2-50 (#112), una compra tiene como máximo un pago, que no
+se reemplaza ni se reinicia: iniciar otro pago responde `409 /problems/pago-existente`
+en cualquier estado, también tras un rechazo. Para volver a intentar hay que crear
+una compra nueva.
+
+`PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
+nunca del cliente. El proveedor queda detrás de la interfaz `PasarelaPago`;
+`PasarelaPagoSimulada` (`SIMULADO`) solo entrega una referencia, y la simulación
+del resultado y su consulta llegan con INT2-76.
+
+### Simulación de pago y consulta (INT2-76)
+
+Conforme al contrato de INT2-50 ([compra-pago-retiro.md](docs/compra-pago-retiro.md)):
+escenarios deterministas, sin proveedor externo, tarjeta, Mercado Pago, `initPoint`
+ni webhooks. Gateway enruta `/v1/compras/**` a order-service.
+
+| Endpoint | Respuesta |
+|---|---|
+| `POST /v1/compras/{compraId}/pago` | `201 Pago`, `Location: /v1/compras/{compraId}/pago`, `Cache-Control: no-store` |
+| `GET /v1/compras/{compraId}/pago` | `200 Pago` con `Cache-Control: no-store`; `404 PAGO_NO_ENCONTRADO` si aún no existe |
+
+El comando admite solo `{"escenario": "aprobar" | "rechazar" | "pendiente"}`;
+cualquier otro campo (tarjeta, importe, estado) o valor responde `400`. Requiere
+`Idempotency-Key` con un UUID por intención.
+
+| Escenario | `estado` | `motivo` |
+|---|---|---|
+| `aprobar` | `aprobado` | `aprobacion_simulada` |
+| `rechazar` | `rechazado` | `rechazo_simulado` |
+| `pendiente` | `pendiente` | `escenario_pendiente` |
+
+`Pago`: `pagoId, compraId, estado, motivo, montoTotal` (CLP entero)`, moneda: CLP,
+simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`.
+
+- **Solo el CLIENTE propietario:** el dueño se toma del `sub` del JWT. Una compra
+  ajena o inexistente responde `404`; otro rol, `403 ROL_NO_PERMITIDO`.
+- **Idempotencia** (tabla `idempotencia`, única por usuario, método, ruta y clave):
+  repetir la clave con el mismo cuerpo reproduce el código, el cuerpo y el `Location`
+  originales, con `Idempotency-Replayed: true`, sin crear nada. La misma clave con
+  otro escenario responde `409 IDEMPOTENCY_CONFLICT`.
+- **Un pago por compra:** otra clave nunca crea un segundo pago ni resuelve uno
+  pendiente; responde `409 PAGO_YA_INICIADO` y el pago no cambia. Un pendiente solo
+  termina al vencer su reserva (INT2-77). Reintentar tras un rechazo exige otra compra.
+- Los errores de dominio llevan las extensiones `code` y `traceId` del contrato.
+
+Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
+compras de prueba para las cuentas de INT2-65:
+
+| Compra | Dueño | Monto |
+|---|---|---|
+| `77777777-7777-4777-8777-777777777701` | `comprador@cloudcoffee.dev` | 3700 |
+| `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
+| `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
+
+El contrato objetivo del Sprint 2 está en
+[Compra, pago simulado y retiro (INT2-50)](docs/compra-pago-retiro.md), con
+[OpenAPI importable](docs/compra-pago-retiro.openapi.json) y
+[ejemplos de eventos](docs/compra-pago-retiro.eventos.json). Define rutas, estados,
+idempotencia, permisos y QR para las siguientes implementaciones; todavía no
+agrega endpoints de Order ni los incorpora al Swagger de Sprint 1.
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
 lo genera desde los controladores y DTO de Auth y Catalog; Swagger UI se sirve
@@ -174,6 +301,7 @@ Todas las rutas siguientes incluyen el prefijo público `/v1` al usar Gateway.
 | `GET /catalog/categorias` | `200`, lista de categorías | No |
 | `GET /catalog/productos` | `200`, página de productos | Sí |
 | `GET /catalog/productos/{id}/ofertas` | `200`, lista por precio ascendente | Sí |
+| `GET /catalog/cafeterias/{cafeteriaId}/ofertas` | `200`, inventario de la cafetería asignada | Sí (personal) |
 
 Logout (INT2-23), perfil (INT2-24) y cambio de contraseña (INT2-25) ya están
 integrados en la base actual; no quedan endpoints pendientes de la lista mínima

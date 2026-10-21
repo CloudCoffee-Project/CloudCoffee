@@ -40,9 +40,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import cl.cloudcoffee.auth_service.messaging.AuthEventPublisher;
 import cl.cloudcoffee.auth_service.messaging.CloudCoffeeEvent;
+import cl.cloudcoffee.auth_service.model.Rol;
 import cl.cloudcoffee.auth_service.model.TipoToken;
 import cl.cloudcoffee.auth_service.model.TokenAuth;
 import cl.cloudcoffee.auth_service.model.Usuario;
+import cl.cloudcoffee.auth_service.repository.AsignacionCafeteriaRepository;
 import cl.cloudcoffee.auth_service.repository.TokenAuthRepository;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 
@@ -66,6 +68,9 @@ class AuthControllerTest extends JwtTestSupport {
 
     @Autowired
     private TokenAuthRepository tokenAuthRepository;
+
+    @Autowired
+    private AsignacionCafeteriaRepository asignacionCafeteriaRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -163,6 +168,44 @@ class AuthControllerTest extends JwtTestSupport {
                 .andExpect(jsonPath("$.verificado").value(false))
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andExpect(jsonPath("$.password").doesNotExist());
+    }
+
+    @Test
+    void registroPublicoIgnoraRolYCafeteriaEnviadosPorElCliente() throws Exception {
+        // INT2-65: el alta pública siempre crea un CLIENTE sin cafetería asignada.
+        String email = "intento-privilegiado@cloudcoffee.cl";
+        mvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "password": "password123",
+                                  "nombre": "Ana",
+                                  "apellido": "Pérez",
+                                  "telefono": "+56912345678",
+                                  "rol": "SUPER_ADMIN",
+                                  "role": "ADMIN_CAFETERIA",
+                                  "cafeteriaId": "44444444-4444-4444-8444-444444444444"
+                                }
+                                """.formatted(email)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.rol").value("CLIENTE"));
+
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseThrow();
+        assertThat(usuario.getRol()).isEqualTo(Rol.CLIENTE);
+        assertThat(asignacionCafeteriaRepository.existsById(usuario.getId())).isFalse();
+
+        String token = capturarTokenVerificacionPublicado(email);
+        mvc.perform(post("/auth/verificacion").contentType(MediaType.APPLICATION_JSON).content(verificarJson(token)))
+                .andExpect(status().isOk());
+        String body = mvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Jwt jwt = jwtDecoder.decode(objectMapper.readTree(body).get("accessToken").asText());
+        assertThat(jwt.getClaimAsString("role")).isEqualTo("CLIENTE");
+        assertThat(jwt.getClaims()).doesNotContainKey("cafeteriaId");
     }
 
     @Test

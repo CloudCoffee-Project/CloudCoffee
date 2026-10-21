@@ -12,6 +12,9 @@ spring:
     out-of-order: false
     clean-disabled: true
     baseline-on-migrate: false
+    # Las compras de prueba (perfil dev) son una migración repetible; si una base
+    # que las cargó arranca sin ese perfil, la validación no debe fallar.
+    ignore-migration-patterns: "*:future,repeatable:missing"
 
 management:
   tracing:

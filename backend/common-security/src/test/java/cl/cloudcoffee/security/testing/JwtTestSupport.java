@@ -26,9 +26,13 @@ public abstract class JwtTestSupport {
     public static final String PUBLIC_KEY_LOCATION = pem("PUBLIC KEY", KEYS.getPublic().getEncoded());
     public static final String PRIVATE_KEY_LOCATION = pem("PRIVATE KEY", KEYS.getPrivate().getEncoded());
 
+    /** Token interno entre servicios efímero para las pruebas (INT2-65). */
+    public static final String INTERNAL_TOKEN = "test-internal-" + UUID.randomUUID();
+
     @DynamicPropertySource
     static void publicKey(DynamicPropertyRegistry registry) {
         registry.add("JWT_PUBLIC_KEY_LOCATION", () -> PUBLIC_KEY_LOCATION);
+        registry.add("cloudcoffee.internal.token", () -> INTERNAL_TOKEN);
     }
 
     public static KeyPair newKeyPair() {
@@ -84,6 +88,8 @@ public abstract class JwtTestSupport {
             case "missing-sub" -> sign(claims().subject(null).build(), KEYS, JWSAlgorithm.RS256);
             case "missing-role" -> sign(claims().claim("role", null).build(), KEYS, JWSAlgorithm.RS256);
             case "invalid-role" -> sign(claims().claim("role", "ROOT").build(), KEYS, JWSAlgorithm.RS256);
+            case "cafeteria-on-client" -> sign(claims().claim("cafeteriaId", UUID.randomUUID().toString()).build(), KEYS, JWSAlgorithm.RS256);
+            case "cafeteria-not-uuid" -> sign(claims().claim("role", "CAJERO").claim("cafeteriaId", "central").build(), KEYS, JWSAlgorithm.RS256);
             case "future" -> sign(claims().notBeforeTime(Date.from(Instant.now().plusSeconds(60))).build(), KEYS, JWSAlgorithm.RS256);
             case "tampered" -> {
                 String[] parts = token().split("\\.");

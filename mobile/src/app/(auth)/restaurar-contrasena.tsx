@@ -17,7 +17,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { mensajeDeErrorApi } from '../../services/httpClient';
@@ -28,8 +28,12 @@ const PASSWORD_MIN = 8;
 export default function RestaurarContrasenaScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { token: tokenParam } = useLocalSearchParams<{ token?: string | string[] }>();
 
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => {
+    const tokenValue = Array.isArray(tokenParam) ? tokenParam[0] : tokenParam;
+    return typeof tokenValue === 'string' ? tokenValue.trim() : '';
+  });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -142,6 +146,7 @@ export default function RestaurarContrasenaScreen() {
                 placeholderTextColor="#A89F95"
                 autoCapitalize="none"
                 autoCorrect={false}
+                testID="token-recuperacion"
                 style={styles.input}
                 editable={!cargando}
               />
