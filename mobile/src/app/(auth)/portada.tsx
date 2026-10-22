@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   },
   content: {
     backgroundColor: tokens.colores.superficie,
-    borderTopWidth: 1,
+    borderTopWidth: tokens.grosores.fino,
     borderTopColor: tokens.colores.bordeAuth,
     borderTopLeftRadius: tokens.radios.panel,
     borderTopRightRadius: tokens.radios.panel,
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: tokens.colores.crema,
-    borderWidth: 1,
+    borderWidth: tokens.grosores.fino,
     borderColor: tokens.colores.bordeAuth,
     borderRadius: tokens.radios.xl,
     paddingVertical: tokens.espaciado['15'],

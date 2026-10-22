@@ -4,11 +4,22 @@
 // El archivo es la base de todas las migraciones del sprint, así que estos
 // tests vigilan que los valores sigan siendo válidos: colores en formato
 // #RRGGBB, escalas sin pasos repetidos ni no numéricos, pesos de texto
-// aceptados por React Native y sombras con sus propiedades completas.
+// aceptados por React Native, sombras con sus propiedades completas y
+// grosores/estados dentro de rangos usables.
 // Si alguien agrega o edita un token y rompe una de estas reglas, el CI lo
 // marca antes de que el error se propague a las pantallas.
+// (Categorías nuevas en INT4-106: grosores y estados.)
 
-import { colores, espaciado, radios, sombras, tipografia, tokens } from '../theme/tokens';
+import {
+  colores,
+  espaciado,
+  estados,
+  grosores,
+  radios,
+  sombras,
+  tipografia,
+  tokens,
+} from '../theme/tokens';
 
 const HEX = /^#[0-9A-F]{6}$/;
 const PESOS_RN = new Set(['100', '200', '300', '400', '500', '600', '700', '800', '900']);
@@ -91,12 +102,32 @@ describe('sombras (INT4-104)', () => {
   });
 });
 
+describe('grosores (INT4-106)', () => {
+  it('los grosores de borde son números positivos y únicos', () => {
+    const valores = Object.values(grosores);
+
+    for (const valor of valores) {
+      expect(valor).toBeGreaterThan(0);
+    }
+    expect(new Set(valores).size).toBe(valores.length);
+  });
+});
+
+describe('estados (INT4-106)', () => {
+  it('la opacidad de controles deshabilitados está estrictamente entre 0 y 1', () => {
+    expect(estados.deshabilitado).toBeGreaterThan(0);
+    expect(estados.deshabilitado).toBeLessThan(1);
+  });
+});
+
 describe('punto de entrada tokens (INT4-104)', () => {
-  it('expone las cinco categorías apuntando a las mismas definiciones', () => {
+  it('expone todas las categorías apuntando a las mismas definiciones', () => {
     expect(tokens.colores).toBe(colores);
     expect(tokens.tipografia).toBe(tipografia);
     expect(tokens.espaciado).toBe(espaciado);
     expect(tokens.radios).toBe(radios);
     expect(tokens.sombras).toBe(sombras);
+    expect(tokens.grosores).toBe(grosores);
+    expect(tokens.estados).toBe(estados);
   });
 });

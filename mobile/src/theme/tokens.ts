@@ -3,9 +3,10 @@
 // INT4-104 — Sistema de tokens de diseño.
 //
 // ÚNICA fuente de verdad de la identidad visual de CloudCoffee móvil. Define,
-// en un solo archivo, los colores, la tipografía, los espaciados, los radios
-// y las sombras de la app. Toda pantalla —las nuevas y las migradas— lee los
-// valores de diseño de acá en lugar de escribirlos a mano en los StyleSheet.
+// en un solo archivo, los colores, la tipografía, los espaciados, los radios,
+// las sombras, los grosores de borde y los estados de interacción de la app.
+// Toda pantalla —las nuevas y las migradas— lee los valores de diseño de acá
+// en lugar de escribirlos a mano en los StyleSheet.
 //
 // Los valores se extrajeron de la identidad real del proyecto: el mockup
 // (cloudcoffee-react) y las pantallas ya construidas. Conviven dos familias
@@ -107,6 +108,8 @@ export const colores = {
   errorBorde: '#FCA5A5',
   /** Texto de mensajes de error. */
   errorTexto: '#991B1B',
+  /** Texto de error en línea de la pantalla de inicio de sesión. */
+  errorAcceso: '#B25329',
 
   // --- Estados: éxito ---
   /** Fondo de cajas de éxito. */
@@ -192,10 +195,14 @@ export const tipografia = {
     marca: { fontSize: 34, lineHeight: 42, letterSpacing: -0.7, fontWeight: '800' },
     /** Título de pantalla de las pantallas de acceso. */
     tituloPantalla: { fontSize: 27, lineHeight: 34, letterSpacing: -0.4, fontWeight: '800' },
+    /** Título grande de login y registro (variante de mayor énfasis). */
+    tituloAcceso: { fontSize: 32, lineHeight: 38, letterSpacing: -0.6, fontWeight: '800' },
     /** Párrafo centrado de apoyo (subtítulos, instrucciones). */
     cuerpo: { fontSize: 14, lineHeight: 21, fontWeight: '500' },
     /** Texto corrido chico con interlineado holgado. */
     cuerpoChico: { fontSize: 13, lineHeight: 19, fontWeight: '500' },
+    /** Label en mayúsculas de los campos de formulario. */
+    etiqueta: { fontSize: 12, letterSpacing: 0.5, fontWeight: '700' },
     /** Texto de botón primario. */
     boton: { fontSize: 15, fontWeight: '700' },
     /** Texto de botón secundario. */
@@ -236,6 +243,8 @@ export const espaciado = {
   '18': 18,
   /** 20 px — margen horizontal de listas. */
   '2xl': 20,
+  /** 22 px — separación de bloques grandes y padding de tarjetas amplias. */
+  '22': 22,
   /** 24 px — separación y padding de secciones. */
   '3xl': 24,
   /** 28 px — margen lateral de las pantallas de acceso. */
@@ -312,6 +321,28 @@ export const sombras = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Grosores de borde
+// ---------------------------------------------------------------------------
+
+/** Anchos de línea y borde (px) usados por la identidad. */
+export const grosores = {
+  /** 1 px — borde fino: cajas, botones secundarios y separadores. */
+  fino: 1,
+  /** 1.5 px — borde de los inputs de formulario. */
+  input: 1.5,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Estados de interacción
+// ---------------------------------------------------------------------------
+
+/** Valores compartidos de estados de los controles. */
+export const estados = {
+  /** Opacidad de botones y controles deshabilitados (fuera de servicio). */
+  deshabilitado: 0.6,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Punto de entrada único
 // ---------------------------------------------------------------------------
 
@@ -326,4 +357,6 @@ export const tokens = {
   espaciado,
   radios,
   sombras,
+  grosores,
+  estados,
 } as const;
