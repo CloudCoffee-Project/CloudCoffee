@@ -1,11 +1,12 @@
 // src/__tests__/cliente-orden-boleta.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import DetalleOrdenScreen from '../app/(cliente)/orden/[id]';
 import { useLocalSearchParams } from 'expo-router';
 import { descargarBoleta, guardarBoletaPdf, compartirBoleta } from '../services/boletas';
 import { ApiError } from '../services/httpClient';
+import { routerMock, textoDe } from '../test-utils';
 
 jest.mock('../services/boletas', () => ({
   descargarBoleta: jest.fn(),
@@ -13,16 +14,12 @@ jest.mock('../services/boletas', () => ({
   compartirBoleta: jest.fn(),
 }));
 
-const mockRouter = { back: jest.fn(), push: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useLocalSearchParams: jest.fn(() => ({ id: 'orden-1' })),
-  useRouter: jest.fn(() => mockRouter),
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
-}));
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 const mockDescargarBoleta = descargarBoleta as unknown as jest.Mock;
@@ -30,12 +27,6 @@ const mockGuardarBoletaPdf = guardarBoletaPdf as unknown as jest.Mock;
 const mockCompartirBoleta = compartirBoleta as unknown as jest.Mock;
 
 const bytesDePdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 async function renderizarPantalla(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
@@ -162,7 +153,7 @@ describe('pantalla de detalle de orden (boleta)', () => {
       volver.props.onPress();
     });
 
-    expect(mockRouter.back).toHaveBeenCalled();
+    expect(routerMock.back).toHaveBeenCalled();
 
     act(() => tree.unmount());
   });

@@ -3,7 +3,7 @@
 // (nunca de una lista local), la confirmación persiste la sede y entra al
 // catálogo, y el error del gateway se muestra normalizado con reintento.
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import CampusScreen from '../app/(cliente)/campus';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../services/catalog';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Campus } from '../types/domain';
 
 jest.mock('../services/catalog', () => ({
@@ -22,27 +23,17 @@ jest.mock('../services/catalog', () => ({
 }));
 
 // AsyncStorage no existe como módulo nativo en Jest; se mockea su superficie.
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
-const mockRouter = { replace: jest.fn(), back: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-  useRouter: jest.fn(() => mockRouter),
-}));
-
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockListar = listarCampus as unknown as jest.Mock;
 const mockLeer = leerCampusSeleccionado as unknown as jest.Mock;
@@ -53,12 +44,6 @@ const campusMock: Campus[] = [
   { id: 'campus-1', nombre: 'Campus San Francisco', direccion: 'Manuel Montt 056, Temuco' },
   { id: 'campus-2', nombre: 'Campus San Juan Pablo II', direccion: 'Peligde, Temuco' },
 ];
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 // Renderiza la pantalla y ejecuta el callback que el mock de useFocusEffect
 // capturó (equivale a que la pantalla gane foco y cargue el campus).
@@ -86,8 +71,7 @@ beforeEach(() => {
   mockLeer.mockReset();
   mockGuardar.mockReset();
   mockUseFocusEffect.mockReset();
-  mockRouter.replace.mockClear();
-  mockRouter.back.mockClear();
+  limpiarRouter();
   mockListar.mockResolvedValue(campusMock);
   mockLeer.mockResolvedValue(null);
   mockGuardar.mockResolvedValue(undefined);
@@ -167,7 +151,7 @@ describe('Selección de campus', () => {
     });
 
     expect(mockGuardar).toHaveBeenCalledWith(campusMock[1]);
-    expect(mockRouter.replace).toHaveBeenCalledWith('/(cliente)');
+    expect(routerMock.replace).toHaveBeenCalledWith('/(cliente)');
   });
 
   it('muestra el error normalizado con botón de reintentar', async () => {
@@ -210,6 +194,6 @@ describe('Selección de campus', () => {
     });
 
     expect(tree.root.findByProps({ testID: 'campus-error-guardado' })).toBeTruthy();
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
   });
 });

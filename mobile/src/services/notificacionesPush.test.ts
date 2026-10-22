@@ -11,13 +11,10 @@ import {
 } from './notificacionesPush';
 
 // AsyncStorage no existe como módulo nativo en Jest; se mockea su superficie.
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-  clear: jest.fn(async () => undefined),
-  getAllKeys: jest.fn(async () => []),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
 // expo-notifications carga módulos nativos y registra auto-registration al
 // importar; se mockea la superficie que usa el servicio para aislar el test.

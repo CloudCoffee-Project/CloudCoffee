@@ -1,6 +1,6 @@
 // src/__tests__/cliente-bandeja.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import BandejaNotificacionesScreen from '../app/(cliente)/notificaciones';
 import {
@@ -10,17 +10,13 @@ import {
   vaciarHistorial,
 } from '../services/historialNotificaciones';
 import { useFocusEffect } from 'expo-router';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { NotificacionHistorial } from '../services/historialNotificaciones';
 
-const mockPush = jest.fn();
-
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-  clear: jest.fn(async () => undefined),
-  getAllKeys: jest.fn(async () => []),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
@@ -47,19 +43,12 @@ jest.mock('../services/notificacionesPush', () => {
   return { ...actual, obtenerTokenGuardado: jest.fn(async () => 'token-testeo') };
 });
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-  useRouter: jest.fn(() => ({ push: mockPush })),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockListar = listarNotificaciones as unknown as jest.Mock;
 const mockMarcarLeida = marcarLeida as unknown as jest.Mock;
@@ -77,12 +66,6 @@ function registro(id: string, sobre: Partial<NotificacionHistorial> = {}): Notif
     fechaIso: new Date().toISOString(),
     ...sobre,
   };
-}
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
 }
 
 // Renderiza la pantalla y ejecuta el callback que el mock de useFocusEffect
@@ -103,7 +86,7 @@ async function renderizarBandeja(): Promise<ReactTestRenderer> {
 }
 
 beforeEach(() => {
-  mockPush.mockClear();
+  limpiarRouter();
   mockListar.mockResolvedValue([]);
   mockMarcarLeida.mockResolvedValue([]);
   mockMarcarTodas.mockResolvedValue([]);
@@ -151,7 +134,7 @@ describe('pantalla de notificaciones (bandeja)', () => {
     });
 
     expect(mockMarcarLeida).toHaveBeenCalledWith('n-2');
-    expect(mockPush).toHaveBeenCalledWith('/(cliente)/mis-compras');
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/mis-compras');
   });
 
   it('al tocar una no leída sin url la marca leída sin navegar', async () => {
@@ -167,7 +150,7 @@ describe('pantalla de notificaciones (bandeja)', () => {
     });
 
     expect(mockMarcarLeida).toHaveBeenCalledWith('n-1');
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
   });
 
   it('marca todas como leídas desde la acción de la bandeja', async () => {

@@ -5,14 +5,15 @@
 // igual que en cajero-escaner.test.tsx.
 
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import ConfirmacionEntregaScreen from '../app/(cajero)/confirmacion-entrega';
 import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
+import { useLocalSearchParams } from 'expo-router';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
 
-const mockReplace = jest.fn();
 const mockParams: { pedido?: string; estado?: string } = {
   pedido: 'o-1',
   estado: 'listo_para_retiro',
@@ -28,14 +29,12 @@ jest.mock('../services/httpClient', () => {
   return { ...actual, getAccessToken: jest.fn() };
 });
 
-jest.mock('expo-router', () => ({
-  useLocalSearchParams: jest.fn(() => mockParams),
-  useRouter: jest.fn(() => ({ replace: mockReplace })),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 const mockFetchPedidos = fetchPedidosEntrantes as unknown as jest.Mock;
 const mockMarcarEntregada = marcarOrdenEntregada as unknown as jest.Mock;
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
+const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
 const ordenEntregable: Orden = {
   ordenId: 'o-1',
@@ -61,12 +60,6 @@ const ordenEntregable: Orden = {
   ],
 };
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 async function renderizarConfirmacion(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
   await act(async () => {
@@ -82,7 +75,8 @@ describe('Pantalla de confirmación de entrega (INT4-9)', () => {
     mockGetAccessToken.mockReset();
     mockFetchPedidos.mockReset();
     mockMarcarEntregada.mockReset();
-    mockReplace.mockClear();
+    limpiarRouter();
+    mockUseLocalSearchParams.mockReturnValue(mockParams);
     mockParams.pedido = 'o-1';
     mockParams.estado = 'listo_para_retiro';
   });
@@ -178,7 +172,7 @@ describe('Pantalla de confirmación de entrega (INT4-9)', () => {
     await act(async () => {
       volver.props.onPress();
     });
-    expect(mockReplace).toHaveBeenCalledWith('/(cajero)/escaner');
+    expect(routerMock.replace).toHaveBeenCalledWith('/(cajero)/escaner');
 
     act(() => tree.unmount());
   });

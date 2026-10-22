@@ -5,10 +5,12 @@ import { Text } from 'react-native';
 
 import BannerNotificacionPush from '../components/BannerNotificacionPush';
 import type { NotificacionRecibida } from '../hooks/useNotificacionesPush';
+import { textosDeTipo } from '../test-utils';
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
-}));
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const notificacion: NotificacionRecibida = {
   titulo: 'Pedido listo',
@@ -18,10 +20,7 @@ const notificacion: NotificacionRecibida = {
 
 // Texto conjunto que renderiza el banner (vacío cuando el banner está oculto).
 function textosDe(tree: ReactTestRenderer): string {
-  return tree.root
-    .findAllByType(Text)
-    .map((nodo) => nodo.props.children)
-    .join('|');
+  return textosDeTipo(tree, Text);
 }
 
 test('no muestra nada cuando no hay notificación', () => {

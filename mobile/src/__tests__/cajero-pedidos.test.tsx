@@ -1,19 +1,16 @@
 // src/__tests__/cajero-pedidos.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 
 import PedidosEntrantesScreen, { buscarOrdenPorCodigo } from '../app/(cajero)/index';
 import { fetchPedidosEntrantes } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
 
-const mockReplace = jest.fn();
-
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({ replace: mockReplace })),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
@@ -164,12 +161,6 @@ const ordenesFiltrosMock: Orden[] = [
     ],
   },
 ];
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 function dataDe(tree: ReactTestRenderer): Orden[] {
   const lista = tree.root.findByType(FlatList);
@@ -344,7 +335,7 @@ describe('Búsqueda manual por código de orden (INT4-10)', () => {
   beforeEach(() => {
     mockGetAccessToken.mockReset();
     mockFetchPedidos.mockReset();
-    mockReplace.mockReset();
+    limpiarRouter();
     (useOrdenEstado as unknown as jest.Mock).mockReturnValue(null);
   });
 
@@ -399,7 +390,7 @@ describe('Búsqueda manual por código de orden (INT4-10)', () => {
       validar.props.onPress();
     });
 
-    expect(mockReplace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
       params: { pedido: 'o-1', estado: 'pagado' },
     });
@@ -464,7 +455,7 @@ describe('Búsqueda manual por código de orden (INT4-10)', () => {
 
     const errorBanner = tree.root.findByProps({ testID: 'cajero-folio-error' });
     expect(textoDe(errorBanner)).toContain('Esta orden ya fue entregada.');
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
 
     act(() => tree.unmount());
   }, 20000);
