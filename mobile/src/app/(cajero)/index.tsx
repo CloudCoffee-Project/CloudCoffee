@@ -3,10 +3,12 @@
 // Pedidos entrantes del cajero (INT4-7). Diseño basado en el mockup
 // (cloudcoffee-react/Cajero_Main → pestaña "Pedidos"): header con rol,
 // buscador, chips de filtro y tarjetas de orden. Los filtros básicos son
-// "Activos" (reservando + pagado) y "No retirados" (no_retirado_pendiente_revision
-// + no_retirado_final), derivados del union EstadoOrden; los datos salen del
-// contrato real (src/types/domain.ts): nada de estados inventados. Por defecto
-// la cola muestra solo pedidos activos, como en el mockup.
+// "Activos" (pagado + listo_para_retiro) y "No retirados"
+// (no_retirado_pendiente_revision + no_retirado_final), derivados del union
+// EstadoOrden; los datos salen del contrato real (src/types/domain.ts): nada de
+// estados inventados. Por defecto la cola muestra solo pedidos activos, como en
+// el mockup. Los badges salen del único mapa de estados
+// (src/utils/estadosOrden.ts).
 //
 // Búsqueda manual por código de orden (INT4-10): respaldo para ubicar una
 // orden por su folio corto ante fallas de escaneo. Sigue el mockup (el input
@@ -33,40 +35,16 @@ import { getAccessToken, toApiError } from '../../services/httpClient';
 import { useOrdenEstado } from '../../hooks/useOrdenEstado';
 import { esEstadoOrdenActivo, esEstadoOrdenNoRetirado } from '../../types/domain';
 import type { EstadoOrden, Orden } from '../../types/domain';
+import { visualEstadoOrden } from '../../utils/estadosOrden';
 
 function formatearMonto(monto: number): string {
   return `$${monto.toLocaleString('es-CL')}`;
 }
 
-interface EstadoVisual {
-  etiqueta: string;
-  fondo: string;
-  texto: string;
-}
-
-function estadoVisual(estado: EstadoOrden): EstadoVisual {
-  switch (estado) {
-    case 'pagado':
-      return { etiqueta: '🔵 Pagado', fondo: '#DBEAFE', texto: '#1E40AF' };
-    case 'listo_para_retiro':
-      return { etiqueta: '🟢 Listo para Retiro', fondo: '#DCFCE7', texto: '#166534' };
-    case 'entregado':
-      return { etiqueta: '🟢 Entregado', fondo: '#DCFCE7', texto: '#166534' };
-    case 'reservando':
-      return { etiqueta: '⏳ Reservando', fondo: '#EFF6FF', texto: '#1D4ED8' };
-    case 'no_retirado_pendiente_revision':
-      return { etiqueta: '⚠️ No Retirado · Revisión', fondo: '#FEF3C7', texto: '#92400E' };
-    case 'no_retirado_final':
-      return { etiqueta: '⚠️ No Retirado', fondo: '#FEE2E2', texto: '#991B1B' };
-    case 'cancelado':
-      return { etiqueta: '✖ Cancelado', fondo: '#FEE2E2', texto: '#991B1B' };
-  }
-}
-
 function FilaPedido({ orden }: { orden: Orden }) {
   const estadoEnVivo = useOrdenEstado(orden.ordenId);
   const estadoActual: EstadoOrden = estadoEnVivo ?? orden.estado;
-  const visual = estadoVisual(estadoActual);
+  const visual = visualEstadoOrden(estadoActual);
 
   return (
     <View style={styles.card} testID={`cajero-orden-${orden.ordenId}`}>
@@ -391,7 +369,7 @@ export default function PedidosEntrantesScreen() {
             <ChipFiltro
               key={estado}
               activo={filtro === estado}
-              etiqueta={`${estadoVisual(estado).etiqueta} (${
+              etiqueta={`${visualEstadoOrden(estado).etiqueta} (${
                 pedidos.filter((pedido) => pedido.estado === estado).length
               })`}
               onPress={() => setFiltro(estado)}

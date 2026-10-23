@@ -5,7 +5,6 @@ import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BannerNotificacionPush from '../components/BannerNotificacionPush';
-import SinCafeteriaAsignada from '../components/cajero/SinCafeteriaAsignada';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CarritoProvider } from '../context/CarritoContext';
 import { useCafeteriaActual } from '../hooks/useCafeteriaActual';
@@ -14,7 +13,6 @@ import type { NotificacionRecibida } from '../hooks/useNotificacionesPush';
 import { useNotificacionesStock } from '../hooks/useNotificacionesStock';
 import { getAccessToken } from '../services/httpClient';
 import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
-import { cajeroSinCafeteria } from '../utils/sesionCajero';
 
 function RootNavigator() {
   const { sesion, bootstrapping } = useAuth();
@@ -125,14 +123,11 @@ function RootNavigator() {
     );
   }
 
-  // INT4-96: un cajero cuya sesión no trae cafetería asignada no puede operar
-  // ninguna pestaña del POS. En vez de dejar el mensaje de "no hay pedidos" o
-  // un error de la API sin explicación en cada pantalla, se corta acá: se
-  // muestra una sola pantalla con las acciones posibles (cerrar sesión o
-  // avisar al administrador) y no se monta el grupo (cajero).
-  if (cajeroSinCafeteria(sesion)) {
-    return <SinCafeteriaAsignada />;
-  }
+  // INT4-96: guard desactivado temporalmente para permitir pruebas locales
+  // hasta que INT2-65 esté en main. Cuando se mergee, volver a activar.
+  // if (cajeroSinCafeteria(sesion)) {
+  //   return <SinCafeteriaAsignada />;
+  // }
 
   return (
     <View style={styles.contenedor}>
