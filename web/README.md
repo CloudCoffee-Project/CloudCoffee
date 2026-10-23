@@ -5,7 +5,9 @@ Base de la aplicación web con React 18, TypeScript, Vite y React Router.
 ## Requisitos
 
 - Node.js 20.19+ o 22.12+
-- npm
+- npm 10.9.2
+
+La versión utilizada por el proyecto y por CI es Node.js 22.13.0. Con NVM se puede activar desde `web/` mediante `nvm use`, que lee el archivo `.nvmrc`.
 
 ## Desarrollo
 
@@ -75,6 +77,31 @@ npm test           # pruebas del cliente HTTP
 npm run build      # revisión de tipos y compilación de producción en dist/
 npm run preview    # vista local de la compilación
 ```
+
+## Integración continua
+
+El workflow `Web CI` se ejecuta en cada pull request. Primero detecta si se modificó `web/` o el propio workflow; cuando corresponde, instala exactamente las dependencias de `package-lock.json` con `npm ci` y ejecuta, en orden:
+
+1. `npm run typecheck`
+2. `npm test`
+3. `npm run build`
+
+Un fallo en cualquiera de esos pasos hace fallar la compuerta. Para proteger `main`, el check que debe configurarse como obligatorio en GitHub es `Compuerta CI web`; este check también termina correctamente cuando un pull request no contiene cambios web.
+
+Para reproducir localmente las mismas verificaciones:
+
+```bash
+cd web
+nvm use
+npm ci
+npm run typecheck
+npm test
+VITE_APP_TITLE="CloudCoffee CI" \
+  VITE_API_BASE_URL="http://localhost:18080" \
+  npm run build
+```
+
+Los valores `VITE_*` usados en CI son configuración pública incorporada al bundle. El workflow no lee credenciales ni secretos de producción.
 
 ## Estructura
 
