@@ -37,28 +37,10 @@ import { getAccessToken, toApiError } from '../../services/httpClient';
 import { useOrdenEstado } from '../../hooks/useOrdenEstado';
 import { esEstadoOrdenNoRetirado } from '../../types/domain';
 import type { AccionNoRetirado, EstadoOrden, Orden } from '../../types/domain';
+import { visualEstadoOrden } from '../../utils/estadosOrden';
 
 function formatearMonto(monto: number): string {
   return `$${monto.toLocaleString('es-CL')}`;
-}
-
-interface EstadoVisual {
-  etiqueta: string;
-  fondo: string;
-  texto: string;
-}
-
-function estadoVisual(estado: EstadoOrden): EstadoVisual {
-  switch (estado) {
-    case 'no_retirado_pendiente_revision':
-      return { etiqueta: '⚠️ No Retirado · Revisión', fondo: '#FEF3C7', texto: '#92400E' };
-    case 'no_retirado_final':
-      return { etiqueta: '⚠️ No Retirado', fondo: '#FEE2E2', texto: '#991B1B' };
-    default:
-      // Por construcción la lista solo muestra estados no retirados; este
-      // caso defiende el badge sin inventar un string de estado.
-      return { etiqueta: `⚠️ No Retirado (${estado})`, fondo: '#FEE2E2', texto: '#991B1B' };
-  }
 }
 
 interface PropsFilaNoRetirado {
@@ -80,7 +62,7 @@ function FilaNoRetirado({
 }: PropsFilaNoRetirado) {
   const estadoEnVivo = useOrdenEstado(orden.ordenId);
   const estadoActual: EstadoOrden = estadoEnVivo ?? orden.estado;
-  const visual = estadoVisual(estadoActual);
+  const visual = visualEstadoOrden(estadoActual);
   // El flujo de decisión pertenece a las órdenes pendientes de revisión; las
   // finales se muestran solo lectura en la misma tarjeta.
   const pendienteRevision = orden.estado === 'no_retirado_pendiente_revision';
