@@ -92,6 +92,16 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertNoBackendRequests();
     }
 
+    @Test
+    void publicProductDetailDoesNotRequireAuthentication() throws Exception {
+        mvc.perform(get("/v1/catalog/productos/33333333-3333-4333-8333-333333333333"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("catalog"));
+
+        assertThat(BACKENDS.get("catalog").take().path())
+                .isEqualTo("/catalog/productos/33333333-3333-4333-8333-333333333333");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"register", "login", "refresh", "verificacion",
             "verificacion/reenviar", "password/recovery", "password/reset"})
