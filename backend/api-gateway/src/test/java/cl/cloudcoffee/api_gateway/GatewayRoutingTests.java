@@ -79,7 +79,19 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
             "auth, /v1/auth/users/me, /auth/users/me",
             "catalog, /v1/catalog/productos/42, /catalog/productos/42",
             "notifications, /v1/notifications/42, /notifications/42",
-            "orders, /v1/compras/42/pago, /compras/42/pago"
+            "orders, /v1/compras, /compras",
+            "orders, /v1/compras/42, /compras/42",
+            "orders, /v1/compras/42/confirmar, /compras/42/confirmar",
+            "orders, /v1/compras/42/cancelar, /compras/42/cancelar",
+            "orders, /v1/compras/42/pago, /compras/42/pago",
+            "orders, /v1/orders, /orders",
+            "orders, /v1/orders/42, /orders/42",
+            "orders, /v1/orders/42/confirmar, /orders/42/confirmar",
+            "orders, /v1/orders/42/cancelar, /orders/42/cancelar",
+            "orders, /v1/orders/42/listo, /orders/42/listo",
+            "orders, /v1/orders/42/qr, /orders/42/qr",
+            "orders, /v1/orders/validar-retiro, /orders/validar-retiro",
+            "orders, /v1/orders/42/entregar, /orders/42/entregar"
     })
     void routesToTheCorrectBackendAndStripsOnlyTheVersion(String service,
             String externalPath, String internalPath) throws Exception {
@@ -165,6 +177,37 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                 .andExpect(content().json(BackendStub.PROBLEM));
         assertThat(BACKENDS.get("auth").take().path()).isEqualTo("/auth/login");
     }
+    @Test
+    void orderAndCashierRoutesPreserveBodyQueryJwtAndDomainErrors() throws Exception {
+        String authorization = "Bearer " + token();
+        String entregarBody = "{\"codigo\":\"token-opaco-de-43-caracteres-para-retiro-qr\"}";
+
+        mvc.perform(post(URI.create("/v1/orders/42/entregar?modo=estricto"))
+                        .with(user("cajero"))
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(entregarBody.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("orders"));
+
+        RecordedRequest received = BACKENDS.get("orders").take();
+        assertThat(received.method()).isEqualTo("POST");
+        assertThat(received.path()).isEqualTo("/orders/42/entregar");
+        assertThat(received.query()).isEqualTo("modo=estricto");
+        assertThat(received.body()).isEqualTo(entregarBody);
+        assertThat(received.authorization()).isEqualTo(authorization);
+        assertThat(received.contentType()).startsWith(MediaType.APPLICATION_JSON_VALUE);
+
+        mvc.perform(post("/v1/orders/validar-retiro")
+                        .with(user("cajero"))
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reject\":true}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(content().json(BackendStub.PROBLEM));
+        assertThat(BACKENDS.get("orders").take().path()).isEqualTo("/orders/validar-retiro");
+    }
 
     @ParameterizedTest
     @CsvSource({
@@ -176,7 +219,18 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
             "DELETE, /v1/catalog/categorias",
             "GET, /v1/auth/login",
             "POST, /v1/auth/login/extra",
-            "GET, /v1/catalog/campus/extra"
+            "GET, /v1/catalog/campus/extra",
+            "POST, /v1/compras",
+            "GET, /v1/compras",
+            "POST, /v1/compras/42/confirmar",
+            "POST, /v1/compras/42/cancelar",
+            "POST, /v1/compras/42/pago",
+            "GET, /v1/orders",
+            "GET, /v1/orders/42",
+            "POST, /v1/orders/42/listo",
+            "GET, /v1/orders/42/qr",
+            "POST, /v1/orders/validar-retiro",
+            "POST, /v1/orders/42/entregar"
     })
     void protectedPathsAndMethodsRejectAnonymousRequests(String method, String path) throws Exception {
         mvc.perform(request(HttpMethod.valueOf(method), path))
@@ -198,8 +252,13 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
 
     @ParameterizedTest
     @ValueSource(strings = {"/auth/login", "/catalog/campus", "/notifications",
-            "/internal/test/events", "/v1/internal/test/events", "/v1/unknown",
-            "/v2/auth/login", "/v1/authentication/login"})
+            "/compras", "/compras/42", "/orders", "/orders/42", "/orders/validar-retiro",
+            "/v1/order", "/v1/order/42", "/v1/ordenes", "/v1/ordenes/42",
+            "/internal/test/events", "/v1/internal/test/events",
+            "/internal/servicios/asignaciones/42", "/v1/internal/servicios/asignaciones/42",
+            "/internal/reservas", "/v1/internal/reservas",
+            "/v1/unknown", "/v2/auth/login", "/v2/compras", "/v2/orders",
+            "/v1/authentication/login"})
     void unknownAndUnversionedPathsAreNotForwarded(String path) throws Exception {
         mvc.perform(get(path).with(user("cliente")))
                 .andExpect(status().isNotFound());
