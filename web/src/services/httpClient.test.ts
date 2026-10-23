@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError, createHttpClient } from './httpClient';
 
 describe('cliente HTTP del API Gateway', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+    });
+  });
+
   it('usa el origen configurado y conserva la ruta, query y headers', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ items: ['café'] }), {
@@ -36,6 +42,21 @@ describe('cliente HTTP del API Gateway', () => {
     })).resolves.toBe('ok');
 
     expect(new Headers(fetcher.mock.calls[0][1]?.headers).get('Accept')).toBe('text/plain');
+  });
+
+  it('envía el access token almacenado fuera de las rutas de autenticación', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue('token-de-sesion'),
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
+    await createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/catalog/campus');
+
+    const headers = new Headers(fetcher.mock.calls[0][1]?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer token-de-sesion');
   });
 
   it.each(['', '/v1', '/auth/login', 'https://otro.example/v1/auth/login',

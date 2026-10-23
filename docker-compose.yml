@@ -5,6 +5,33 @@ services:
         - "9411:9411"
         networks:
         - backend
+
+    web:
+        build:
+            context: ./web
+            dockerfile: Dockerfile
+        environment:
+            VITE_APP_TITLE: ${WEB_APP_TITLE:-CloudCoffee}
+            # La URL se usa en el navegador, por eso apunta al puerto publicado.
+            VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
+            CHOKIDAR_USEPOLLING: "true"
+        ports:
+            - "${WEB_PORT:-3000}:3000"
+        volumes:
+            - ./web:/app
+            - web_node_modules:/app/node_modules
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:3000/"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+        depends_on:
+            api-gateway:
+                condition: service_healthy
+        networks:
+            - backend
+
     auth-service:
         build:
             context: ./backend
@@ -326,6 +353,7 @@ networks:
     driver: bridge
 
 volumes:
+  web_node_modules:
   rabbitmq_data:
   auth_db_data:
   catalog_db_data:
