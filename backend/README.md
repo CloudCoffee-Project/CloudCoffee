@@ -164,7 +164,7 @@ del resultado y su consulta llegan con INT2-76.
 
 Conforme al contrato de INT2-50 ([compra-pago-retiro.md](docs/compra-pago-retiro.md)):
 escenarios deterministas, sin proveedor externo, tarjeta, Mercado Pago, `initPoint`
-ni webhooks. Gateway enruta `/v1/compras/**` a order-service.
+ni webhooks. Gateway enruta `/v1/compras/**` y `/v1/orders/**` a order-service.
 
 | Endpoint | Respuesta |
 |---|---|
