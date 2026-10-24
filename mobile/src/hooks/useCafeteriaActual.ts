@@ -1,19 +1,18 @@
 // src/hooks/useCafeteriaActual.ts
 //
 // Devuelve el id de la cafetería a la que suscribirse para eventos de stock
-// (INT4-46), según el rol de la sesión:
+// (INT4-46, INT4-98), según el rol de la sesión:
 //   - cajero → sesion.cafeteriaId (viene en el JWT).
-//   - cliente → cafetería principal del campus seleccionado (AsyncStorage).
-//     El campus se relee al montar, al cambiar de usuario y cada vez que la
-//     app vuelve a primer plano: si el cliente cambió de campus la suscripción
-//     sigue a la nueva cafetería.
+//   - cliente → primera cafetería del campus guardado en AsyncStorage (IDs reales
+//     que devuelve GET /v1/catalog/campus). Se relee al montar, al cambiar de
+//     usuario y cada vez que la app vuelve a primer plano para seguir el campus
+//     seleccionado.
 //   - otros roles → null (sin suscripción a stock).
 
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { CAMPUS_STORAGE_KEY, cafeteriaIdDeCampus } from '../services/campus';
+import { leerCampusSeleccionado } from '../services/catalog';
 import type { Rol } from '../types/domain';
 
 export function useCafeteriaActual(
@@ -21,15 +20,19 @@ export function useCafeteriaActual(
   cafeteriaIdSesion: string | null,
   claveSesion?: string
 ): string | null {
-  // Campus cargado del almacén local; solo se usa para el rol cliente.
-  const [campusId, setCampusId] = useState<string | null>(null);
+  // Cafetería cargada del campus guardado; solo se usa para el rol cliente.
+  const [cafeteriaIdCliente, setCafeteriaIdCliente] = useState<string | null>(null);
 
-  // Solo lee el campus; el setState lo hacen los callbacks (promesa/evento).
-  const leerCampus = useCallback(async (): Promise<string | null> => {
+  // Lee el campus guardado y toma la primera cafetería real del catálogo.
+  const leerCafeteriaCliente = useCallback(async (): Promise<string | null> => {
     try {
-      const crudo = await AsyncStorage.getItem(CAMPUS_STORAGE_KEY);
-      const campus = crudo ? (JSON.parse(crudo) as { id?: string }) : null;
-      return campus?.id ?? null;
+      const campus = await leerCampusSeleccionado();
+      const cafeterias = campus?.cafeterias;
+      if (Array.isArray(cafeterias) && cafeterias.length > 0) {
+        const primera = cafeterias[0];
+        return primera?.id ?? null;
+      }
+      return null;
     } catch {
       // Campus corrupto o almacenamiento no disponible: sin cafetería.
       return null;
@@ -41,19 +44,19 @@ export function useCafeteriaActual(
       return;
     }
 
-    void leerCampus().then((id) => setCampusId(id));
+    void leerCafeteriaCliente().then((id) => setCafeteriaIdCliente(id));
 
     const sub = AppState.addEventListener('change', (estado) => {
       if (estado === 'active') {
-        void leerCampus().then((id) => setCampusId(id));
+        void leerCafeteriaCliente().then((id) => setCafeteriaIdCliente(id));
       }
     });
 
     return () => sub.remove();
-  }, [rol, claveSesion, leerCampus]);
+  }, [rol, claveSesion, leerCafeteriaCliente]);
 
   if (rol === 'cajero') {
     return cafeteriaIdSesion;
   }
-  return rol === 'cliente' ? cafeteriaIdDeCampus(campusId) : null;
+  return rol === 'cliente' ? cafeteriaIdCliente : null;
 }

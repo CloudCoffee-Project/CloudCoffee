@@ -7,25 +7,31 @@
 
 export type Rol = 'cliente' | 'cajero' | 'admin_cafeteria' | 'super_admin';
 
+// Contrato del backend (backend/docs/compra-pago-retiro.md, enum EstadoOrden
+// de compra-pago-retiro.openapi.json). `reservando` es un paso interno de la
+// operación durable y NO es un estado de orden del contrato: la app solo usa
+// los valores que el backend puede devolver.
 export type EstadoOrden =
-  | 'reservando'
+  | 'revision_requerida'
+  | 'pendiente_pago'
   | 'pagado'
   | 'listo_para_retiro'
-  | 'no_retirado_pendiente_revision'
   | 'entregado'
+  | 'no_retirado_pendiente_revision'
   | 'no_retirado_final'
   | 'cancelado';
 
 // Lista canónica de estados de orden: permite validar en runtime valores que
 // llegan desde el WebSocket (/topic/orden/{id}/estado) o desde los params de
 // navegación, para que ninguna pantalla invente un string de estado por su
-// cuenta (ver cabecera de este archivo).
+// cuenta (ver cabecera de este archivo). Mismo orden que el enum del contrato.
 export const ESTADOS_ORDEN: readonly EstadoOrden[] = [
-  'reservando',
+  'revision_requerida',
+  'pendiente_pago',
   'pagado',
   'listo_para_retiro',
-  'no_retirado_pendiente_revision',
   'entregado',
+  'no_retirado_pendiente_revision',
   'no_retirado_final',
   'cancelado',
 ];
@@ -37,12 +43,10 @@ export function esEstadoOrden(valor: unknown): valor is EstadoOrden {
 // Agrupaciones semánticas del union EstadoOrden para el listado del cajero
 // (INT4-7, filtros básicos de pedidos activos / no retirados). Se centralizan
 // aquí para que ninguna pantalla invente su propia lógica de categoría: los
-// filtros se derivan del union, nunca de strings planos.
-export const ESTADOS_ORDEN_ACTIVOS: readonly EstadoOrden[] = [
-  'reservando',
-  'pagado',
-  'listo_para_retiro',
-];
+// filtros se derivan del union, nunca de strings planos. "Activos" es lo que el
+// cajero debe preparar/entregar: una orden recién está activa cuando el pago y
+// el stock quedaron confirmados ('pagado') y hasta que se retira.
+export const ESTADOS_ORDEN_ACTIVOS: readonly EstadoOrden[] = ['pagado', 'listo_para_retiro'];
 
 export const ESTADOS_ORDEN_NO_RETIRADOS: readonly EstadoOrden[] = [
   'no_retirado_pendiente_revision',
@@ -57,17 +61,17 @@ export function esEstadoOrdenNoRetirado(estado: EstadoOrden): boolean {
   return ESTADOS_ORDEN_NO_RETIRADOS.includes(estado);
 }
 
-export type EstadoCompra =
-  'reservando' | 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
+// Mismo enum EstadoCompra del contrato: toda compra nace en
+// 'revision_requerida' o 'pendiente_pago' (no existe 'reservando' como estado
+// de negocio estable).
+export type EstadoCompra = 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
 
 // Estados en los que el cliente todavía puede actuar sobre su compra (INT4-37):
-// una compra confirmada ('pagado') o ya cancelada no se toca, y una compra en
-// revisión solo se puede cancelar (confirmarla mientras se revisa no tiene
-// sentido). Igual que el resto de estados, se derivan del union EstadoCompra
-// acá y no como strings sueltos en la pantalla.
-export const ESTADOS_COMPRA_CONFIRMABLES: readonly EstadoCompra[] = ['reservando'];
+// una compra confirmada ('pagado') o ya cancelada no se toca. Confirmar
+// reintenta las reservas solo desde 'revision_requerida'; cancelar se permite
+// mientras la compra siga en revisión o pendiente de pago.
+export const ESTADOS_COMPRA_CONFIRMABLES: readonly EstadoCompra[] = ['revision_requerida'];
 export const ESTADOS_COMPRA_CANCELABLES: readonly EstadoCompra[] = [
-  'reservando',
   'revision_requerida',
   'pendiente_pago',
 ];
@@ -81,11 +85,15 @@ export function puedeCancelarCompra(estado: EstadoCompra): boolean {
 }
 
 // Estados en los que el cliente todavía puede actuar sobre UNA orden puntual de
-// su compra (INT4-37). La orden solo es cancelable mientras está reservando: en
+// su compra (INT4-37). Confirmar reintenta la reserva solo en
+// 'revision_requerida'; cancelar se permite en revisión o pendiente de pago. En
 // cuanto el pago entró ('pagado' en adelante) la cafetería ya la está
 // preparando y cancelar ya no corresponde al cliente.
-export const ESTADOS_ORDEN_CONFIRMABLES: readonly EstadoOrden[] = ['reservando'];
-export const ESTADOS_ORDEN_CANCELABLES: readonly EstadoOrden[] = ['reservando'];
+export const ESTADOS_ORDEN_CONFIRMABLES: readonly EstadoOrden[] = ['revision_requerida'];
+export const ESTADOS_ORDEN_CANCELABLES: readonly EstadoOrden[] = [
+  'revision_requerida',
+  'pendiente_pago',
+];
 
 export function puedeConfirmarOrden(estado: EstadoOrden): boolean {
   return ESTADOS_ORDEN_CONFIRMABLES.includes(estado);
