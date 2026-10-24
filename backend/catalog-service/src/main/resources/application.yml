@@ -16,6 +16,11 @@ spring:
     # arranca sin ese perfil, la validación no debe fallar por no encontrarlo.
     ignore-migration-patterns: "*:future,repeatable:missing"
 
+catalog:
+  reservations:
+    ttl: ${CATALOG_RESERVATION_TTL:PT5M}
+    expiration-scan-ms: ${CATALOG_RESERVATION_EXPIRATION_SCAN_MS:30000}
+
 management:
   tracing:
     sampling:
