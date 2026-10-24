@@ -25,7 +25,7 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(5);
+        assertThat(api.path("paths").size()).isEqualTo(6);
         assertThat(api.at("/paths/~1catalog~1cafeterias~1{cafeteriaId}~1ofertas/get/security/0/bearerAuth").isArray()).isTrue();
         assertThat(api.at("/servers/0/url").asText()).isEqualTo("/v1");
         assertThat(api.at("/paths/~1catalog~1campus/get/security").isMissingNode()).isTrue();
@@ -35,6 +35,9 @@ class OpenApiAccessTests extends JwtTestSupport {
             assertThat(api.path("paths").path(path).at("/get/responses/400/content/application~1problem+json/schema/$ref").asText())
                     .endsWith("/Problem");
         }
+        assertThat(api.at("/paths/~1catalog~1productos~1{id}/get/security").isMissingNode()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1productos~1{id}/get/responses/404/content/application~1problem+json/schema/$ref")
+                .asText()).endsWith("/Problem");
         var parameters = api.at("/paths/~1catalog~1productos/get/parameters");
         assertThat(parameters).hasSize(6);
         for (var parameter : parameters) {

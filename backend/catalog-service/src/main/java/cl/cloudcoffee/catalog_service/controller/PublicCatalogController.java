@@ -23,6 +23,7 @@ import cl.cloudcoffee.catalog_service.dto.CampusResponse;
 import cl.cloudcoffee.catalog_service.dto.CategoryResponse;
 import cl.cloudcoffee.catalog_service.dto.ProductOfferResponse;
 import cl.cloudcoffee.catalog_service.dto.ProductResponse;
+import cl.cloudcoffee.catalog_service.dto.PublicProductDetailResponse;
 import cl.cloudcoffee.catalog_service.service.PublicCatalogQueryService;
 
 @Tag(name = "Catálogo", description = "Campus, categorías, productos y comparación de ofertas")
@@ -71,6 +72,17 @@ public class PublicCatalogController {
             @RequestParam(required = false) String q,
             @ParameterObject Pageable pageable) {
         return queryService.findProducts(campusId, categoriaId, q, pageable);
+    }
+
+    @Operation(operationId = "consultarDetallePublicoProducto", summary = "Consultar detalle público de un producto",
+            description = "Consulta pública. Solo devuelve productos activos; los productos inexistentes o inactivos responden 404.")
+    @ApiResponse(responseCode = "200", description = "Detalle público del producto")
+    @ApiResponse(responseCode = "404", description = "Producto activo no encontrado")
+    @GetMapping("/productos/{id}")
+    public PublicProductDetailResponse findProductById(
+            @Parameter(description = "UUID del producto", example = "33333333-3333-4333-8333-333333333333")
+            @PathVariable UUID id) {
+        return queryService.findActiveProduct(id);
     }
 
     @Operation(operationId = "compararOfertas", summary = "Comparar ofertas de un producto por cafetería",

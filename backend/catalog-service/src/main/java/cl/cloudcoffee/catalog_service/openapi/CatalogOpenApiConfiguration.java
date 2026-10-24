@@ -47,9 +47,19 @@ public class CatalogOpenApiConfiguration {
                 }
                 if (path.startsWith("/catalog/productos")) {
                     operation.getResponses().addApiResponse("400", problem("Falta campusId o un UUID/parámetro tiene formato inválido", 400, path));
+                    if ("/catalog/productos/{id}".equals(path)) {
+                        operation.getResponses().remove("400");
+                        operation.getResponses().addApiResponse("400", problem(
+                                "El UUID del producto no tiene un formato válido.", 400, path));
+                    }
                 }
                 operation.getResponses().addApiResponse("401", problem(
                         path.startsWith("/catalog/productos") ? "JWT ausente o inválido" : "Bearer inválido si se envía; sin Bearer la consulta es pública", 401, path));
+                if ("/catalog/productos/{id}".equals(path)) {
+                    operation.getResponses().remove("401");
+                    operation.getResponses().addApiResponse("404", problem(
+                            "No existe un producto activo con el identificador indicado.", 404, path));
+                }
                 operation.getResponses().addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
             }));
         };
