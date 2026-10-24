@@ -16,10 +16,11 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
     @Query("SELECT o FROM Offer o WHERE o.id = :offerId")
     java.util.Optional<Offer> findByIdForUpdate(@Param("offerId") UUID offerId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
         UPDATE offer
         SET stock = stock - :quantity,
+            version = version + 1,
             status = CASE WHEN stock - :quantity = 0 THEN 'OUT_OF_STOCK' ELSE status END
         WHERE id = :offerId
           AND status = 'AVAILABLE'

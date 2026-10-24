@@ -196,6 +196,22 @@ class StockReservationIntegrationTests extends JwtTestSupport {
     }
 
     @Test
+    void reservingAfterExpirationUsesRestoredStockWithoutAStaleVersion() {
+        var old = reservationService.reserve(new ReserveStockRequest(UUID.randomUUID(), offer.getId(), 1))
+                .reservation();
+        old.setReservedAt(Instant.now().minusSeconds(600));
+        old.setExpiresAt(Instant.now().minusSeconds(1));
+        reservationRepository.saveAndFlush(old);
+
+        var replacement = reservationService.reserve(new ReserveStockRequest(UUID.randomUUID(), offer.getId(), 1));
+
+        assertThat(replacement.created()).isTrue();
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
+        assertThat(reservationRepository.findById(old.getId()).orElseThrow().getStatus())
+                .isEqualTo(StockReservationStatus.EXPIRED);
+    }
+
+    @Test
     void doesNotReserveInactiveOffer() {
         offer.setStatus(OfferStatus.OUT_OF_STOCK);
         offerRepository.saveAndFlush(offer);

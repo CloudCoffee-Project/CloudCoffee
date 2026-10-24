@@ -107,6 +107,44 @@ volver a operar sobre su oferta. Configuración opcional: `CATALOG_RESERVATION_T
 (duración ISO-8601, por ejemplo `PT5M`) y
 `CATALOG_RESERVATION_EXPIRATION_SCAN_MS` (intervalo de revisión en milisegundos).
 
+### Ajuste de stock por cafetería (INT2-99)
+
+`PUT /v1/catalog/cafeterias/{cafeteriaId}/ofertas/{offerId}/stock` (Gateway) requiere
+JWT de `ADMIN_CAFETERIA` y asignación persistida a esa cafetería, verificada en Auth.
+El claim `cafeteriaId` del JWT no concede permisos. Otros roles, personal sin
+asignación, cafetería ajena o Auth no disponible reciben `403`; sin JWT, `401`.
+Una oferta que no pertenece a la cafetería de la ruta responde `404`.
+
+```json
+{"quantity": 20}
+```
+
+`quantity` es la cantidad total sin vender, **incluidas las reservas pendientes**,
+y debe ser un entero no negativo. Por ejemplo, con 4 unidades reservadas, ajustar
+a 20 deja 16 disponibles. Un total inferior a las reservas responde
+`409 STOCK_COMPROMETIDO`; cantidad ausente, nula o negativa responde `400`.
+La respuesta incluye `adjustmentId`, `offerId`, `quantity`, `reservedQuantity`,
+`previousStock`, `stock` (disponibilidad vendible), `version` y `adjustedAt`.
+
+El ajuste usa el mismo bloqueo de oferta que las reservas, procesa vencimientos
+antes de calcular disponibilidad y conserva las reservas vigentes. Liberarlas
+devuelve únicamente sus unidades; confirmarlas no vuelve a descontar stock.
+Stock cero marca `OUT_OF_STOCK`; una reposición positiva marca `AVAILABLE`.
+La migración `V3__create_stock_adjustments.sql` registra administrador, fecha,
+total declarado, reservas, disponibilidad anterior/resultante y versión de oferta.
+
+Después del commit se publica `catalog.stock.actualizado.v1` en el exchange durable
+`cloudcoffee.events`, con el envelope y payload de INT2-50 (`stockActual` es la
+disponibilidad vendible). Catalog utiliza las variables estándar
+`SPRING_RABBITMQ_HOST`, `SPRING_RABBITMQ_PORT`, `SPRING_RABBITMQ_USERNAME` y
+`SPRING_RABBITMQ_PASSWORD`; Compose ya las configura. La entrega durable con
+outbox/reintentos de INT2-64 y la difusión WebSocket corresponden a sus propias
+issues; este endpoint no las implementa.
+
+`StockAdjustmentIntegrationTests` verifica autorización, auditoría, publicación
+solo tras commit, rollback, reservas/vencimientos y concurrencia en ambos órdenes
+entre reserva y ajuste, además de dos ajustes simultáneos.
+
 ### Personal por cafetería y cuentas de prueba (INT2-65)
 
 Auth guarda la cafetería de cada `CAJERO` y `ADMIN_CAFETERIA` en

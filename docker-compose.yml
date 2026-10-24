@@ -109,6 +109,10 @@ services:
             DB_URL: jdbc:postgresql://catalog-db:5432/${CATALOG_DB_NAME}
             DB_USER: ${CATALOG_DB_USER}
             DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_PORT: 5672
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
         secrets:
@@ -123,6 +127,8 @@ services:
             start_period: 30s
         depends_on:
             catalog-db:
+                condition: service_healthy
+            rabbitmq:
                 condition: service_healthy
         networks:
             - backend

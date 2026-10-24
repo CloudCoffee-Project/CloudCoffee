@@ -55,6 +55,13 @@ public class CatalogOpenApiConfiguration {
                 }
                 operation.getResponses().addApiResponse("401", problem(
                         path.startsWith("/catalog/productos") ? "JWT ausente o inválido" : "Bearer inválido si se envía; sin Bearer la consulta es pública", 401, path));
+                if (path.endsWith("/stock")) {
+                    operation.getResponses().addApiResponse("400", problem("Cantidad total ausente, negativa o con formato inválido", 400, path));
+                    operation.getResponses().addApiResponse("401", problem("JWT ausente o inválido", 401, path));
+                    operation.getResponses().addApiResponse("403", problem("Requiere ADMIN_CAFETERIA con asignación verificada", 403, path));
+                    operation.getResponses().addApiResponse("404", problem("La oferta no existe en la cafetería indicada", 404, path));
+                    operation.getResponses().addApiResponse("409", problem("La cantidad total no cubre las reservas pendientes", 409, path));
+                }
                 if ("/catalog/productos/{id}".equals(path)) {
                     operation.getResponses().remove("401");
                     operation.getResponses().addApiResponse("404", problem(

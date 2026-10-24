@@ -6,6 +6,8 @@ import java.util.UUID;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -15,7 +17,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import cl.cloudcoffee.catalog_service.dto.CafeteriaInventoryItemResponse;
+import cl.cloudcoffee.catalog_service.dto.AdjustStockRequest;
+import cl.cloudcoffee.catalog_service.dto.StockAdjustmentResponse;
 import cl.cloudcoffee.catalog_service.service.CafeteriaInventoryService;
+import cl.cloudcoffee.catalog_service.service.StockAdjustmentService;
 import cl.cloudcoffee.security.CafeteriaAccess;
 
 @Tag(name = "Personal de cafetería", description = "Consultas restringidas a la cafetería asignada")
@@ -25,10 +30,25 @@ public class StaffCatalogController {
 
     private final CafeteriaInventoryService inventoryService;
     private final CafeteriaAccess cafeteriaAccess;
+    private final StockAdjustmentService stockAdjustmentService;
 
-    public StaffCatalogController(CafeteriaInventoryService inventoryService, CafeteriaAccess cafeteriaAccess) {
+    public StaffCatalogController(CafeteriaInventoryService inventoryService, CafeteriaAccess cafeteriaAccess,
+            StockAdjustmentService stockAdjustmentService) {
         this.inventoryService = inventoryService;
         this.cafeteriaAccess = cafeteriaAccess;
+        this.stockAdjustmentService = stockAdjustmentService;
+    }
+
+    @Operation(operationId = "ajustarStock", summary = "Ajustar el stock de una oferta de la cafetería asignada",
+            description = "Solo ADMIN_CAFETERIA con asignación verificada en Auth. quantity es el total sin vender, "
+                    + "incluidas las reservas pendientes; stock es la disponibilidad resultante. "
+                    + "Rechaza con 409 un total inferior a las reservas. Registra el ajuste y publica el cambio tras commit.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponse(responseCode = "200", description = "Ajuste registrado")
+    @PutMapping("/{cafeteriaId}/ofertas/{offerId}/stock")
+    public StockAdjustmentResponse adjustStock(@PathVariable UUID cafeteriaId, @PathVariable UUID offerId,
+            @RequestBody AdjustStockRequest request, Authentication authentication) {
+        return stockAdjustmentService.adjust(cafeteriaId, offerId, request, authentication);
     }
 
     @Operation(operationId = "inventarioCafeteria", summary = "Inventario de la cafetería asignada",

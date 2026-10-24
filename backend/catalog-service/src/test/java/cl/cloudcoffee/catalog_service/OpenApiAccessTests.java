@@ -25,7 +25,14 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(6);
+        assertThat(api.path("paths").size()).isEqualTo(7);
+        var stockOperation = api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/ofertas/{offerId}/stock").path("put");
+        assertThat(stockOperation.at("/security/0/bearerAuth").isArray()).isTrue();
+        assertThat(api.at("/components/schemas/AdjustStockRequest/properties/quantity/type").asText()).isEqualTo("integer");
+        for (String code : new String[]{"400", "401", "403", "404", "409"}) {
+            assertThat(stockOperation.path("responses").path(code).at("/content/application~1problem+json/schema/$ref").asText())
+                    .endsWith("/Problem");
+        }
         assertThat(api.at("/paths/~1catalog~1cafeterias~1{cafeteriaId}~1ofertas/get/security/0/bearerAuth").isArray()).isTrue();
         assertThat(api.at("/servers/0/url").asText()).isEqualTo("/v1");
         assertThat(api.at("/paths/~1catalog~1campus/get/security").isMissingNode()).isTrue();

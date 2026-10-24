@@ -33,4 +33,8 @@ public class Offer {
     @Column(nullable = false)
     private OfferStatus status;
 
+    @Version
+    @Column(nullable = false)
+    private long version;
+
 }

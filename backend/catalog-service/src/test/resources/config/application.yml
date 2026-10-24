@@ -1,0 +1,8 @@
+# Las pruebas no requieren un broker RabbitMQ ni un colector Zipkin.
+management:
+  health:
+    rabbit:
+      enabled: false
+  tracing:
+    export:
+      enabled: false
