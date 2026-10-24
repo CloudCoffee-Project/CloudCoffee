@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useOrdenEstado } from '../../hooks/useOrdenEstado';
 import { esEstadoOrden } from '../../types/domain';
+import { etiquetaEstadoOrden, visualEstadoOrden } from '../../utils/estadosOrden';
 import type { EstadoOrden } from '../../types/domain';
 
 const PASOS_SEGUIMIENTO = [
@@ -43,7 +44,8 @@ const ESTADOS_DE_RETIRO: readonly EstadoOrden[] = [
 // y -1 el estado terminal cancelado.
 function pasoDelEstado(estado: EstadoOrden): number {
   switch (estado) {
-    case 'reservando':
+    case 'revision_requerida':
+    case 'pendiente_pago':
       return 0;
     case 'pagado':
       return 1;
@@ -55,42 +57,6 @@ function pasoDelEstado(estado: EstadoOrden): number {
       return PASOS_SEGUIMIENTO.length;
     case 'cancelado':
       return -1;
-  }
-}
-
-// Etiquetas de estado idénticas a las del mockup (🔵 Pagado / 🟢 Listo para
-// retiro / ⚪ Entregado).
-function etiquetaDeEstado(estado: EstadoOrden): string {
-  switch (estado) {
-    case 'reservando':
-      return '🔵 Reservando';
-    case 'pagado':
-      return '🔵 Pagado';
-    case 'listo_para_retiro':
-      return '🟢 Listo para retiro';
-    case 'no_retirado_pendiente_revision':
-      return '🟡 No retirado (en revisión)';
-    case 'entregado':
-      return '⚪ Entregado';
-    case 'no_retirado_final':
-      return '🟡 No retirado';
-    case 'cancelado':
-      return '⚪ Cancelado';
-  }
-}
-
-function clasePill(estado: EstadoOrden): { fondo: string; texto: string } {
-  switch (estado) {
-    case 'reservando':
-    case 'pagado':
-      return { fondo: '#DBEAFE', texto: '#1E40AF' };
-    case 'listo_para_retiro':
-    case 'no_retirado_pendiente_revision':
-    case 'no_retirado_final':
-      return { fondo: '#DCFCE7', texto: '#166534' };
-    case 'entregado':
-    case 'cancelado':
-      return { fondo: '#F3F4F6', texto: '#6B7280' };
   }
 }
 
@@ -112,8 +78,8 @@ export default function SeguimientosScreen() {
   const estado: EstadoOrden | null = esEstadoOrden(estadoEnVivo) ? estadoEnVivo : null;
   const pasoActual = estado === null ? null : pasoDelEstado(estado);
   const puedeVerQr = estado !== null && ESTADOS_DE_RETIRO.includes(estado);
-  const pill = estado === null ? { fondo: '#F3F4F6', texto: '#6B7280' } : clasePill(estado);
-  const etiqueta = estado === null ? 'Esperando estado…' : etiquetaDeEstado(estado);
+  const pill = estado === null ? { fondo: '#F3F4F6', texto: '#6B7280' } : visualEstadoOrden(estado);
+  const etiqueta = estado === null ? 'Esperando estado…' : etiquetaEstadoOrden(estado);
 
   const abrirQrRetiro = () => {
     if (!estado) return;
