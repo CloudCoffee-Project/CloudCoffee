@@ -1,14 +1,14 @@
-// src/app/(cliente)/payment/retorno.tsx
+// src/app/(cliente)/pago/retorno.tsx
 //
-// Esta pantalla existe para el "Camino B" del deep link cloudcoffee://payment/retorno:
+// Esta pantalla existe para el "Camino B" del deep link cloudcoffee://pago/retorno:
 // cuando el usuario backgroundeó o cerró la app durante el pago y el sistema
 // operativo termina abriendo la app directamente vía el scheme, en vez de que
 // el redirect sea interceptado por WebBrowser.openAuthSessionAsync (Camino A,
-// manejado en carrito.tsx).
+// manejado en checkout.tsx).
 //
 // Expo Router ignora las carpetas entre paréntesis al armar la ruta, así que
 // aunque este archivo vive dentro de (cliente), responde exactamente a la
-// ruta /payment/retorno.
+// ruta /pago/retorno.
 
 import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
