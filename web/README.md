@@ -68,12 +68,22 @@ try {
 
 La petición debe ir a `http://localhost:18080/v1/auth/login` y devolver `400` con el detalle y los campos inválidos del Problem Details. En la pestaña Red del navegador debe observarse una respuesta legible desde `http://localhost:3000`, lo que confirma CORS. No se necesitan credenciales reales para esta comprobación.
 
+## Catálogo web
+
+En `/catalogo`, seleccionar un campus carga sus productos mediante el Gateway. El formulario permite filtrar por categoría y buscar en nombre o descripción al pulsar **Buscar** o Enter. La búsqueda recorta espacios exteriores; enviarla vacía elimina ese filtro. No se hacen peticiones por cada tecla.
+
+La paginación solicita 12 productos por página con índices desde cero y orden estable por `name,id`. El listado y los botones **Anterior/Siguiente** usan `content`, `number`, `totalElements`, `totalPages`, `first` y `last` de la respuesta Spring Data Page. Se conservan campus, categoría y búsqueda al navegar. Cambiar búsqueda o categoría vuelve a la primera página; cambiar campus también limpia categoría y texto. Las consultas anteriores se cancelan y sus respuestas se descartan.
+
+Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos`. La configuración actual del backend exige sesión para el listado de productos, pendiente de INT2-66; el cliente HTTP adjunta el token existente. El catálogo contempla resultados vacíos, carga y errores con reintento.
+
+INT2-96 incorpora el listado mínimo porque la base de INT2-48 aún estaba pendiente. La comparación de ofertas, el carrito y los cambios de seguridad del backend quedan en sus respectivos issues.
+
 ## Scripts
 
 ```bash
 npm run dev        # servidor de desarrollo
 npm run typecheck  # revisión de tipos
-npm test           # pruebas del cliente HTTP
+npm test           # pruebas del cliente HTTP y del catálogo
 npm run build      # revisión de tipos y compilación de producción en dist/
 npm run preview    # vista local de la compilación
 ```
