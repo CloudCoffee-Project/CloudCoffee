@@ -31,16 +31,7 @@
 // colores y medidas salen de src/theme/tokens.ts (INT4-107).
 
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -56,12 +47,19 @@ import {
 } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import { useCarrito } from '../../context/CarritoContext';
+import { Esqueleto, EsqueletoPulso } from '../../components/Esqueleto';
 import { tokens } from '../../theme/tokens';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
 // Filtro de "todas las categorías". No es un id del catálogo: es el valor del
 // estado local que significa "sin filtro", por eso vive acá y no en domain.ts.
 const TODAS_CATEGORIAS = 'todos';
+
+// Anchos y alto de los chips de la silueta de categorías (INT4-108). Son
+// medidas de layout de esta pantalla, no contenido real: solo le dan al
+// esqueleto el ritmo de la fila de pills que va a aparecer.
+const ANCHOS_CHIPS_ESQUELETO = [72, 92, 64, 84, 76];
+const ALTO_CHIP_ESQUELETO = 34;
 
 // Distancia de Levenshtein entre dos cadenas, para tolerar errores de tipeo en
 // la búsqueda. Se usa sobre los datos reales que devuelve el servicio, nunca
@@ -217,9 +215,67 @@ export default function CatalogoProductosScreen() {
     );
   } else if (productos === null) {
     contenido = (
-      <View style={styles.centrado} testID="catalogo-cargando">
-        <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      // INT4-108: la silueta repite la tarjeta real (ícono, nombre,
+      // descripción y las ofertas de cada cafetería) para que la lista no
+      // aparezca de golpe cuando responde el catálogo.
+      <ScrollView
+        contentContainerStyle={styles.listaContent}
+        showsVerticalScrollIndicator={false}
+        testID="catalogo-esqueleto"
+      >
+        <EsqueletoPulso style={styles.esqueletoLista}>
+          {[0, 1, 2].map((indice) => (
+            <View key={indice} style={styles.productCard}>
+              <View style={styles.productHeader}>
+                <Esqueleto
+                  ancho={tokens.tamanos.chipIcono}
+                  alto={tokens.tamanos.chipIcono}
+                  radio={tokens.radios.md}
+                  fuerte
+                />
+                <View style={styles.productDetails}>
+                  <Esqueleto
+                    ancho="55%"
+                    alto={tokens.tipografia.tamano.boton}
+                    radio={tokens.radios.xs}
+                  />
+                  <Esqueleto
+                    ancho="90%"
+                    alto={tokens.tipografia.tamano.detalle}
+                    radio={tokens.radios.xs}
+                    style={styles.esqueletoLinea}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.offerList}>
+                {[0, 1].map((oferta) => (
+                  <View key={oferta} style={styles.offerRow}>
+                    <View style={styles.offerInfo}>
+                      <Esqueleto
+                        ancho="45%"
+                        alto={tokens.tipografia.tamano.detalle}
+                        radio={tokens.radios.xs}
+                      />
+                      <Esqueleto
+                        ancho="30%"
+                        alto={tokens.tipografia.tamano.cuerpo}
+                        radio={tokens.radios.xs}
+                        style={styles.esqueletoLinea}
+                      />
+                    </View>
+                    <Esqueleto
+                      ancho="22%"
+                      alto={tokens.tipografia.tamano.detalle}
+                      radio={tokens.radios.xs}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))}
+        </EsqueletoPulso>
+      </ScrollView>
     );
   } else {
     contenido = (
@@ -345,7 +401,29 @@ export default function CatalogoProductosScreen() {
       </View>
 
       {/* Filtro por categorías */}
-      {categorias !== null && categorias.length > 0 && (
+      {categorias === null && errorCarga === null ? (
+        // INT4-108: mientras llegan las categorías se dibujan sus pills
+        // vacías; el esqueleto de productos sigue visible debajo.
+        <View style={styles.categoriesContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.esqueletoChips}
+            testID="catalogo-esqueleto-categorias"
+          >
+            <EsqueletoPulso style={styles.esqueletoFilaChips}>
+              {ANCHOS_CHIPS_ESQUELETO.map((ancho, indice) => (
+                <Esqueleto
+                  key={indice}
+                  ancho={ancho}
+                  alto={ALTO_CHIP_ESQUELETO}
+                  radio={tokens.radios.pildora}
+                />
+              ))}
+            </EsqueletoPulso>
+          </ScrollView>
+        </View>
+      ) : categorias !== null && categorias.length > 0 ? (
         <View style={styles.categoriesContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <Pressable
@@ -382,7 +460,7 @@ export default function CatalogoProductosScreen() {
             ))}
           </ScrollView>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.lista}>{contenido}</View>
     </SafeAreaView>
@@ -474,6 +552,14 @@ const styles = StyleSheet.create({
   categoriesContainer: {
     marginBottom: tokens.espaciado.lg,
   },
+  // Silueta de la fila de chips mientras cargan las categorías (INT4-108).
+  esqueletoChips: {
+    paddingHorizontal: tokens.espaciado.xxxl,
+  },
+  esqueletoFilaChips: {
+    flexDirection: 'row',
+    gap: tokens.espaciado.md,
+  },
   chip: {
     backgroundColor: tokens.colores.superficie,
     borderWidth: tokens.grosores.fino,
@@ -502,6 +588,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.espaciado.xxxl,
     paddingBottom: tokens.espaciado['3xl'],
     gap: tokens.espaciado.xxl,
+  },
+  // Silueta de las tarjetas de producto mientras carga la lista (INT4-108).
+  esqueletoLista: {
+    gap: tokens.espaciado.xxl,
+  },
+  esqueletoLinea: {
+    marginTop: tokens.espaciado.xxs,
   },
   productCard: {
     backgroundColor: tokens.colores.superficie,
@@ -586,10 +679,6 @@ const styles = StyleSheet.create({
     fontSize: tokens.tipografia.tamano.detalle,
     color: tokens.colores.textoNeutro,
     textAlign: 'center',
-  },
-  centrado: {
-    paddingVertical: tokens.espaciado['6xl'],
-    alignItems: 'center',
   },
   tarjetaError: {
     marginHorizontal: tokens.espaciado.xxxl,

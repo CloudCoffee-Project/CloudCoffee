@@ -9,7 +9,8 @@
 // Si alguien agrega o edita un token y rompe una de estas reglas, el CI lo
 // marca antes de que el error se propague a las pantallas.
 // (Categorías nuevas en INT4-106: grosores y estados; en INT4-107: tamanos,
-//  interlineado y tracking.)
+//  interlineado y tracking; en INT4-108: colores y opacidad de los esqueletos
+//  de carga.)
 
 import {
   colores,

@@ -14,7 +14,7 @@ import { leerCampusSeleccionado, listarCategorias, obtenerProducto } from '../se
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ApiError } from '../services/httpClient';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
-import { limpiarRouter, routerMock, textoDe } from '../test-utils';
+import { limpiarRouter, promesaPendiente, routerMock, textoDe } from '../test-utils';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 // INT4-32: la pantalla ya no navega al carrito al agregar, lo escribe en el
@@ -157,6 +157,16 @@ describe('Detalle de producto', () => {
     expect(mockObtenerProducto).toHaveBeenCalledWith('prod-1', 'campus-1');
     expect(mockListarCategorias).toHaveBeenCalled();
     expect(tree.root.findByProps({ testID: 'producto-detalle-scroll' })).toBeTruthy();
+  });
+
+  it('muestra el esqueleto del detalle y de las cafeterías mientras carga', async () => {
+    mockObtenerProducto.mockReturnValue(promesaPendiente<Producto>());
+
+    const tree = await renderDetalle();
+
+    expect(tree.root.findByProps({ testID: 'producto-esqueleto' })).toBeTruthy();
+    expect(tree.root.findByProps({ testID: 'producto-esqueleto-cafeterias' })).toBeTruthy();
+    expect(() => tree.root.findByProps({ testID: 'producto-detalle-scroll' })).toThrow();
   });
 
   it('muestra nombre, descripción y categoría real del producto', async () => {

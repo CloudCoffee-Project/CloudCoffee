@@ -36,15 +36,7 @@
 // acentos amarillos y bordes cálidos) replicada del mockup web.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -57,6 +49,8 @@ import {
 } from '../../../services/catalog';
 import { ApiProblem, toApiError } from '../../../services/httpClient';
 import { useCarrito } from '../../../context/CarritoContext';
+import { Esqueleto, EsqueletoPulso } from '../../../components/Esqueleto';
+import { tokens } from '../../../theme/tokens';
 import type { Campus, Categoria, Oferta, Producto } from '../../../types/domain';
 
 function formatearPrecio(precio: number): string {
@@ -216,10 +210,75 @@ export default function DetalleProductoScreen() {
   let contenido;
 
   if (cargando) {
+    // INT4-108: silueta del detalle y de la lista de cafeterías (una oferta
+    // por cafetería). Mientras el producto viaja desde el gateway no queda la
+    // pantalla vacía ni un spinner centrado.
     contenido = (
-      <View style={styles.centrado} testID="producto-detalle-cargando">
-        <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        testID="producto-esqueleto"
+      >
+        <EsqueletoPulso style={styles.esqueletoDetalle}>
+          <View style={styles.categoriaFila}>
+            <Esqueleto
+              ancho={76}
+              alto={tokens.tipografia.tamano.etiqueta + tokens.espaciado.sm}
+              radio={tokens.radios.sm}
+            />
+          </View>
+
+          <View style={styles.header}>
+            <Esqueleto
+              ancho="65%"
+              alto={tokens.tipografia.tamano.encabezado}
+              radio={tokens.radios.xs}
+            />
+            <Esqueleto
+              ancho="90%"
+              alto={tokens.tipografia.tamano.detalle}
+              radio={tokens.radios.xs}
+              style={styles.esqueletoLinea}
+            />
+          </View>
+
+          {/* Esta es la lista de cafeterías de retiro: cada fila representa
+              una oferta con su precio. */}
+          <View style={styles.seccion} testID="producto-esqueleto-cafeterias">
+            <Esqueleto ancho="70%" alto={tokens.tipografia.tamano.boton} radio={tokens.radios.xs} />
+            <View style={styles.ofertasLista}>
+              {[0, 1, 2].map((indice) => (
+                <View key={indice} style={styles.ofertaCard}>
+                  <View style={styles.ofertaInfo}>
+                    <Esqueleto
+                      ancho="55%"
+                      alto={tokens.tipografia.tamano.cuerpoMedio}
+                      radio={tokens.radios.xs}
+                    />
+                    <Esqueleto
+                      ancho="80%"
+                      alto={tokens.tipografia.tamano.detalle}
+                      radio={tokens.radios.xs}
+                      style={styles.esqueletoLinea}
+                    />
+                    <Esqueleto
+                      ancho="40%"
+                      alto={tokens.tipografia.tamano.detalle}
+                      radio={tokens.radios.xs}
+                      style={styles.esqueletoLinea}
+                    />
+                  </View>
+                  <Esqueleto
+                    ancho={56}
+                    alto={tokens.tipografia.tamano.boton}
+                    radio={tokens.radios.xs}
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
+        </EsqueletoPulso>
+      </ScrollView>
     );
   } else if (errorCarga !== null) {
     contenido = (
@@ -487,6 +546,14 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     gap: 16,
   },
+  // Silueta del detalle mientras carga (INT4-108). El gap repite el del
+  // scrollContent real para que el contenido no salte al aparecer.
+  esqueletoDetalle: {
+    gap: tokens.espaciado.xxxl,
+  },
+  esqueletoLinea: {
+    marginTop: tokens.espaciado.xxs,
+  },
   categoriaFila: {
     flexDirection: 'row',
   },
@@ -685,10 +752,6 @@ const styles = StyleSheet.create({
   },
   btnPresionado: {
     opacity: 0.85,
-  },
-  centrado: {
-    paddingVertical: 40,
-    alignItems: 'center',
   },
   tarjetaAviso: {
     marginHorizontal: 16,

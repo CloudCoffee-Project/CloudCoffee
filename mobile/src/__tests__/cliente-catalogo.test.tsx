@@ -7,7 +7,7 @@
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
-import { limpiarRouter, routerMock, textoDe } from '../test-utils';
+import { limpiarRouter, promesaPendiente, routerMock, textoDe } from '../test-utils';
 
 import CatalogoProductosScreen from '../app/(cliente)/index';
 // Desde INT4-25 la pantalla saca los datos de services/catalog, contra el
@@ -162,6 +162,24 @@ describe('Catálogo del cliente', () => {
     // El campus manda el filtro: sin categoría, solo campusId.
     expect(mockListarProductos).toHaveBeenCalledWith('san-juan-pablo-ii', undefined);
     expect(tree.root.findByProps({ testID: 'catalogo-lista' })).toBeTruthy();
+  });
+
+  it('muestra el esqueleto de productos mientras carga la lista', async () => {
+    mockListarProductos.mockReturnValue(promesaPendiente<Producto[]>());
+
+    const tree = await renderCatalogo();
+
+    expect(tree.root.findByProps({ testID: 'catalogo-esqueleto' })).toBeTruthy();
+    expect(() => tree.root.findByProps({ testID: 'catalogo-lista' })).toThrow();
+  });
+
+  it('muestra el esqueleto de categorías mientras cargan los filtros', async () => {
+    mockListarCategorias.mockReturnValue(promesaPendiente<Categoria[]>());
+
+    const tree = await renderCatalogo();
+
+    expect(tree.root.findByProps({ testID: 'catalogo-esqueleto-categorias' })).toBeTruthy();
+    expect(() => tree.root.findByProps({ testID: 'catalogo-chip-todos' })).toThrow();
   });
 
   it('muestra las categorías reales como pills, con TODOS primero', async () => {

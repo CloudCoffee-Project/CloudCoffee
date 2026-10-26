@@ -139,6 +139,12 @@ export const colores = {
   infoChip: '#DBEAFE',
   /** Fondo azul muy claro de la opción seleccionada (pago y entrega). */
   opcionActivaFondo: '#F3F8FE',
+
+  // --- Estados: carga ---
+  /** Bloque base de los esqueletos de carga (INT4-108). */
+  esqueleto: '#E5DED2',
+  /** Bloque de énfasis de los esqueletos: íconos y cifras (INT4-108). */
+  esqueletoFuerte: '#D8CFC0',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -306,6 +312,8 @@ export const tamanos = {
   botonStepper: 24,
   /** 38 px — chip cuadrado de ícono (campus y producto del catálogo). */
   chipIcono: 38,
+  /** 44 px — ícono cuadrado de las tarjetas de campus (INT4-108). */
+  iconoTarjeta: 44,
   /** 80 px — círculo del resultado de la compra (éxito, revisión o fallo). */
   circuloResultado: 80,
 } as const;
@@ -403,6 +411,8 @@ export const estados = {
   apagado: 0.4,
   /** Opacidad de íconos de acciones secundarias que no compiten con el contenido. */
   tenue: 0.65,
+  /** Opacidad mínima del pulso de los esqueletos de carga (INT4-108). */
+  esqueleto: 0.5,
 } as const;
 
 // ---------------------------------------------------------------------------
