@@ -13,7 +13,7 @@ import {
 } from '../services/catalog';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
-import { limpiarRouter, routerMock, textoDe } from '../test-utils';
+import { limpiarRouter, promesaPendiente, routerMock, textoDe } from '../test-utils';
 import type { Campus } from '../types/domain';
 
 jest.mock('../services/catalog', () => ({
@@ -93,6 +93,15 @@ describe('Selección de campus', () => {
     expect(mockListar).toHaveBeenCalled();
     expect(tree.root.findByProps({ testID: 'campus-card-campus-1' })).toBeTruthy();
     expect(tree.root.findByProps({ testID: 'campus-card-campus-2' })).toBeTruthy();
+  });
+
+  it('muestra el esqueleto de la lista mientras carga', async () => {
+    mockListar.mockReturnValue(promesaPendiente<Campus[]>());
+
+    const tree = await renderCampus();
+
+    expect(tree.root.findByProps({ testID: 'campus-esqueleto' })).toBeTruthy();
+    expect(() => tree.root.findByProps({ testID: 'campus-lista' })).toThrow();
   });
 
   it('preselecciona el primer campus cuando no hay selección previa', async () => {
