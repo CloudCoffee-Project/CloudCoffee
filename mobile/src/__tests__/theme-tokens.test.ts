@@ -8,7 +8,8 @@
 // grosores/estados dentro de rangos usables.
 // Si alguien agrega o edita un token y rompe una de estas reglas, el CI lo
 // marca antes de que el error se propague a las pantallas.
-// (Categorías nuevas en INT4-106: grosores y estados.)
+// (Categorías nuevas en INT4-106: grosores y estados; en INT4-107: tamanos,
+//  interlineado y tracking.)
 
 import {
   colores,
@@ -17,6 +18,7 @@ import {
   grosores,
   radios,
   sombras,
+  tamanos,
   tipografia,
   tokens,
 } from '../theme/tokens';
@@ -61,6 +63,18 @@ describe('radios (INT4-104)', () => {
   });
 });
 
+describe('tamanos (INT4-107)', () => {
+  it('los lados de componente son enteros positivos y únicos', () => {
+    const valores = Object.values(tamanos);
+
+    for (const valor of valores) {
+      expect(Number.isInteger(valor)).toBe(true);
+      expect(valor).toBeGreaterThan(0);
+    }
+    expect(new Set(valores).size).toBe(valores.length);
+  });
+});
+
 describe('tipografía (INT4-104)', () => {
   it('los tamaños de texto son enteros positivos y únicos', () => {
     const valores = Object.values(tipografia.tamano);
@@ -76,6 +90,26 @@ describe('tipografía (INT4-104)', () => {
     for (const peso of Object.values(tipografia.peso)) {
       expect(PESOS_RN.has(peso)).toBe(true);
     }
+  });
+
+  it('los interlineados son enteros positivos y únicos (INT4-107)', () => {
+    const valores = Object.values(tipografia.interlineado);
+
+    for (const valor of valores) {
+      expect(Number.isInteger(valor)).toBe(true);
+      expect(valor).toBeGreaterThan(0);
+    }
+    expect(new Set(valores).size).toBe(valores.length);
+  });
+
+  it('el tracking es numérico, distinto de cero y único (INT4-107)', () => {
+    const valores = Object.values(tipografia.tracking);
+
+    for (const valor of valores) {
+      expect(Number.isFinite(valor)).toBe(true);
+      expect(valor).not.toBe(0);
+    }
+    expect(new Set(valores).size).toBe(valores.length);
   });
 
   it('los estilos combinados tienen tamaño y peso válidos', () => {
@@ -114,9 +148,14 @@ describe('grosores (INT4-106)', () => {
 });
 
 describe('estados (INT4-106)', () => {
-  it('la opacidad de controles deshabilitados está estrictamente entre 0 y 1', () => {
-    expect(estados.deshabilitado).toBeGreaterThan(0);
-    expect(estados.deshabilitado).toBeLessThan(1);
+  it('todas las opacidades están estrictamente entre 0 y 1 y no se repiten', () => {
+    const valores = Object.values(estados);
+
+    for (const valor of valores) {
+      expect(valor).toBeGreaterThan(0);
+      expect(valor).toBeLessThan(1);
+    }
+    expect(new Set(valores).size).toBe(valores.length);
   });
 });
 
@@ -125,6 +164,7 @@ describe('punto de entrada tokens (INT4-104)', () => {
     expect(tokens.colores).toBe(colores);
     expect(tokens.tipografia).toBe(tipografia);
     expect(tokens.espaciado).toBe(espaciado);
+    expect(tokens.tamanos).toBe(tamanos);
     expect(tokens.radios).toBe(radios);
     expect(tokens.sombras).toBe(sombras);
     expect(tokens.grosores).toBe(grosores);
