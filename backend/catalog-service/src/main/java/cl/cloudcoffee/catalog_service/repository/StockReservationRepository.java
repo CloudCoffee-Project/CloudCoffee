@@ -19,6 +19,10 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
     Optional<StockReservation> findByOrderIdAndOfferId(UUID orderId, UUID offerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM StockReservation r WHERE r.id = :reservationId")
+    Optional<StockReservation> findByIdForUpdate(@Param("reservationId") UUID reservationId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM StockReservation r WHERE r.orderId = :orderId AND r.offer.id = :offerId")
     Optional<StockReservation> findByOrderIdAndOfferIdForUpdate(
             @Param("orderId") UUID orderId,

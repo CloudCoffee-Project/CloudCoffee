@@ -33,6 +33,16 @@ public class InternalStockReservationController {
                 : ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{reservationId}/confirmar")
+    public StockReservationResponse confirmReservation(@PathVariable UUID reservationId) {
+        return StockReservationResponse.from(reservationService.confirm(reservationId));
+    }
+
+    @PostMapping("/{reservationId}/liberar")
+    public StockReservationResponse releaseReservation(@PathVariable UUID reservationId) {
+        return StockReservationResponse.from(reservationService.release(reservationId));
+    }
+
     @PostMapping("/{orderId}/{offerId}/confirmar")
     public StockReservationResponse confirm(@PathVariable UUID orderId, @PathVariable UUID offerId) {
         return StockReservationResponse.from(reservationService.confirm(orderId, offerId));

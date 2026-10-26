@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,8 +21,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import cl.cloudcoffee.catalog_service.dto.ReserveStockRequest;
+import cl.cloudcoffee.catalog_service.messaging.StockEventPublisher;
 import cl.cloudcoffee.catalog_service.model.entity.Cafeteria;
 import cl.cloudcoffee.catalog_service.model.entity.Campus;
 import cl.cloudcoffee.catalog_service.model.entity.Category;
@@ -37,7 +42,6 @@ import cl.cloudcoffee.catalog_service.repository.CategoryRepository;
 import cl.cloudcoffee.catalog_service.repository.OfferRepository;
 import cl.cloudcoffee.catalog_service.repository.ProductRepository;
 import cl.cloudcoffee.catalog_service.repository.StockReservationRepository;
-import cl.cloudcoffee.catalog_service.dto.ReserveStockRequest;
 import cl.cloudcoffee.errors.BusinessException;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
@@ -74,6 +78,9 @@ class StockReservationIntegrationTests extends JwtTestSupport {
 
     @Autowired
     private MockMvc mvc;
+
+    @MockitoBean
+    private StockEventPublisher stockEventPublisher;
 
     private Offer offer;
 
@@ -193,6 +200,46 @@ class StockReservationIntegrationTests extends JwtTestSupport {
         assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(1);
         assertThat(reservationService.confirm(orderId, offer.getId()).getStatus())
                 .isEqualTo(StockReservationStatus.EXPIRED);
+    }
+
+    @Test
+    void confirmingReservationIsIdempotentByReservationId() {
+        var reservation = reservationService.reserve(
+                new ReserveStockRequest(UUID.randomUUID(), offer.getId(), 1)).reservation();
+
+        StockReservation confirmed = reservationService.confirm(reservation.getId());
+        StockReservation repeated = reservationService.confirm(reservation.getId());
+
+        assertThat(confirmed.getStatus()).isEqualTo(StockReservationStatus.CONFIRMED);
+        assertThat(repeated.getStatus()).isEqualTo(StockReservationStatus.CONFIRMED);
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
+    }
+
+    @Test
+    void releasingReservationIsIdempotentByReservationId() {
+        var reservation = reservationService.reserve(
+                new ReserveStockRequest(UUID.randomUUID(), offer.getId(), 1)).reservation();
+
+        StockReservation released = reservationService.release(reservation.getId());
+        StockReservation repeated = reservationService.release(reservation.getId());
+
+        assertThat(released.getStatus()).isEqualTo(StockReservationStatus.RELEASED);
+        assertThat(repeated.getStatus()).isEqualTo(StockReservationStatus.RELEASED);
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(1);
+        verify(stockEventPublisher, times(2)).publishStockUpdated(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void internalEndpointReleasesReservationByReservationId() throws Exception {
+        StockReservation reservation = reservationService.reserve(
+                new ReserveStockRequest(UUID.randomUUID(), offer.getId(), 1)).reservation();
+
+        mvc.perform(post("/internal/servicios/catalogo/reservas/{reservationId}/liberar",
+                        reservation.getId())
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reservationId").value(reservation.getId().toString()))
+                .andExpect(jsonPath("$.status").value("RELEASED"));
     }
 
     @Test
