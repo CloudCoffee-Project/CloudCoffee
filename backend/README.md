@@ -25,6 +25,16 @@ backend/
 └── notification-service/
 ```
 
+### Historial operacional de notificaciones (INT2-67)
+
+`GET /v1/notifications` (Gateway) y `GET /notifications` (acceso directo al
+servicio) exigen un JWT válido con rol `SUPER_ADMIN`. El Gateway aplica la regla
+antes de enrutar y el servicio la vuelve a aplicar como defensa en profundidad;
+`CLIENTE`, `CAJERO` y `ADMIN_CAFETERIA` no pueden consultar registros globales.
+La respuesta conserva la paginación de Spring Data (`page` y `size`). El payload
+elimina recursivamente campos de tokens y credenciales, y los detalles de error
+se saneán antes de persistirse y de responder.
+
 ## Requisitos
 
 - JDK 21

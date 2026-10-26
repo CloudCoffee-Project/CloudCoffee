@@ -9,11 +9,8 @@ public record NotificationHistoryResponse(UUID id, UUID eventId, String eventTyp
         Map<String, Object> payload, String status, String errorDetail, Instant processedAt, Instant createdAt) {
 
     public static NotificationHistoryResponse from(NotificationHistory history) {
-        String errorDetail = history.getErrorDetail();
-        Object token = history.getPayload().get("token");
-        if (errorDetail != null && token instanceof String value && !value.isEmpty()) {
-            errorDetail = errorDetail.replace(value, "[REDACTED]");
-        }
+        String errorDetail = NotificationHistory.sanitizeSensitiveText(
+                history.getErrorDetail(), history.getPayload());
         return new NotificationHistoryResponse(history.getId(), history.getEventId(), history.getEventType(),
                 history.getTrackingId(), NotificationHistory.sanitizedPayload(history.getPayload()),
                 history.getStatus(), errorDetail, history.getProcessedAt(), history.getCreatedAt());

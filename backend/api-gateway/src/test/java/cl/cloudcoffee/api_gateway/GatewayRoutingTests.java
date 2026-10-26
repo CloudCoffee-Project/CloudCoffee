@@ -96,7 +96,15 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     void routesToTheCorrectBackendAndStripsOnlyTheVersion(String service,
             String externalPath, String internalPath) throws Exception {
         // La identidad se inyecta solo en el test; no hay autenticacion simulada en produccion.
-        mvc.perform(get(externalPath).with(user("cliente")))
+        var request = get(externalPath);
+        if ("notifications".equals(service)) {
+            request.header(HttpHeaders.AUTHORIZATION, "Bearer " + sign(
+                    claims().claim("role", "SUPER_ADMIN").build(), KEYS,
+                    com.nimbusds.jose.JWSAlgorithm.RS256));
+        } else {
+            request = request.with(user("cliente"));
+        }
+        mvc.perform(request)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.service").value(service));
 
@@ -240,6 +248,34 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"CLIENTE", "CAJERO", "ADMIN_CAFETERIA"})
+    void notificationHistoryRejectsNonSuperAdminRolesBeforeRouting(String role) throws Exception {
+        String jwt = sign(claims().claim("role", role).build(), KEYS,
+                com.nimbusds.jose.JWSAlgorithm.RS256);
+
+        mvc.perform(get("/v1/notifications?page=0&size=5")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt))
+                .andExpect(status().isForbidden());
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void superAdminCanReachPaginatedNotificationHistoryThroughGateway() throws Exception {
+        String jwt = sign(claims().claim("role", "SUPER_ADMIN").build(), KEYS,
+                com.nimbusds.jose.JWSAlgorithm.RS256);
+
+        mvc.perform(get("/v1/notifications?page=0&size=5")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("notifications"));
+
+        RecordedRequest forwarded = BACKENDS.get("notifications").take();
+        assertThat(forwarded.path()).isEqualTo("/notifications");
+        assertThat(forwarded.query()).isEqualTo("page=0&size=5");
+        assertThat(forwarded.authorization()).isEqualTo("Bearer " + jwt);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"Bearer arbitrary-token", "Basic dXNlcjpwYXNzd29yZA=="})
     void unverifiedCredentialsCannotOpenProtectedRoutes(String authorization) throws Exception {
         mvc.perform(get("/v1/notifications")
@@ -354,7 +390,9 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
 
     @Test
     void realSignedJwtIsForwardedWithoutChangingTheToken() throws Exception {
-        String authorization = "Bearer " + token();
+        String authorization = "Bearer " + sign(
+                claims().claim("role", "SUPER_ADMIN").build(), KEYS,
+                com.nimbusds.jose.JWSAlgorithm.RS256);
         try (HttpClient client = HttpClient.newHttpClient()) {
             HttpResponse<String> response = client.send(HttpRequest.newBuilder(
                             URI.create("http://localhost:" + gatewayPort + "/v1/notifications"))

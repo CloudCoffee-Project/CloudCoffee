@@ -71,6 +71,8 @@ public class GatewaySecurityConfig {
                         .requestMatchers(HttpMethod.HEAD,
                                 "/v1/catalog/campus", "/v1/catalog/categorias",
                                 "/v1/catalog/productos/*").permitAll()
+                        // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
+                        .requestMatchers("/v1/notifications", "/v1/notifications/**").hasRole("SUPER_ADMIN")
                         // Solo un JWT validado con la llave publica autentica estas rutas.
                         .requestMatchers("/v1/**").authenticated()
                         // No hay rutas de proxy fuera de /v1; conservar sus errores 404.

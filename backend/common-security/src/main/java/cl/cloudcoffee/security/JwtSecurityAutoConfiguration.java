@@ -151,6 +151,8 @@ public class JwtSecurityAutoConfiguration {
                         // Solo servicios con el token interno; un JWT de usuario recibe 403.
                         .requestMatchers(InternalServiceAuthenticationFilter.PATH_PREFIX + "**")
                             .hasRole(InternalServiceAuthenticationFilter.ROLE)
+                        // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
+                        .requestMatchers("/notifications", "/notifications/**").hasRole("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .build();
     }
