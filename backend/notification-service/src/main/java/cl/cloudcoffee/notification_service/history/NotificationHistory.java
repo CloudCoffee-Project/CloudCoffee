@@ -8,13 +8,21 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Entity
 @Table(name = "notification_history")
 public class NotificationHistory {
+    private static final Pattern LABELED_CREDENTIAL = Pattern.compile(
+            "(?i)(token|password|secret|credential|authorization|api[_-]?key|private[_-]?key)(\\s*[=:]\\s*)[^\\s,;]+");
+    private static final Pattern BEARER_TOKEN = Pattern.compile("(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*");
+
     @Id
     private UUID id;
 
@@ -60,7 +68,7 @@ public class NotificationHistory {
         this.trackingId = trackingId;
         this.payload = sanitizedPayload(payload);
         this.status = status;
-        this.errorDetail = errorDetail;
+        this.errorDetail = sanitizeSensitiveText(errorDetail, payload);
         this.processedAt = Instant.now();
         this.createdAt = Instant.now();
     }
@@ -100,8 +108,81 @@ public class NotificationHistory {
     }
 
     public static Map<String, Object> sanitizedPayload(Map<String, Object> payload) {
-        Map<String, Object> safe = new HashMap<>(payload);
-        safe.remove("token");
+        Map<String, Object> safe = new LinkedHashMap<>();
+        payload.forEach((key, value) -> {
+            if (!isSensitiveKey(key)) {
+                safe.put(key, sanitizeValue(value));
+            }
+        });
         return safe;
+    }
+
+    public static String sanitizeSensitiveText(String text, Map<String, Object> payload) {
+        if (text == null) {
+            return null;
+        }
+        List<String> sensitiveValues = new ArrayList<>();
+        collectSensitiveValues(payload, sensitiveValues);
+        sensitiveValues.removeIf(String::isEmpty);
+        sensitiveValues.sort((left, right) -> Integer.compare(right.length(), left.length()));
+        String sanitized = text;
+        for (String value : sensitiveValues) {
+            sanitized = sanitized.replace(value, "[REDACTED]");
+        }
+        return BEARER_TOKEN.matcher(LABELED_CREDENTIAL.matcher(sanitized)
+                .replaceAll("$1$2[REDACTED]"))
+                .replaceAll("[REDACTED]");
+    }
+
+    private static Object sanitizeValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> safe = new LinkedHashMap<>();
+            map.forEach((key, nestedValue) -> {
+                String stringKey = String.valueOf(key);
+                if (!isSensitiveKey(stringKey)) {
+                    safe.put(stringKey, sanitizeValue(nestedValue));
+                }
+            });
+            return safe;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(NotificationHistory::sanitizeValue).toList();
+        }
+        return value;
+    }
+
+    private static boolean isSensitiveKey(String key) {
+        String normalized = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return normalized.contains("token")
+                || normalized.contains("password")
+                || normalized.contains("secret")
+                || normalized.contains("credential")
+                || normalized.contains("authorization")
+                || normalized.contains("apikey")
+                || normalized.contains("privatekey");
+    }
+
+    private static void collectSensitiveValues(Object value, List<String> values) {
+        if (value instanceof Map<?, ?> map) {
+            map.forEach((key, nestedValue) -> {
+                if (isSensitiveKey(String.valueOf(key))) {
+                    collectStrings(nestedValue, values);
+                } else {
+                    collectSensitiveValues(nestedValue, values);
+                }
+            });
+        } else if (value instanceof List<?> list) {
+            list.forEach(item -> collectSensitiveValues(item, values));
+        }
+    }
+
+    private static void collectStrings(Object value, List<String> values) {
+        if (value instanceof String string) {
+            values.add(string);
+        } else if (value instanceof Map<?, ?> map) {
+            map.values().forEach(item -> collectStrings(item, values));
+        } else if (value instanceof List<?> list) {
+            list.forEach(item -> collectStrings(item, values));
+        }
     }
 }
