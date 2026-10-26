@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     backgroundColor: tokens.colores.superficie,
-    borderWidth: tokens.grosores.input,
+    borderWidth: tokens.grosores.medio,
     borderColor: tokens.colores.bordeAuth,
     borderRadius: tokens.radios.lg,
     paddingHorizontal: tokens.espaciado.xxl,
