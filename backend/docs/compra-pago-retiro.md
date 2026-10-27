@@ -92,6 +92,10 @@ reserva; otro contenido entra en conflicto. Una reserva pasa de `activa` a
 `confirmada` o `liberada`, nunca ambas. Reservar descuenta disponibilidad;
 confirmar no vuelve a descontar; liberar restaura solo una vez. No son rutas
 públicas de Gateway ni se autoriza a un comprador a llamar operaciones internas.
+El resultado de confirmar/liberar una reserva puede reintentarse usando su
+`reservaId`; repetir el estado final no vuelve a modificar el stock. Cada cambio
+de disponibilidad publica `catalog.stock.actualizado.v1` en `cloudcoffee.events`,
+con `traceId` y la versión monotónica de la oferta.
 
 La aprobación confirma **el lote de reservas de todas las órdenes activas** en
 una sola transacción de Catalog, identificado por `compraId` y la lista de

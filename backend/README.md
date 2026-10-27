@@ -25,6 +25,16 @@ backend/
 └── notification-service/
 ```
 
+### Historial operacional de notificaciones (INT2-67)
+
+`GET /v1/notifications` (Gateway) y `GET /notifications` (acceso directo al
+servicio) exigen un JWT válido con rol `SUPER_ADMIN`. El Gateway aplica la regla
+antes de enrutar y el servicio la vuelve a aplicar como defensa en profundidad;
+`CLIENTE`, `CAJERO` y `ADMIN_CAFETERIA` no pueden consultar registros globales.
+La respuesta conserva la paginación de Spring Data (`page` y `size`). El payload
+elimina recursivamente campos de tokens y credenciales, y los detalles de error
+se saneán antes de persistirse y de responder.
+
 ## Requisitos
 
 - JDK 21
@@ -83,6 +93,29 @@ El seed es una migración repetible con UUID fijos: se reaplica sola al editarla
 no duplica filas. Los UUID del primer campus, categoría y producto coinciden con
 los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
 esperados de filtros, búsqueda y comparación de precios sobre estos datos.
+
+### Reserva atómica de stock (INT2-51)
+
+Catalog-service es dueño del stock y expone al order-service llamadas internas
+protegidas por `X-Internal-Service-Token`:
+
+| Operación | Ruta | Comportamiento |
+|---|---|---|
+| Reservar | `POST /internal/servicios/catalogo/reservas` | Recibe `orderId`, `offerId` y `quantity`; primera reserva responde `201`, un reintento idéntico `200`. |
+| Confirmar | `POST /internal/servicios/catalogo/reservas/{orderId}/{offerId}/confirmar` | Confirma una reserva vigente sin devolver stock. |
+| Liberar | `POST /internal/servicios/catalogo/reservas/{orderId}/{offerId}/liberar` | Devuelve al inventario el stock de una reserva pendiente. |
+
+La combinación `orderId` + `offerId` identifica la reserva y permite que una orden
+tenga varios ítems. Repetir esa combinación con una cantidad distinta responde `409`.
+Solo se admiten cantidades positivas y ofertas `AVAILABLE`
+con producto `ACTIVE`, cafetería `OPEN` y stock suficiente. El descuento se ejecuta
+en una actualización condicional de la base de datos, por lo que solicitudes
+concurrentes no pueden reservar más unidades que las disponibles. La migración
+`V2__create_stock_reservations.sql` persiste estado y vencimiento (cinco minutos por
+defecto). Las reservas vencidas liberan stock mediante un proceso periódico y al
+volver a operar sobre su oferta. Configuración opcional: `CATALOG_RESERVATION_TTL`
+(duración ISO-8601, por ejemplo `PT5M`) y
+`CATALOG_RESERVATION_EXPIRATION_SCAN_MS` (intervalo de revisión en milisegundos).
 
 ### Personal por cafetería y cuentas de prueba (INT2-65)
 

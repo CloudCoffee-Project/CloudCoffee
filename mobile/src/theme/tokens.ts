@@ -3,8 +3,9 @@
 // INT4-104 — Sistema de tokens de diseño.
 //
 // ÚNICA fuente de verdad de la identidad visual de CloudCoffee móvil. Define,
-// en un solo archivo, los colores, la tipografía, los espaciados, los radios,
-// las sombras, los grosores de borde y los estados de interacción de la app.
+// en un solo archivo, los colores, la tipografía, los espaciados, los tamaños
+// de componente, los radios, las sombras, los grosores de borde y los estados
+// de interacción de la app.
 // Toda pantalla —las nuevas y las migradas— lee los valores de diseño de acá
 // en lugar de escribirlos a mano en los StyleSheet.
 //
@@ -110,6 +111,10 @@ export const colores = {
   errorTexto: '#991B1B',
   /** Texto de error en línea de la pantalla de inicio de sesión. */
   errorAcceso: '#B25329',
+  /** Rojo intenso de campos inválidos y fallos de pago. */
+  errorFuerte: '#D32F2F',
+  /** Fondo rosado muy claro del campo con error. */
+  errorCampoFondo: '#FFF8F6',
 
   // --- Estados: éxito ---
   /** Fondo de cajas de éxito. */
@@ -119,6 +124,12 @@ export const colores = {
   /** Texto de mensajes de éxito. */
   exitoTexto: '#166534',
 
+  // --- Estados: disponibilidad ---
+  /** Verde de stock disponible y confirmaciones puntuales del cliente. */
+  disponible: '#15803D',
+  /** Rojo de stock agotado y avisos negativos del cliente. */
+  agotado: '#B42318',
+
   // --- Estados: información ---
   /** Fondo de badges e informativos (variante clara). */
   infoFondo: '#E0EDFF',
@@ -126,6 +137,14 @@ export const colores = {
   infoSuave: '#EFF6FF',
   /** Fondo de chips informativos azules. */
   infoChip: '#DBEAFE',
+  /** Fondo azul muy claro de la opción seleccionada (pago y entrega). */
+  opcionActivaFondo: '#F3F8FE',
+
+  // --- Estados: carga ---
+  /** Bloque base de los esqueletos de carga (INT4-108). */
+  esqueleto: '#E5DED2',
+  /** Bloque de énfasis de los esqueletos: íconos y cifras (INT4-108). */
+  esqueletoFuerte: '#D8CFC0',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -163,6 +182,8 @@ export const tipografia = {
     titulo: 22,
     /** 27 — títulos de pantalla. */
     tituloPantalla: 27,
+    /** 28 — íconos emoji de estados vacíos y de error. */
+    iconoMedio: 28,
     /** 34 — logotipo de la portada. */
     marca: 34,
     /** 44 — íconos emoji grandes de estados (✔️ ✉️). */
@@ -183,6 +204,28 @@ export const tipografia = {
     extranegrita: '800',
     /** Máximo énfasis (encabezados de tabla, cifras). */
     negro: '900',
+  },
+
+  /**
+   * Interlineados (lineHeight, px) de los textos sueltos que no usan un preset.
+   * Los presets de `texto` ya traen el suyo; esto cubre las pantallas que
+   * combinan tamaño y peso por separado.
+   */
+  interlineado: {
+    /** 15 — notas y errores de campo de 11 px. */
+    apretado: 15,
+    /** 17 — textos corridos de 12 px. */
+    normal: 17,
+    /** 19 — textos corridos de 13 px. */
+    holgado: 19,
+  },
+
+  /** Tracking (letterSpacing, px) de los textos con énfasis. */
+  tracking: {
+    /** -0.5 — cifras grandes y títulos apretados. */
+    apretado: -0.5,
+    /** 0.5 — labels en mayúsculas y badges. */
+    amplio: 0.5,
   },
 
   /**
@@ -253,6 +296,26 @@ export const espaciado = {
   '5xl': 32,
   /** 40 px — respiración grande (cabecera de la portada). */
   '6xl': 40,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Tamaños de componente
+// ---------------------------------------------------------------------------
+
+/**
+ * Lados de cajas que se dibujan y se repiten entre pantallas (px). No es la
+ * escala de espaciado: el espaciado separa elementos y esto define el tamaño
+ * del propio control (un botón, un chip de ícono).
+ */
+export const tamanos = {
+  /** 24 px — botón del stepper de cantidad (+ / −). */
+  botonStepper: 24,
+  /** 38 px — chip cuadrado de ícono (campus y producto del catálogo). */
+  chipIcono: 38,
+  /** 44 px — ícono cuadrado de las tarjetas de campus (INT4-108). */
+  iconoTarjeta: 44,
+  /** 80 px — círculo del resultado de la compra (éxito, revisión o fallo). */
+  circuloResultado: 80,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -328,8 +391,10 @@ export const sombras = {
 export const grosores = {
   /** 1 px — borde fino: cajas, botones secundarios y separadores. */
   fino: 1,
-  /** 1.5 px — borde de los inputs de formulario. */
-  input: 1.5,
+  /** 1.5 px — borde de inputs, tarjetas destacadas y opciones. */
+  medio: 1.5,
+  /** 2 px — línea de progreso y separadores de énfasis. */
+  grueso: 2,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -340,6 +405,14 @@ export const grosores = {
 export const estados = {
   /** Opacidad de botones y controles deshabilitados (fuera de servicio). */
   deshabilitado: 0.6,
+  /** Opacidad de un control pulsado (feedback mientras se mantiene). */
+  presionado: 0.85,
+  /** Opacidad de un control en su límite (stepper sin más margen). */
+  apagado: 0.4,
+  /** Opacidad de íconos de acciones secundarias que no compiten con el contenido. */
+  tenue: 0.65,
+  /** Opacidad mínima del pulso de los esqueletos de carga (INT4-108). */
+  esqueleto: 0.5,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -355,6 +428,7 @@ export const tokens = {
   colores,
   tipografia,
   espaciado,
+  tamanos,
   radios,
   sombras,
   grosores,

@@ -141,14 +141,18 @@ public class JwtSecurityAutoConfiguration {
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh",
                                 "/auth/verificacion", "/auth/verificacion/reenviar",
                                 "/auth/password/recovery", "/auth/password/reset").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/catalog/campus", "/catalog/categorias").permitAll()
-                        .requestMatchers(HttpMethod.HEAD, "/catalog/campus", "/catalog/categorias").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/catalog/campus", "/catalog/categorias",
+                                "/catalog/productos/*").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/catalog/campus", "/catalog/categorias",
+                                "/catalog/productos/*").permitAll()
                         // Conservar los endpoints de monitoreo ya expuestos por Notification.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/actuator/info").permitAll()
                         // Solo servicios con el token interno; un JWT de usuario recibe 403.
                         .requestMatchers(InternalServiceAuthenticationFilter.PATH_PREFIX + "**")
                             .hasRole(InternalServiceAuthenticationFilter.ROLE)
+                        // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
+                        .requestMatchers("/notifications", "/notifications/**").hasRole("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .build();
     }

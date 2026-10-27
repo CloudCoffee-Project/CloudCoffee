@@ -45,8 +45,6 @@ import {
 // string plano inventado en la pantalla.
 function etiquetaDeEstadoCompra(estado: EstadoCompra): string {
   switch (estado) {
-    case 'reservando':
-      return '🔵 Reservando';
     case 'revision_requerida':
       return '🟡 Requiere revisión';
     case 'pendiente_pago':
@@ -60,8 +58,6 @@ function etiquetaDeEstadoCompra(estado: EstadoCompra): string {
 
 function claseEstadoCompra(estado: EstadoCompra): { fondo: string; texto: string } {
   switch (estado) {
-    case 'reservando':
-      return { fondo: '#DBEAFE', texto: '#1E40AF' };
     case 'revision_requerida':
     case 'pendiente_pago':
       return { fondo: '#FEF3C7', texto: '#92400E' };

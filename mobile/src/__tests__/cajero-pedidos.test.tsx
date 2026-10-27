@@ -72,7 +72,8 @@ const ordenesMock: Orden[] = [
 ];
 
 // Cubre los valores del union EstadoOrden para probar los filtros básicos
-// "Activos" (reservando, pagado, listo_para_retiro) y "No retirados".
+// "Activos" (pagado, listo_para_retiro) y "No retirados". Las órdenes aún no
+// pagadas (revision_requerida / pendiente_pago) no entran a la cola del cajero.
 const ordenesFiltrosMock: Orden[] = [
   ...ordenesMock,
   {
@@ -115,7 +116,7 @@ const ordenesFiltrosMock: Orden[] = [
     cafeteriaId: 'c-1',
     cafeteriaNombre: 'Cafetería Central',
     clienteNombre: 'Luis Torres',
-    estado: 'reservando',
+    estado: 'pendiente_pago',
     montoTotal: 1800,
     items: [
       {
@@ -192,7 +193,7 @@ describe('Pantalla de pedidos del cajero', () => {
 
     expect(mockGetAccessToken).toHaveBeenCalled();
     expect(mockFetchPedidos).toHaveBeenCalledWith('token-real');
-    // Por defecto el listado es "Activos" (reservando + pagado): el
+    // Por defecto el listado es "Activos" (pagado + listo_para_retiro): el
     // pedido entregado queda fuera de la cola.
     expect(dataDe(tree)).toEqual([ordenesMock[0]]);
 
@@ -286,12 +287,8 @@ describe('Pantalla de pedidos del cajero', () => {
 
     const tree = await renderizarPedidos();
 
-    // Cola por defecto: solo activos (reservando, pagado, listo_para_retiro).
-    expect(dataDe(tree)).toEqual([
-      ordenesFiltrosMock[0],
-      ordenesFiltrosMock[4],
-      ordenesFiltrosMock[6],
-    ]);
+    // Cola por defecto: solo activos (pagado y listo_para_retiro).
+    expect(dataDe(tree)).toEqual([ordenesFiltrosMock[0], ordenesFiltrosMock[6]]);
 
     const chipNoRetirados = tree.root.findByProps({ testID: 'cajero-filtro-no-retirados' });
     await act(async () => {
@@ -303,11 +300,7 @@ describe('Pantalla de pedidos del cajero', () => {
     await act(async () => {
       chipActivos.props.onPress();
     });
-    expect(dataDe(tree)).toEqual([
-      ordenesFiltrosMock[0],
-      ordenesFiltrosMock[4],
-      ordenesFiltrosMock[6],
-    ]);
+    expect(dataDe(tree)).toEqual([ordenesFiltrosMock[0], ordenesFiltrosMock[6]]);
 
     const chipTodos = tree.root.findByProps({ testID: 'cajero-filtro-todos' });
     await act(async () => {

@@ -14,7 +14,8 @@ describe('qrRetiro (contrato del QR de retiro)', () => {
 
   it('acepta cualquier estado del union EstadoOrden', () => {
     const casos: QrRetiro[] = [
-      { pedido: 'a', estado: 'reservando' },
+      { pedido: 'a', estado: 'revision_requerida' },
+      { pedido: 'a', estado: 'pendiente_pago' },
       { pedido: 'a', estado: 'pagado' },
       { pedido: 'a', estado: 'listo_para_retiro' },
       { pedido: 'a', estado: 'no_retirado_pendiente_revision' },

@@ -21,47 +21,11 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { esEstadoOrden } from '../../types/domain';
 import { serializarQrRetiro } from '../../services/qrRetiro';
+import { etiquetaEstadoOrden, visualEstadoOrden } from '../../utils/estadosOrden';
 import type { EstadoOrden, QrRetiro } from '../../types/domain';
 
 function textoUnico(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
-}
-
-// Etiquetas de estado idénticas a las del mockup (🔵 Pagado / 🟢 Listo para
-// retiro / ⚪ Entregado). Centralizadas acá para que la pantalla no mezcle
-// formatos de estado según quién los mande.
-function etiquetaDeEstado(estado: EstadoOrden): string {
-  switch (estado) {
-    case 'reservando':
-      return '🔵 Reservando';
-    case 'pagado':
-      return '🔵 Pagado';
-    case 'listo_para_retiro':
-      return '🟢 Listo para retiro';
-    case 'no_retirado_pendiente_revision':
-      return '🟡 No retirado (en revisión)';
-    case 'entregado':
-      return '⚪ Entregado';
-    case 'no_retirado_final':
-      return '🟡 No retirado';
-    case 'cancelado':
-      return '⚪ Cancelado';
-  }
-}
-
-function clasePill(estado: EstadoOrden): { fondo: string; texto: string } {
-  switch (estado) {
-    case 'reservando':
-    case 'pagado':
-      return { fondo: '#DBEAFE', texto: '#1E40AF' };
-    case 'listo_para_retiro':
-    case 'no_retirado_pendiente_revision':
-    case 'no_retirado_final':
-      return { fondo: '#DCFCE7', texto: '#166534' };
-    case 'entregado':
-    case 'cancelado':
-      return { fondo: '#F3F4F6', texto: '#6B7280' };
-  }
 }
 
 export default function QrRetiroScreen() {
@@ -126,9 +90,11 @@ export default function QrRetiroScreen() {
                   <Text style={styles.orderLabel}>N° DE PEDIDO</Text>
                   <Text style={styles.orderId}>#{ordenId}</Text>
                 </View>
-                <View style={[styles.statusPill, { backgroundColor: clasePill(estado).fondo }]}>
-                  <Text style={[styles.statusPillText, { color: clasePill(estado).texto }]}>
-                    {etiquetaDeEstado(estado)}
+                <View
+                  style={[styles.statusPill, { backgroundColor: visualEstadoOrden(estado).fondo }]}
+                >
+                  <Text style={[styles.statusPillText, { color: visualEstadoOrden(estado).texto }]}>
+                    {etiquetaEstadoOrden(estado)}
                   </Text>
                 </View>
               </View>

@@ -63,19 +63,43 @@ export default function ResultadoPagoScreen() {
       {!!params.paymentId && <Text style={styles.detalle}>Pago: {params.paymentId}</Text>}
 
       <View style={styles.acciones}>
-        <Pressable
-          style={[styles.boton, { backgroundColor: contenido.color }]}
-          onPress={() => router.replace('/mis-compras')}
-        >
-          <Text style={styles.botonTexto}>Ver mis compras</Text>
-        </Pressable>
+        {estado === 'rechazado' ? (
+          <>
+            <Pressable
+              style={[styles.boton, { backgroundColor: contenido.color }]}
+              onPress={() => router.replace('/carrito')}
+            >
+              <Text style={styles.botonTexto}>Reintentar compra</Text>
+            </Pressable>
 
-        <Pressable
-          style={[styles.boton, styles.botonSecundario]}
-          onPress={() => router.replace('/')}
-        >
-          <Text style={[styles.botonTexto, styles.botonSecundarioTexto]}>Volver al catálogo</Text>
-        </Pressable>
+            <Pressable
+              style={[styles.boton, styles.botonSecundario]}
+              onPress={() => router.replace('/mis-compras')}
+            >
+              <Text style={[styles.botonTexto, styles.botonSecundarioTexto]}>Ver mis compras</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              style={[styles.boton, { backgroundColor: contenido.color }]}
+              onPress={() => router.replace('/mis-compras')}
+            >
+              <Text style={styles.botonTexto}>
+                {estado === 'exitoso' ? 'Ver mi compra' : 'Ver mis compras'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.boton, styles.botonSecundario]}
+              onPress={() => router.replace('/')}
+            >
+              <Text style={[styles.botonTexto, styles.botonSecundarioTexto]}>
+                Volver al catálogo
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );

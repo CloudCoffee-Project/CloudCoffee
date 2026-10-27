@@ -31,10 +31,7 @@ public class NotificationHistoryService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registerFailure(CloudCoffeeEvent event, String errorDetail) {
-        Object token = event.payload().get("token");
-        if (token instanceof String value && !value.isEmpty() && errorDetail != null) {
-            errorDetail = errorDetail.replace(value, "[REDACTED]");
-        }
+        errorDetail = NotificationHistory.sanitizeSensitiveText(errorDetail, event.payload());
         // Truncar el detalle del error en caso de que sea muy largo
         if (errorDetail != null && errorDetail.length() > 1000) {
             errorDetail = errorDetail.substring(0, 997) + "...";
