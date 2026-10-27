@@ -64,13 +64,15 @@ public class GatewaySecurityConfig {
                                 "/v1/auth/verificacion/reenviar",
                                 "/v1/auth/password/recovery",
                                 "/v1/auth/password/reset").permitAll()
-                        // Consultas publicas definidas en INT2-33.
+                        // Consultas publicas de catalogo; solo lectura y rutas explicitas.
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/catalog/campus", "/v1/catalog/categorias",
-                                "/v1/catalog/productos/*").permitAll()
+                                "/v1/catalog/productos", "/v1/catalog/productos/*",
+                                "/v1/catalog/productos/*/ofertas").permitAll()
                         .requestMatchers(HttpMethod.HEAD,
                                 "/v1/catalog/campus", "/v1/catalog/categorias",
-                                "/v1/catalog/productos/*").permitAll()
+                                "/v1/catalog/productos", "/v1/catalog/productos/*",
+                                "/v1/catalog/productos/*/ofertas").permitAll()
                         // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
                         .requestMatchers("/v1/notifications", "/v1/notifications/**").hasRole("SUPER_ADMIN")
                         // Solo un JWT validado con la llave publica autentica estas rutas.

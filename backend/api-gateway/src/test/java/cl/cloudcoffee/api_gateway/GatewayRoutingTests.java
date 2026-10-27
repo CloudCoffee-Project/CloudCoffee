@@ -112,16 +112,6 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertNoBackendRequests();
     }
 
-    @Test
-    void publicProductDetailDoesNotRequireAuthentication() throws Exception {
-        mvc.perform(get("/v1/catalog/productos/33333333-3333-4333-8333-333333333333"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.service").value("catalog"));
-
-        assertThat(BACKENDS.get("catalog").take().path())
-                .isEqualTo("/catalog/productos/33333333-3333-4333-8333-333333333333");
-    }
-
     @ParameterizedTest
     @ValueSource(strings = {"register", "login", "refresh", "verificacion",
             "verificacion/reenviar", "password/recovery", "password/reset"})
@@ -153,6 +143,26 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         RecordedRequest received = BACKENDS.get("catalog").take();
         assertThat(received.method()).isEqualTo(method);
         assertThat(received.path()).isEqualTo("/catalog/" + endpoint);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "GET, /v1/catalog/productos?campusId=11111111-1111-4111-8111-111111111111, /catalog/productos, campusId=11111111-1111-4111-8111-111111111111",
+            "HEAD, /v1/catalog/productos?campusId=11111111-1111-4111-8111-111111111111, /catalog/productos, campusId=11111111-1111-4111-8111-111111111111",
+            "GET, /v1/catalog/productos/33333333-3333-4333-8333-333333333333, /catalog/productos/33333333-3333-4333-8333-333333333333, none",
+            "HEAD, /v1/catalog/productos/33333333-3333-4333-8333-333333333333, /catalog/productos/33333333-3333-4333-8333-333333333333, none",
+            "GET, /v1/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas?campusId=11111111-1111-4111-8111-111111111111, /catalog/productos/33333333-3333-4333-8333-333333333333/ofertas, campusId=11111111-1111-4111-8111-111111111111",
+            "HEAD, /v1/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas?campusId=11111111-1111-4111-8111-111111111111, /catalog/productos/33333333-3333-4333-8333-333333333333/ofertas, campusId=11111111-1111-4111-8111-111111111111"
+    })
+    void publicProductAndOfferQueriesAreForwardedWithoutAuthentication(
+            String method, String externalPath, String internalPath, String expectedQuery) throws Exception {
+        mvc.perform(request(HttpMethod.valueOf(method), externalPath))
+                .andExpect(status().isOk());
+
+        RecordedRequest received = BACKENDS.get("catalog").take();
+        assertThat(received.method()).isEqualTo(method);
+        assertThat(received.path()).isEqualTo(internalPath);
+        assertThat(received.query()).isEqualTo("none".equals(expectedQuery) ? null : expectedQuery);
     }
 
     @Test
@@ -225,9 +235,14 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
             "GET, /v1/notifications",
             "POST, /v1/catalog/campus",
             "DELETE, /v1/catalog/categorias",
+            "POST, /v1/catalog/productos",
+            "PUT, /v1/catalog/productos/33333333-3333-4333-8333-333333333333",
+            "DELETE, /v1/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas",
             "GET, /v1/auth/login",
             "POST, /v1/auth/login/extra",
             "GET, /v1/catalog/campus/extra",
+            "GET, /v1/catalog/productos/42/extra",
+            "GET, /v1/catalog/productos/42/ofertas/extra",
             "POST, /v1/compras",
             "GET, /v1/compras",
             "POST, /v1/compras/42/confirmar",
@@ -287,6 +302,18 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {
+            "/v1/catalog/productos?campusId=11111111-1111-4111-8111-111111111111",
+            "/v1/catalog/productos/33333333-3333-4333-8333-333333333333",
+            "/v1/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas?campusId=11111111-1111-4111-8111-111111111111"
+    })
+    void invalidJwtStillRejectsPublicCatalogQueries(String path) throws Exception {
+        mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
+        assertNoBackendRequests();
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"/auth/login", "/catalog/campus", "/notifications",
             "/compras", "/compras/42", "/orders", "/orders/42", "/orders/validar-retiro",
             "/v1/order", "/v1/order/42", "/v1/ordenes", "/v1/ordenes/42",
@@ -319,7 +346,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/v1/auth/users/me", "/v1/catalog/productos", "/v1/notifications",
+    @ValueSource(strings = {"/v1/auth/users/me", "/v1/catalog/productos",
+            "/v1/catalog/productos/42/ofertas", "/v1/notifications",
             "/v1/compras", "/v1/compras/42/pago"})
     void preflightIsHandledAtTheGatewayWithoutAuthenticationOrBackendCalls(String path) throws Exception {
         mvc.perform(options(path)
@@ -528,4 +556,3 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         }
     }
 }
-

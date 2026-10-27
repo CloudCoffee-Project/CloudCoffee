@@ -29,7 +29,8 @@ class GatewayCorsConfigTests {
                 .withPropertyValues("cloudcoffee.cors.allowed-origins=http://localhost:3000, https://app.example.com")
                 .run(context -> {
                     UrlBasedCorsConfigurationSource source = context.getBean(UrlBasedCorsConfigurationSource.class);
-                    CorsConfiguration config = source.getCorsConfiguration(new MockHttpServletRequest("OPTIONS", "/v1/compras"));
+                    CorsConfiguration config = source.getCorsConfiguration(
+                            new MockHttpServletRequest("OPTIONS", "/v1/catalog/productos/42/ofertas"));
 
                     assertThat(config).isNotNull();
                     assertThat(config.getAllowedOrigins())
