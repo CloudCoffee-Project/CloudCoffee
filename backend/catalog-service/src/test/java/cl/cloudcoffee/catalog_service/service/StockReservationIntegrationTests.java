@@ -2,12 +2,14 @@ package cl.cloudcoffee.catalog_service.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,8 +57,13 @@ import cl.cloudcoffee.security.testing.JwtTestSupport;
 @AutoConfigureMockMvc
 class StockReservationIntegrationTests extends JwtTestSupport {
 
+    private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
+
     @Autowired
     private StockReservationService reservationService;
+
+    @Autowired
+    private ExpiredStockReservationScheduler reservationScheduler;
 
     @Autowired
     private CampusRepository campusRepository;
@@ -82,10 +89,15 @@ class StockReservationIntegrationTests extends JwtTestSupport {
     @MockitoBean
     private StockEventPublisher stockEventPublisher;
 
+    @MockitoBean
+    private Clock clock;
+
     private Offer offer;
 
     @BeforeEach
     void createActiveOffer() {
+        when(clock.instant()).thenReturn(NOW);
+
         reservationRepository.deleteAll();
         offerRepository.deleteAll();
         productRepository.deleteAll();
@@ -188,8 +200,8 @@ class StockReservationIntegrationTests extends JwtTestSupport {
         UUID orderId = UUID.randomUUID();
         var reservation = reservationService.reserve(new ReserveStockRequest(orderId, offer.getId(), 1))
                 .reservation();
-        reservation.setReservedAt(Instant.now().minusSeconds(600));
-        reservation.setExpiresAt(Instant.now().minusSeconds(1));
+        reservation.setReservedAt(NOW.minusSeconds(600));
+        reservation.setExpiresAt(NOW.minusSeconds(1));
         reservationRepository.saveAndFlush(reservation);
 
         reservationService.expireForOffer(offer.getId());
@@ -200,6 +212,36 @@ class StockReservationIntegrationTests extends JwtTestSupport {
         assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(1);
         assertThat(reservationService.confirm(orderId, offer.getId()).getStatus())
                 .isEqualTo(StockReservationStatus.EXPIRED);
+    }
+
+    @Test
+    void expirationSchedulerIsIdempotentAndDoesNotReleaseConfirmedReservations() {
+        offer.setStock(2);
+        offerRepository.saveAndFlush(offer);
+
+        var expiredOrderId = UUID.randomUUID();
+        var confirmedOrderId = UUID.randomUUID();
+        StockReservation expired = reservationService.reserve(
+                new ReserveStockRequest(expiredOrderId, offer.getId(), 1)).reservation();
+        StockReservation confirmed = reservationService.reserve(
+                new ReserveStockRequest(confirmedOrderId, offer.getId(), 1)).reservation();
+        confirmed = reservationService.confirm(confirmedOrderId, offer.getId());
+
+        expired.setReservedAt(NOW.minusSeconds(600));
+        expired.setExpiresAt(NOW.minusSeconds(1));
+        confirmed.setReservedAt(NOW.minusSeconds(600));
+        confirmed.setExpiresAt(NOW.minusSeconds(1));
+        reservationRepository.saveAllAndFlush(List.of(expired, confirmed));
+
+        reservationScheduler.releaseExpiredReservations();
+        reservationScheduler.releaseExpiredReservations();
+
+        assertThat(reservationRepository.findByOrderIdAndOfferId(expiredOrderId, offer.getId())
+                .orElseThrow().getStatus()).isEqualTo(StockReservationStatus.EXPIRED);
+        assertThat(reservationRepository.findByOrderIdAndOfferId(confirmedOrderId, offer.getId())
+                .orElseThrow().getStatus()).isEqualTo(StockReservationStatus.CONFIRMED);
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(1);
+        verify(stockEventPublisher, times(3)).publishStockUpdated(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

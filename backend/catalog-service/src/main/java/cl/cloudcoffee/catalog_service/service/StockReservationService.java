@@ -1,6 +1,7 @@
 package cl.cloudcoffee.catalog_service.service;
 
 import java.net.URI;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -29,6 +30,7 @@ public class StockReservationService {
     private final StockReservationRepository reservationRepository;
     private final EntityManager entityManager;
     private final StockEventPublisher stockEventPublisher;
+    private final Clock clock;
     private final Duration reservationTtl;
 
     public StockReservationService(
@@ -36,6 +38,7 @@ public class StockReservationService {
             StockReservationRepository reservationRepository,
             EntityManager entityManager,
             StockEventPublisher stockEventPublisher,
+            Clock clock,
             @Value("${catalog.reservations.ttl:PT5M}") Duration reservationTtl) {
         if (reservationTtl.compareTo(Duration.ofNanos(1_000)) < 0) {
             throw new IllegalArgumentException("catalog.reservations.ttl debe ser de al menos un microsegundo");
@@ -44,6 +47,7 @@ public class StockReservationService {
         this.reservationRepository = reservationRepository;
         this.entityManager = entityManager;
         this.stockEventPublisher = stockEventPublisher;
+        this.clock = clock;
         this.reservationTtl = reservationTtl;
     }
 
@@ -62,7 +66,7 @@ public class StockReservationService {
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Oferta no encontrada",
                         "No existe una oferta con el identificador indicado.", "OFERTA_NO_ENCONTRADA"));
 
-        expireReservationsForOffer(offer, Instant.now());
+        expireReservationsForOffer(offer, clock.instant());
 
         var existing = reservationRepository.findByOrderIdAndOfferIdForUpdate(
                 request.orderId(), request.offerId());
@@ -84,7 +88,7 @@ public class StockReservationService {
         }
         entityManager.refresh(offer);
 
-        Instant reservedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant reservedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         StockReservation reservation = new StockReservation();
         reservation.setOrderId(request.orderId());
         reservation.setOffer(offer);
@@ -101,7 +105,7 @@ public class StockReservationService {
     public StockReservation confirm(UUID orderId, UUID offerId) {
         Offer offer = lockOffer(offerId);
         StockReservation reservation = lockReservation(orderId, offerId);
-        expireReservationsForOffer(offer, Instant.now());
+        expireReservationsForOffer(offer, clock.instant());
         if (reservation.getStatus() == StockReservationStatus.EXPIRED) {
             return reservation;
         }
@@ -125,7 +129,7 @@ public class StockReservationService {
     public StockReservation release(UUID orderId, UUID offerId) {
         Offer offer = lockOffer(offerId);
         StockReservation reservation = lockReservation(orderId, offerId);
-        expireReservationsForOffer(offer, Instant.now());
+        expireReservationsForOffer(offer, clock.instant());
         if (reservation.getStatus() == StockReservationStatus.EXPIRED
                 || reservation.getStatus() == StockReservationStatus.RELEASED) {
             return reservation;
@@ -149,7 +153,7 @@ public class StockReservationService {
     @Transactional
     public void expireForOffer(UUID offerId) {
         Offer offer = lockOffer(offerId);
-        expireReservationsForOffer(offer, Instant.now());
+        expireReservationsForOffer(offer, clock.instant());
     }
 
     private StockReservation lockReservation(UUID orderId, UUID offerId) {
