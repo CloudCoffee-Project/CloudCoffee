@@ -273,18 +273,46 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/v1/auth/users/me", "/v1/catalog/productos", "/v1/notifications"})
+    @ValueSource(strings = {"/v1/auth/users/me", "/v1/catalog/productos", "/v1/notifications",
+            "/v1/compras", "/v1/compras/42/pago"})
     void preflightIsHandledAtTheGatewayWithoutAuthenticationOrBackendCalls(String path) throws Exception {
         mvc.perform(options(path)
                         .header(HttpHeaders.ORIGIN, "http://localhost:3000")
-                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
-                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization, content-type"))
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                                "authorization, content-type, idempotency-key"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
                         "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS"))
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "authorization, content-type"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        "authorization, content-type, idempotency-key"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        "Location, Idempotency-Replayed, Retry-After"))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void purchaseRequestsForwardIdempotencyKeyAndExposeContractHeadersToAuthorizedOrigins() throws Exception {
+        String idempotencyKey = "80000000-0000-4000-8000-000000000001";
+        mvc.perform(post("/v1/compras/42/pago")
+                        .with(user("cliente"))
+                        .header(HttpHeaders.ORIGIN, "https://app.example.com")
+                        .header(GatewayCorsConfig.IDEMPOTENCY_KEY, idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"escenario\":\"aprobar\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.example.com"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        "Location, Idempotency-Replayed, Retry-After"))
+                .andExpect(header().string(HttpHeaders.LOCATION, "/v1/compras/42/pago"))
+                .andExpect(header().string(GatewayCorsConfig.IDEMPOTENCY_REPLAYED, "true"))
+                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "2"));
+
+        RecordedRequest received = BACKENDS.get("orders").take();
+        assertThat(received.path()).isEqualTo("/compras/42/pago");
+        assertThat(received.idempotencyKey()).isEqualTo(idempotencyKey);
         assertNoBackendRequests();
     }
 
@@ -310,6 +338,15 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        mvc.perform(options("/v1/compras")
+                        .header(HttpHeaders.ORIGIN, origin)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                                "authorization, content-type, idempotency-key"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS))
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS));
         mvc.perform(get("/v1/catalog/campus").header(HttpHeaders.ORIGIN, origin))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
@@ -331,14 +368,24 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     @ParameterizedTest
-    @CsvSource({"TRACE, authorization", "POST, x-unapproved-header"})
+    @CsvSource({
+            "TRACE, authorization",
+            "TRACE, idempotency-key",
+            "POST, x-unapproved-header",
+            "POST, x-idempotency-key",
+            "POST, idempotency-replayed",
+            "POST, retry-after"
+    })
     void preflightRejectsUnapprovedMethodsAndHeaders(String method, String headers) throws Exception {
-        mvc.perform(options("/v1/auth/login")
-                        .header(HttpHeaders.ORIGIN, "https://app.example.com")
-                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)
-                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, headers))
-                .andExpect(status().isForbidden())
-                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        for (String path : new String[] {"/v1/auth/login", "/v1/compras"}) {
+            mvc.perform(options(path)
+                            .header(HttpHeaders.ORIGIN, "https://app.example.com")
+                            .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)
+                            .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, headers))
+                    .andExpect(status().isForbidden())
+                    .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
+                    .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS));
+        }
         assertNoBackendRequests();
     }
 
@@ -368,7 +415,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
     }
 
     private record RecordedRequest(String method, String path, String query,
-            String body, String authorization, String contentType, String userAgent) {
+            String body, String authorization, String contentType, String userAgent,
+            String idempotencyKey) {
     }
 
     private static final class BackendStub {
@@ -387,11 +435,13 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                 server.createContext("/", exchange -> {
                     try (exchange) {
                         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                        String idempotencyKey = exchange.getRequestHeaders().getFirst(GatewayCorsConfig.IDEMPOTENCY_KEY);
                         requests.add(new RecordedRequest(exchange.getRequestMethod(),
                                 exchange.getRequestURI().getRawPath(), exchange.getRequestURI().getRawQuery(),
                                 body, exchange.getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION),
                                 exchange.getRequestHeaders().getFirst(HttpHeaders.CONTENT_TYPE),
-                                exchange.getRequestHeaders().getFirst(HttpHeaders.USER_AGENT)));
+                                exchange.getRequestHeaders().getFirst(HttpHeaders.USER_AGENT),
+                                idempotencyKey));
                         boolean reject = body.equals("{\"reject\":true}");
                         byte[] response = (reject ? PROBLEM : "{\"service\":\"" + name + "\"}")
                                 .getBytes(StandardCharsets.UTF_8);
@@ -399,6 +449,11 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                                 reject ? MediaType.APPLICATION_PROBLEM_JSON_VALUE : MediaType.APPLICATION_JSON_VALUE);
                         if (reject) {
                             exchange.getResponseHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+                        }
+                        if (idempotencyKey != null) {
+                            exchange.getResponseHeaders().set(HttpHeaders.LOCATION, "/v1/compras/42/pago");
+                            exchange.getResponseHeaders().set(GatewayCorsConfig.IDEMPOTENCY_REPLAYED, "true");
+                            exchange.getResponseHeaders().set(HttpHeaders.RETRY_AFTER, "2");
                         }
                         boolean head = exchange.getRequestMethod().equals("HEAD");
                         exchange.sendResponseHeaders(reject ? 401 : 200, head ? -1 : response.length);
@@ -425,3 +480,4 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         }
     }
 }
+
