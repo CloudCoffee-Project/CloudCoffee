@@ -55,6 +55,10 @@ public class GatewaySecurityConfig {
                         .accessDeniedHandler(accessDeniedHandlers.getIfAvailable(AccessDeniedHandlerImpl::new)))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        // Los contratos son públicos solo cuando no se envían credenciales.
+                        .requestMatchers(request -> isOpenApiContract(request)
+                                && request.getHeader("Authorization") == null).permitAll()
+                        .requestMatchers("/openapi/auth", "/openapi/catalog").authenticated()
                         // Contratos de Auth: INT2-19, 20, 21, 22 y 26.
                         .requestMatchers(HttpMethod.POST,
                                 "/v1/auth/register",
@@ -80,5 +84,11 @@ public class GatewaySecurityConfig {
                         // No hay rutas de proxy fuera de /v1; conservar sus errores 404.
                         .anyRequest().permitAll())
                 .build();
+    }
+
+    private static boolean isOpenApiContract(jakarta.servlet.http.HttpServletRequest request) {
+        String path = request.getContextPath() + request.getRequestURI();
+        return (path.equals("/openapi/auth") || path.equals("/openapi/catalog"))
+                && ("GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod()));
     }
 }
