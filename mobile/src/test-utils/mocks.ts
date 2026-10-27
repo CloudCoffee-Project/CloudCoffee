@@ -106,3 +106,16 @@ export const asyncStorageMock = {
   clear: jest.fn(async () => undefined),
   getAllKeys: jest.fn(async () => [] as string[]),
 };
+
+// ---------------------------------------------------------------------------
+// Promesas controladas
+// ---------------------------------------------------------------------------
+
+/**
+ * Promesa que no se resuelve nunca. Deja la pantalla en su estado de carga
+ * durante todo el test, que es lo que necesitan las aserciones del esqueleto
+ * (INT4-108).
+ */
+export function promesaPendiente<T>(): Promise<T> {
+  return new Promise<T>(() => undefined);
+}

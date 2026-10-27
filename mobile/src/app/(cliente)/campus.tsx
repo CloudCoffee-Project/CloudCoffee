@@ -29,6 +29,8 @@ import {
   listarCampus,
 } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
+import { Esqueleto, EsqueletoPulso } from '../../components/Esqueleto';
+import { tokens } from '../../theme/tokens';
 import type { Campus } from '../../types/domain';
 
 export default function CampusScreen() {
@@ -109,9 +111,37 @@ export default function CampusScreen() {
     );
   } else if (campus === null) {
     contenido = (
-      <View style={styles.centrado}>
-        <ActivityIndicator size="large" color="#0052CC" testID="campus-cargando" />
-      </View>
+      // INT4-108: la silueta de las tarjetas ocupa el lugar de la lista
+      // mientras llega GET /v1/catalog/campus; no hay pantalla en blanco.
+      <EsqueletoPulso style={styles.esqueletoLista} testID="campus-esqueleto">
+        {[0, 1, 2].map((indice) => (
+          <View key={indice} style={styles.card}>
+            <Esqueleto
+              ancho={tokens.tamanos.iconoTarjeta}
+              alto={tokens.tamanos.iconoTarjeta}
+              radio={tokens.radios.xl}
+              fuerte
+            />
+            <View style={styles.esqueletoInfo}>
+              <Esqueleto
+                ancho="65%"
+                alto={tokens.tipografia.tamano.destacado}
+                radio={tokens.radios.xs}
+              />
+              <Esqueleto
+                ancho="85%"
+                alto={tokens.tipografia.tamano.detalle}
+                radio={tokens.radios.xs}
+              />
+            </View>
+            <Esqueleto
+              ancho={tokens.tamanos.botonStepper}
+              alto={tokens.tamanos.botonStepper}
+              radio={tokens.radios.pildora}
+            />
+          </View>
+        ))}
+      </EsqueletoPulso>
     );
   } else if (campus.length === 0) {
     contenido = (
@@ -274,6 +304,16 @@ const styles = StyleSheet.create({
   lista: {
     gap: 12,
   },
+  // Silueta de la lista mientras carga (INT4-108). Las tarjetas reutilizan
+  // styles.card para que el esqueleto tenga el mismo alto y los mismos bordes
+  // que el contenido real.
+  esqueletoLista: {
+    gap: tokens.espaciado.xl,
+  },
+  esqueletoInfo: {
+    flex: 1,
+    gap: tokens.espaciado.sm,
+  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -378,10 +418,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
-  },
-  centrado: {
-    paddingVertical: 40,
-    alignItems: 'center',
   },
   tarjetaError: {
     backgroundColor: '#FFFFFF',
