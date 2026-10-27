@@ -10,6 +10,7 @@ El backend utiliza Docker Compose para ejecutar los microservicios y su infraest
 
 - Docker Engine
 - Docker Compose v2
+- OpenSSL
 
 Verificar la instalación:
 
@@ -18,21 +19,28 @@ docker --version
 docker compose version
 ```
 
-### Configuración
+### Preparación inicial
 
-Crear el archivo local de variables:
+Desde un checkout limpio, preparar las variables locales y la pareja de llaves JWT:
 
 ```bash
-cp .env.example .env
+./scripts/setup-dev-environment.sh
 ```
 
-`.env.example` contiene valores de desarrollo. El archivo `.env` es privado y está excluido de Git.
+El script copia `.env.example` solamente cuando `.env` no existe, genera las llaves
+RSA que falten dentro de `secrets/` y comprueba la configuración de Compose. Nunca
+sobrescribe un `.env` existente ni una pareja de llaves completa.
+
+`.env.example` contiene valores exclusivamente locales. Tanto `.env` como
+`secrets/` son privados y están excluidos de Git.
 
 Cada integrante puede modificar en su `.env` los puertos o credenciales locales sin afectar al resto del equipo.
 
-Antes del primer arranque, generar las llaves JWT siguiendo la sección
-[JWT RS256 del backend](backend/README.md#jwt-rs256-int2-14). Compose entrega la
-llave privada solo a Auth y la pública a los servicios que validan tokens.
+Si ya existe un `.env` antiguo y la validación informa una variable faltante, copiar
+solo esa variable desde `.env.example`; no reemplazar el archivo completo. Compose
+entrega la llave privada únicamente a Auth y la pública a los servicios que validan
+tokens. La generación manual se explica en
+[JWT RS256 del backend](backend/README.md#jwt-rs256-int2-14).
 
 ### Iniciar el entorno
 
@@ -40,15 +48,52 @@ llave privada solo a Auth y la pública a los servicios que validan tokens.
 docker compose up --build -d
 ```
 
+Este comando inicia PostgreSQL, RabbitMQ, Zipkin, los cuatro microservicios, el API
+Gateway y la web de Vite. La aplicación queda disponible en
+http://localhost:3000 y todas sus peticiones pasan por el Gateway publicado en
+http://localhost:18080.
+
+El directorio `web/` se monta en el contenedor para aplicar cambios durante el
+desarrollo. Si cambia `package.json` o `package-lock.json`, reconstruir la imagen y
+su volumen de dependencias:
+
+```bash
+docker compose build web
+docker compose run --rm --no-deps web npm ci
+docker compose up -d web
+```
+
+### Migraciones y datos de desarrollo
+
+Los servicios ejecutan automáticamente sus migraciones Flyway al arrancar. Los
+perfiles `docker,dev` definidos en `.env.example` agregan seeds repetibles para:
+
+- cuentas y personal de prueba en Auth;
+- campus, cafeterías, categorías, productos y ofertas en Catalog;
+- compras y pagos de ejemplo en Order.
+
+Los seeds están separados de `db/migration`, por lo que no se cargan al usar solo
+el perfil `docker`. Para reiniciar completamente migraciones y datos locales se
+pueden eliminar los volúmenes con `docker compose down --volumes`; esta operación
+es destructiva.
+
 ### Consultar el estado
 
 ```bash
 docker compose ps
 ```
 
-Los cinco procesos Spring Boot se consideran listos únicamente cuando su endpoint
-`/actuator/health` responde correctamente. El API Gateway espera a que Auth,
-Catalog, Order y Notification estén saludables antes de iniciar.
+Los cinco procesos Spring Boot y la web se consideran listos únicamente cuando
+sus healthchecks responden correctamente. El API Gateway espera a Auth,
+Catalog, Order y Notification; la web espera al Gateway.
+
+Comprobación mínima del entorno integrado:
+
+```bash
+curl --fail http://localhost:18080/actuator/health
+curl --fail http://localhost:18080/v1/catalog/campus
+curl --fail http://localhost:3000/
+```
 
 Para consultar manualmente salud e información no sensible, sustituir el puerto
 por el del servicio correspondiente:
@@ -119,6 +164,11 @@ El último comando elimina las bases de datos locales y debe utilizarse con prec
 
 ## Contrato de API para web y mobile
 
+Para el Sprint 2, consultar el
+[contrato de compra, pago simulado y retiro (INT2-50)](backend/docs/compra-pago-retiro.md).
+Incluye OpenAPI y ejemplos de eventos como referencia para las implementaciones
+de backend y clientes.
+
 La [guía de OpenAPI y Swagger del backend](backend/README.md#openapi-y-swagger--api-sprint-1-int2-31)
 explica cómo habilitar la documentación con `OPENAPI_ENABLED=true`, consultar
 Auth/Catálogo desde Gateway y probar operaciones con JWT. Está desactivada por defecto.
@@ -129,6 +179,7 @@ al ejecutar Gateway directamente con su TLS predeterminado, usar HTTPS.
 
 | Componente | Acceso desde el computador |
 | --- | --- |
+| Web | http://localhost:3000 |
 | API Gateway | http://localhost:18080 |
 | Auth Service | http://localhost:18081 |
 | Catalog Service | http://localhost:18082 |

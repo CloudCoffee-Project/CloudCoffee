@@ -1,19 +1,16 @@
 // src/__tests__/cajero-pedidos.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 
 import PedidosEntrantesScreen, { buscarOrdenPorCodigo } from '../app/(cajero)/index';
 import { fetchPedidosEntrantes } from '../services/ordenes';
 import { getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
 
-const mockReplace = jest.fn();
-
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({ replace: mockReplace })),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
@@ -75,7 +72,8 @@ const ordenesMock: Orden[] = [
 ];
 
 // Cubre los valores del union EstadoOrden para probar los filtros básicos
-// "Activos" (reservando, pagado, listo_para_retiro) y "No retirados".
+// "Activos" (pagado, listo_para_retiro) y "No retirados". Las órdenes aún no
+// pagadas (revision_requerida / pendiente_pago) no entran a la cola del cajero.
 const ordenesFiltrosMock: Orden[] = [
   ...ordenesMock,
   {
@@ -118,7 +116,7 @@ const ordenesFiltrosMock: Orden[] = [
     cafeteriaId: 'c-1',
     cafeteriaNombre: 'Cafetería Central',
     clienteNombre: 'Luis Torres',
-    estado: 'reservando',
+    estado: 'pendiente_pago',
     montoTotal: 1800,
     items: [
       {
@@ -165,12 +163,6 @@ const ordenesFiltrosMock: Orden[] = [
   },
 ];
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 function dataDe(tree: ReactTestRenderer): Orden[] {
   const lista = tree.root.findByType(FlatList);
   return lista.props.data as Orden[];
@@ -201,7 +193,7 @@ describe('Pantalla de pedidos del cajero', () => {
 
     expect(mockGetAccessToken).toHaveBeenCalled();
     expect(mockFetchPedidos).toHaveBeenCalledWith('token-real');
-    // Por defecto el listado es "Activos" (reservando + pagado): el
+    // Por defecto el listado es "Activos" (pagado + listo_para_retiro): el
     // pedido entregado queda fuera de la cola.
     expect(dataDe(tree)).toEqual([ordenesMock[0]]);
 
@@ -295,12 +287,8 @@ describe('Pantalla de pedidos del cajero', () => {
 
     const tree = await renderizarPedidos();
 
-    // Cola por defecto: solo activos (reservando, pagado, listo_para_retiro).
-    expect(dataDe(tree)).toEqual([
-      ordenesFiltrosMock[0],
-      ordenesFiltrosMock[4],
-      ordenesFiltrosMock[6],
-    ]);
+    // Cola por defecto: solo activos (pagado y listo_para_retiro).
+    expect(dataDe(tree)).toEqual([ordenesFiltrosMock[0], ordenesFiltrosMock[6]]);
 
     const chipNoRetirados = tree.root.findByProps({ testID: 'cajero-filtro-no-retirados' });
     await act(async () => {
@@ -312,11 +300,7 @@ describe('Pantalla de pedidos del cajero', () => {
     await act(async () => {
       chipActivos.props.onPress();
     });
-    expect(dataDe(tree)).toEqual([
-      ordenesFiltrosMock[0],
-      ordenesFiltrosMock[4],
-      ordenesFiltrosMock[6],
-    ]);
+    expect(dataDe(tree)).toEqual([ordenesFiltrosMock[0], ordenesFiltrosMock[6]]);
 
     const chipTodos = tree.root.findByProps({ testID: 'cajero-filtro-todos' });
     await act(async () => {
@@ -344,7 +328,7 @@ describe('Búsqueda manual por código de orden (INT4-10)', () => {
   beforeEach(() => {
     mockGetAccessToken.mockReset();
     mockFetchPedidos.mockReset();
-    mockReplace.mockReset();
+    limpiarRouter();
     (useOrdenEstado as unknown as jest.Mock).mockReturnValue(null);
   });
 
@@ -399,7 +383,7 @@ describe('Búsqueda manual por código de orden (INT4-10)', () => {
       validar.props.onPress();
     });
 
-    expect(mockReplace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
       params: { pedido: 'o-1', estado: 'pagado' },
     });
@@ -464,7 +448,7 @@ describe('Búsqueda manual por código de orden (INT4-10)', () => {
 
     const errorBanner = tree.root.findByProps({ testID: 'cajero-folio-error' });
     expect(textoDe(errorBanner)).toContain('Esta orden ya fue entregada.');
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
 
     act(() => tree.unmount());
   }, 20000);

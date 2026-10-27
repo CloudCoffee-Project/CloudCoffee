@@ -27,6 +27,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @AutoConfiguration(beforeName = {
@@ -61,7 +62,8 @@ public class JwtSecurityAutoConfiguration {
                         return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token",
                                 "JWT requires sub, exp and a valid role", null));
                     }
-                    // INT2-65: solo el personal puede traer cafetería, y debe ser un UUID.
+                    // INT2-65: el claim es informativo (UI), pero si viene debe ser
+                    // coherente: solo en personal y con formato UUID.
                     Object cafeteria = jwt.getClaims().get(CafeteriaAccess.CLAIM);
                     if (cafeteria != null && (!CafeteriaAccess.ROLES_PERSONAL.contains(role)
                             || !(cafeteria instanceof String id) || !esUuid(id))) {
@@ -73,10 +75,20 @@ public class JwtSecurityAutoConfiguration {
         return decoder;
     }
 
+    /** Consulta remota a auth-service; auth-service define su propia implementación local. */
     @Bean
     @ConditionalOnMissingBean
-    CafeteriaAccess cafeteriaAccess() {
-        return new CafeteriaAccess();
+    AsignacionesCafeteria asignacionesCafeteria(
+            @Value("${cloudcoffee.auth.url:${AUTH_SERVICE_URL:http://localhost:18081}}") String authServiceUrl,
+            @Value("${cloudcoffee.internal.token:${INTERNAL_SERVICE_TOKEN:}}") String token,
+            @Value("${cloudcoffee.auth.asignaciones-timeout:PT2S}") Duration timeout) {
+        return new HttpAsignacionesCafeteria(authServiceUrl, token, timeout);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    CafeteriaAccess cafeteriaAccess(AsignacionesCafeteria asignacionesCafeteria) {
+        return new CafeteriaAccess(asignacionesCafeteria);
     }
 
     private static boolean esUuid(String value) {
@@ -101,8 +113,13 @@ public class JwtSecurityAutoConfiguration {
     @ConditionalOnMissingBean(SecurityFilterChain.class)
     SecurityFilterChain serviceSecurityFilterChain(HttpSecurity http, ApiSecurityErrorHandler errors,
             JwtAuthenticationConverter converter,
-            @Value("${cloudcoffee.openapi.enabled:${OPENAPI_ENABLED:false}}") boolean openapiEnabled) throws Exception {
+            @Value("${cloudcoffee.openapi.enabled:${OPENAPI_ENABLED:false}}") boolean openapiEnabled,
+            @Value("${cloudcoffee.internal.token:${INTERNAL_SERVICE_TOKEN:}}") String internalToken) throws Exception {
         return http
+                // INT2-65/INT2-50: llamadas entre servicios a /internal/servicios/**. No es un
+                // @Bean para que el contenedor de servlets no lo registre por segunda vez.
+                .addFilterBefore(new InternalServiceAuthenticationFilter(internalToken),
+                        BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -124,11 +141,20 @@ public class JwtSecurityAutoConfiguration {
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh",
                                 "/auth/verificacion", "/auth/verificacion/reenviar",
                                 "/auth/password/recovery", "/auth/password/reset").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/catalog/campus", "/catalog/categorias").permitAll()
-                        .requestMatchers(HttpMethod.HEAD, "/catalog/campus", "/catalog/categorias").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/catalog/campus", "/catalog/categorias",
+                                "/catalog/productos", "/catalog/productos/*",
+                                "/catalog/productos/*/ofertas").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/catalog/campus", "/catalog/categorias",
+                                "/catalog/productos", "/catalog/productos/*",
+                                "/catalog/productos/*/ofertas").permitAll()
                         // Conservar los endpoints de monitoreo ya expuestos por Notification.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/actuator/info").permitAll()
+                        // Solo servicios con el token interno; un JWT de usuario recibe 403.
+                        .requestMatchers(InternalServiceAuthenticationFilter.PATH_PREFIX + "**")
+                            .hasRole(InternalServiceAuthenticationFilter.ROLE)
+                        // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
+                        .requestMatchers("/notifications", "/notifications/**").hasRole("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .build();
     }

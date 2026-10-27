@@ -55,6 +55,10 @@ public class GatewaySecurityConfig {
                         .accessDeniedHandler(accessDeniedHandlers.getIfAvailable(AccessDeniedHandlerImpl::new)))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        // Los contratos son públicos solo cuando no se envían credenciales.
+                        .requestMatchers(request -> isOpenApiContract(request)
+                                && request.getHeader("Authorization") == null).permitAll()
+                        .requestMatchers("/openapi/auth", "/openapi/catalog").authenticated()
                         // Contratos de Auth: INT2-19, 20, 21, 22 y 26.
                         .requestMatchers(HttpMethod.POST,
                                 "/v1/auth/register",
@@ -64,15 +68,27 @@ public class GatewaySecurityConfig {
                                 "/v1/auth/verificacion/reenviar",
                                 "/v1/auth/password/recovery",
                                 "/v1/auth/password/reset").permitAll()
-                        // Consultas publicas definidas en INT2-33.
+                        // Consultas publicas de catalogo; solo lectura y rutas explicitas.
                         .requestMatchers(HttpMethod.GET,
-                                "/v1/catalog/campus", "/v1/catalog/categorias").permitAll()
+                                "/v1/catalog/campus", "/v1/catalog/categorias",
+                                "/v1/catalog/productos", "/v1/catalog/productos/*",
+                                "/v1/catalog/productos/*/ofertas").permitAll()
                         .requestMatchers(HttpMethod.HEAD,
-                                "/v1/catalog/campus", "/v1/catalog/categorias").permitAll()
+                                "/v1/catalog/campus", "/v1/catalog/categorias",
+                                "/v1/catalog/productos", "/v1/catalog/productos/*",
+                                "/v1/catalog/productos/*/ofertas").permitAll()
+                        // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
+                        .requestMatchers("/v1/notifications", "/v1/notifications/**").hasRole("SUPER_ADMIN")
                         // Solo un JWT validado con la llave publica autentica estas rutas.
                         .requestMatchers("/v1/**").authenticated()
                         // No hay rutas de proxy fuera de /v1; conservar sus errores 404.
                         .anyRequest().permitAll())
                 .build();
+    }
+
+    private static boolean isOpenApiContract(jakarta.servlet.http.HttpServletRequest request) {
+        String path = request.getContextPath() + request.getRequestURI();
+        return (path.equals("/openapi/auth") || path.equals("/openapi/catalog"))
+                && ("GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod()));
     }
 }

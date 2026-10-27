@@ -1,6 +1,6 @@
 // src/__tests__/cajero-escaner.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import EscanerQRScreen, { procesarCodigo } from '../app/(cajero)/escaner';
 import { fetchPedidosEntrantes } from '../services/ordenes';
@@ -8,9 +8,8 @@ import { getAccessToken } from '../services/httpClient';
 import { serializarQrRetiro } from '../services/qrRetiro';
 import { useIsFocused } from 'expo-router';
 import { useCameraPermissions } from 'expo-camera';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden, QrRetiro } from '../types/domain';
-
-const mockReplace = jest.fn();
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
@@ -21,11 +20,7 @@ jest.mock('../services/httpClient', () => {
   return { ...actual, getAccessToken: jest.fn() };
 });
 
-jest.mock('expo-router', () => ({
-  useIsFocused: jest.fn(() => true),
-  useRouter: jest.fn(() => ({ replace: mockReplace })),
-  useFocusEffect: jest.fn(),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 // expo-camera es un módulo nativo: en los tests se reemplaza por un View que
 // expone onBarcodeScanned para simular un escaneo, y el permiso queda mockeado.
@@ -84,12 +79,6 @@ const ordenYaEntregada: Orden = {
   codigoOrden: 'CC-9802',
   estado: 'entregado',
 };
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 async function renderizarEscaner(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
@@ -165,7 +154,7 @@ describe('Pantalla de escaneo de QR (cajero)', () => {
     mockGetAccessToken.mockReset();
     mockFetchPedidos.mockReset();
     requestPermission.mockReset();
-    mockReplace.mockClear();
+    limpiarRouter();
     mockUseIsFocused.mockReturnValue(true);
     mockUseCameraPermissions.mockReset();
     mockUseCameraPermissions.mockReturnValue([{ granted: true }, requestPermission]);
@@ -189,7 +178,7 @@ describe('Pantalla de escaneo de QR (cajero)', () => {
     const tree = await renderizarEscaner();
     await escanear(tree, contenidoValido);
 
-    expect(mockReplace).toHaveBeenCalledWith({
+    expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
       params: { pedido: 'o-1', estado: 'listo_para_retiro' },
     });

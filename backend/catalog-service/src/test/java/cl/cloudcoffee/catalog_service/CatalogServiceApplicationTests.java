@@ -15,7 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "management.health.rabbit.enabled=false")
 @AutoConfigureMockMvc
 class CatalogServiceApplicationTests extends ServiceJwtTests {
 
@@ -43,8 +43,11 @@ class CatalogServiceApplicationTests extends ServiceJwtTests {
     }
 
     @Test
-    void serviceNamespaceRequiresAuthentication() throws Exception {
-        mvc.perform(get("/catalog/productos"))
+    void publicProductListingDoesNotRequireAuthenticationWhileStaffInventoryRemainsProtected() throws Exception {
+        mvc.perform(get("/catalog/productos")
+                        .param("campusId", "11111111-1111-4111-8111-111111111111"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/catalog/cafeterias/44444444-4444-4444-8444-444444444444/ofertas"))
                 .andExpect(status().isUnauthorized());
     }
 

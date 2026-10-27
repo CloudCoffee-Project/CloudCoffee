@@ -17,12 +17,12 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import cl.cloudcoffee.catalog_service.dto.CampusResponse;
 import cl.cloudcoffee.catalog_service.dto.CategoryResponse;
 import cl.cloudcoffee.catalog_service.dto.ProductOfferResponse;
 import cl.cloudcoffee.catalog_service.dto.ProductResponse;
+import cl.cloudcoffee.catalog_service.dto.PublicProductDetailResponse;
 import cl.cloudcoffee.catalog_service.service.PublicCatalogQueryService;
 
 @Tag(name = "Catálogo", description = "Campus, categorías, productos y comparación de ofertas")
@@ -53,8 +53,7 @@ public class PublicCatalogController {
     }
 
     @Operation(operationId = "buscarProductos", summary = "Explorar y buscar productos por campus",
-            description = "Requiere JWT según la seguridad actual. Devuelve la página de productos disponibles en el campus. Conserva la serialización actual de Spring Data Page, incluidos content y metadatos. Un filtro sin coincidencias devuelve una página vacía.")
-    @SecurityRequirement(name = "bearerAuth")
+            description = "Consulta pública. Devuelve la página de productos disponibles en el campus. Conserva la serialización actual de Spring Data Page, incluidos content y metadatos. Un filtro sin coincidencias devuelve una página vacía. Si se envía un JWT, debe ser válido.")
     @ApiResponse(responseCode = "200", description = "Página de productos")
     @Parameters({
             @Parameter(name = "page", description = "Índice de página desde cero; los negativos se resuelven a cero", schema = @Schema(type = "integer", defaultValue = "0")),
@@ -73,9 +72,19 @@ public class PublicCatalogController {
         return queryService.findProducts(campusId, categoriaId, q, pageable);
     }
 
+    @Operation(operationId = "consultarDetallePublicoProducto", summary = "Consultar detalle público de un producto",
+            description = "Consulta pública. Solo devuelve productos activos; los productos inexistentes o inactivos responden 404.")
+    @ApiResponse(responseCode = "200", description = "Detalle público del producto")
+    @ApiResponse(responseCode = "404", description = "Producto activo no encontrado")
+    @GetMapping("/productos/{id}")
+    public PublicProductDetailResponse findProductById(
+            @Parameter(description = "UUID del producto", example = "33333333-3333-4333-8333-333333333333")
+            @PathVariable UUID id) {
+        return queryService.findActiveProduct(id);
+    }
+
     @Operation(operationId = "compararOfertas", summary = "Comparar ofertas de un producto por cafetería",
-            description = "Requiere JWT según la seguridad actual. Filtra ofertas AVAILABLE de cafeterías OPEN por producto y campus, ordenadas por precio ascendente; disponible indica stock mayor que cero. Si no hay ofertas coincidentes devuelve una lista vacía, incluso para identificadores inexistentes.")
-    @SecurityRequirement(name = "bearerAuth")
+            description = "Consulta pública. Filtra ofertas AVAILABLE de cafeterías OPEN por producto y campus, ordenadas por precio ascendente; disponible indica stock mayor que cero. Si no hay ofertas coincidentes devuelve una lista vacía, incluso para identificadores inexistentes. Si se envía un JWT, debe ser válido.")
     @ApiResponse(responseCode = "200", description = "Lista de ofertas")
     @GetMapping("/productos/{id}/ofertas")
     public List<ProductOfferResponse> findProductOffers(

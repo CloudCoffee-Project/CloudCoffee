@@ -65,12 +65,25 @@ class PagosMigrationTests extends JwtTestSupport {
 
     @Test
     void rechazaReferenciasDuplicadasDelMismoProveedor() {
-        UUID compra = insertarCompra("1500.00");
         String referencia = "SIM-" + UUID.randomUUID();
-        insertarPago(compra, "RECHAZADO", "1500.00", referencia);
+        insertarPago(insertarCompra("1500.00"), "RECHAZADO", "1500.00", referencia);
 
-        assertThatThrownBy(() -> insertarPago(compra, "PENDIENTE", "1500.00", referencia))
+        // Otra compra, para que solo choque la referencia y no la regla de un pago por compra.
+        UUID otraCompra = insertarCompra("1500.00");
+        assertThatThrownBy(() -> insertarPago(otraCompra, "PENDIENTE", "1500.00", referencia))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void unaCompraNoAdmiteUnSegundoPagoNiSiquieraTrasUnRechazo() {
+        // Contrato INT2-50 (#112): la base respalda la regla aunque se salte el servicio.
+        UUID compra = insertarCompra("1500.00");
+        insertarPago(compra, "RECHAZADO", "1500.00");
+
+        assertThatThrownBy(() -> insertarPago(compra, "PENDIENTE", "1500.00"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM pagos WHERE compra_id = ?", Integer.class, compra))
+                .isEqualTo(1);
     }
 
     private UUID insertarCompra(String monto) {

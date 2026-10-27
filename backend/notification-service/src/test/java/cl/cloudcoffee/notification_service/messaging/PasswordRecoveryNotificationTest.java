@@ -100,4 +100,22 @@ class PasswordRecoveryNotificationTest extends ServiceJwtTests {
         assertThat(response.payload()).doesNotContainKey("token");
         assertThat(response.errorDetail()).doesNotContain("token-antiguo");
     }
+
+    @Test
+    void eliminaCredencialesAnidadasDelPayloadYDelDetalleDeError() {
+        Map<String, Object> payload = Map.of(
+                "email", "user@cloudcoffee.cl",
+                "credentials", Map.of("password", "clave-super-secreta"),
+                "devices", java.util.List.of(Map.of("refresh_token", "refresh-secreto")));
+        NotificationHistory history = new NotificationHistory(UUID.randomUUID(),
+                "auth.recuperacion.solicitud-password.v1", "trace", payload, "FAILED",
+                "Fallo con clave-super-secreta y refresh-secreto");
+
+        NotificationHistoryResponse response = NotificationHistoryResponse.from(history);
+
+        assertThat(response.payload()).containsEntry("email", "user@cloudcoffee.cl")
+                .doesNotContainKeys("credentials");
+        assertThat(response.payload().get("devices").toString()).doesNotContain("refresh-secreto");
+        assertThat(response.errorDetail()).doesNotContain("clave-super-secreta", "refresh-secreto");
+    }
 }

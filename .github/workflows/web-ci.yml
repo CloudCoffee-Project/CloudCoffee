@@ -1,0 +1,107 @@
+name: Web CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detectar cambios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - name: Evaluar archivos modificados
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            web:
+              - 'web/**'
+              - '.github/workflows/web-ci.yml'
+
+  quality:
+    name: Typecheck, tests and build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Production build
+        env:
+          # VITE_* se incorpora al bundle: solo se permiten valores públicos.
+          VITE_APP_TITLE: CloudCoffee CI
+          VITE_API_BASE_URL: http://localhost:18080
+        run: npm run build
+
+  gate:
+    name: Compuerta CI web
+    needs: [changes, quality]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verificar resultado de los jobs
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+        run: |
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::No se pudieron evaluar los archivos modificados."
+            exit 1
+          fi
+
+          case "$QUALITY_RESULT" in
+            success)
+              echo "OK: las verificaciones de web pasaron."
+              ;;
+            skipped)
+              echo "OK: el PR no modifica web/, no hay nada que verificar."
+              ;;
+            failure)
+              echo "::error::Fallaron las verificaciones de web."
+              exit 1
+              ;;
+            cancelled)
+              echo "::error::Las verificaciones de web fueron canceladas."
+              exit 1
+              ;;
+            *)
+              echo "::error::Resultado inesperado: $QUALITY_RESULT"
+              exit 1
+              ;;
+          esac

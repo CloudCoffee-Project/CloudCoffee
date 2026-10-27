@@ -21,15 +21,8 @@ public class Compra {
     @Column(name = "monto_total", nullable = false, precision = 10, scale = 2)
     private BigDecimal montoTotal;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private EstadoCompra estado;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
-    @Column(name = "updated_at")
-    private Instant updatedAt;
 
     protected Compra() {}
 
@@ -40,27 +33,11 @@ public class Compra {
         }
         this.usuarioId = usuarioId;
         this.montoTotal = montoTotal;
-        this.estado = EstadoCompra.PENDIENTE_PAGO;
         this.createdAt = Instant.now();
-    }
-
-    /** Cierra la compra con el estado final indicado; solo una compra pendiente de pago cambia. */
-    public void cerrar(EstadoCompra destino) {
-        if (estado != EstadoCompra.PENDIENTE_PAGO || destino == EstadoCompra.PENDIENTE_PAGO) {
-            throw new IllegalStateException("La compra " + id + " no puede pasar de " + estado + " a " + destino);
-        }
-        this.estado = destino;
-        this.updatedAt = Instant.now();
-    }
-
-    public boolean estaPendienteDePago() {
-        return estado == EstadoCompra.PENDIENTE_PAGO;
     }
 
     public UUID getId() { return id; }
     public UUID getUsuarioId() { return usuarioId; }
     public BigDecimal getMontoTotal() { return montoTotal; }
-    public EstadoCompra getEstado() { return estado; }
     public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
 }

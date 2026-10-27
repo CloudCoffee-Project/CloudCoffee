@@ -43,6 +43,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# cobertura de pruebas (jest --coverage)
+coverage/
+
 example
 
 # generated native folders

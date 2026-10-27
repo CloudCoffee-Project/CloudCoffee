@@ -12,6 +12,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {"OPENAPI_ENABLED=true", "spring.rabbitmq.listener.simple.auto-startup=false",
@@ -25,16 +26,19 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(5);
+        assertThat(api.path("paths").size()).isEqualTo(6);
         assertThat(api.at("/paths/~1catalog~1cafeterias~1{cafeteriaId}~1ofertas/get/security/0/bearerAuth").isArray()).isTrue();
         assertThat(api.at("/servers/0/url").asText()).isEqualTo("/v1");
         assertThat(api.at("/paths/~1catalog~1campus/get/security").isMissingNode()).isTrue();
         assertThat(api.at("/paths/~1catalog~1categorias/get/security").isMissingNode()).isTrue();
         for (String path : new String[]{"/catalog/productos", "/catalog/productos/{id}/ofertas"}) {
-            assertThat(api.path("paths").path(path).at("/get/security/0/bearerAuth").isArray()).isTrue();
+            assertThat(api.path("paths").path(path).at("/get/security").isMissingNode()).isTrue();
             assertThat(api.path("paths").path(path).at("/get/responses/400/content/application~1problem+json/schema/$ref").asText())
                     .endsWith("/Problem");
         }
+        assertThat(api.at("/paths/~1catalog~1productos~1{id}/get/security").isMissingNode()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1productos~1{id}/get/responses/404/content/application~1problem+json/schema/$ref")
+                .asText()).endsWith("/Problem");
         var parameters = api.at("/paths/~1catalog~1productos/get/parameters");
         assertThat(parameters).hasSize(6);
         for (var parameter : parameters) {
@@ -81,8 +85,18 @@ class OpenApiAccessTests extends JwtTestSupport {
     }
 
     @Test
-    void enablingDocumentationDoesNotMakeBusinessRoutesPublic() throws Exception {
+    void invalidJwtAndWritesRemainProtectedWhilePublicReadRoutesAllowAnonymousRequests() throws Exception {
+        mvc.perform(get("/catalog/productos")
+                        .param("campusId", "11111111-1111-4111-8111-111111111111")
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas")
+                        .param("campusId", "11111111-1111-4111-8111-111111111111")
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
         mvc.perform(get("/catalog/productos"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/catalog/productos"))
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/v3/api-docs").header("Authorization", "Bearer malformed"))
                 .andExpect(status().isUnauthorized());

@@ -22,11 +22,10 @@ import { httpClient } from './httpClient';
 import type { Campus, Categoria, Oferta, Producto } from '../types/domain';
 
 // AsyncStorage no existe como módulo nativo en Jest; se mockea su superficie.
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
 const mockGetItem = AsyncStorage.getItem as unknown as jest.Mock;
 const mockSetItem = AsyncStorage.setItem as unknown as jest.Mock;

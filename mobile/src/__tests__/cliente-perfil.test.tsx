@@ -1,12 +1,13 @@
 // src/__tests__/cliente-perfil.test.tsx
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import PerfilScreen, { validarPerfil } from '../app/(cliente)/perfil';
 import { actualizarPerfil, obtenerPerfil } from '../services/auth';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../services/httpClient';
+import { limpiarRouter, pulsar, routerMock, textoDe } from '../test-utils';
 import type { PerfilUsuario } from '../types/domain';
 
 jest.mock('../services/auth', () => ({
@@ -14,9 +15,7 @@ jest.mock('../services/auth', () => ({
   actualizarPerfil: jest.fn(),
 }));
 
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({ push: jest.fn() })),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 jest.mock('../context/AuthContext', () => ({
   useAuth: jest.fn(() => ({ cerrarSesion: jest.fn() })),
@@ -37,12 +36,6 @@ const perfilMock: PerfilUsuario = {
   verificado: true,
 };
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 async function renderizarPerfil(): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
   await act(async () => {
@@ -57,13 +50,6 @@ async function irAEdicion(tree: ReactTestRenderer): Promise<void> {
   const btn = tree.root.findByProps({ testID: 'editar-perfil' });
   await act(async () => {
     btn.props.onPress();
-  });
-}
-
-async function pulsar(tree: ReactTestRenderer, testID: string): Promise<void> {
-  const nodo = tree.root.findByProps({ testID });
-  await act(async () => {
-    nodo.props.onPress();
   });
 }
 
@@ -114,7 +100,8 @@ describe('Pantalla Mi Perfil', () => {
     mockActualizarPerfil.mockReset();
     mockUseAuth.mockReset();
     mockUseRouter.mockReset();
-    mockUseRouter.mockReturnValue({ push: jest.fn() });
+    mockUseRouter.mockReturnValue(routerMock);
+    limpiarRouter();
     mockUseAuth.mockReturnValue({ cerrarSesion: jest.fn() });
   });
 
@@ -229,26 +216,22 @@ describe('Pantalla Mi Perfil', () => {
 
   it('navega a cambiar-contrasena desde el botón del mockup', async () => {
     mockObtenerPerfil.mockResolvedValue(perfilMock);
-    const mockPush = jest.fn();
-    mockUseRouter.mockReturnValue({ push: mockPush });
 
     const tree = await renderizarPerfil();
     await pulsar(tree, 'cambiar-contrasena');
 
-    expect(mockPush).toHaveBeenCalledWith('/(cliente)/cambiar-contrasena');
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/cambiar-contrasena');
 
     act(() => tree.unmount());
   });
 
   it('navega a mis-seguimientos desde el botón del mockup', async () => {
     mockObtenerPerfil.mockResolvedValue(perfilMock);
-    const mockPush = jest.fn();
-    mockUseRouter.mockReturnValue({ push: mockPush });
 
     const tree = await renderizarPerfil();
     await pulsar(tree, 'mis-seguimientos');
 
-    expect(mockPush).toHaveBeenCalledWith('/(cliente)/mis-seguimientos');
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/mis-seguimientos');
 
     act(() => tree.unmount());
   });

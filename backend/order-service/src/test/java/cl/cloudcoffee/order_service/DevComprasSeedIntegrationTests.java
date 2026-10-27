@@ -38,12 +38,12 @@ class DevComprasSeedIntegrationTests extends JwtTestSupport {
 
     @Test
     void compradorSimulaElPagoDeSuCompraSembrada() throws Exception {
-        mvc.perform(post("/compras/{id}/pago/simulacion", COMPRA_DEL_COMPRADOR)
+        mvc.perform(post("/compras/{id}/pago", COMPRA_DEL_COMPRADOR)
                         .header("Authorization", "Bearer " + comprador())
-                        .header("Idempotency-Key", "seed-dev-1")
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"escenario\":\"APROBADO\"}"))
+                        .header("Idempotency-Key", java.util.UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"escenario\":\"aprobar\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.monto").value(3700.00));
+                .andExpect(jsonPath("$.montoTotal").value(3700));
     }
 
     @Test

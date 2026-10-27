@@ -26,11 +26,12 @@
 // la revocación las simula el mismo backend.
 
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import { Text as RNText, TextInput } from 'react-native';
+import type { ReactTestRenderer } from 'react-test-renderer';
+import { Text as RNText } from 'react-native';
 import type { ReactElement } from 'react';
 import { AxiosError } from 'axios';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
+import { useLocalSearchParams } from 'expo-router';
 
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import LoginScreen from '../app/(auth)/login';
@@ -43,11 +44,13 @@ import { eliminarRegistroPush } from '../services/notificacionesPush';
 import { leerSesion } from '../services/sessionStorage';
 import { obtenerPerfil } from '../services/auth';
 import { listarProductos } from '../services/catalog';
+import { escribirPorIndice, pulsarPorTexto, routerMock, textoDe } from '../test-utils';
 import type { LoginResponse, Producto } from '../types/domain';
 
 const mockRequestNewTokens = requestNewTokens as unknown as jest.Mock;
 const mockObtenerPerfil = obtenerPerfil as unknown as jest.Mock;
 const mockEliminarRegistroPush = eliminarRegistroPush as unknown as jest.Mock;
+const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
 jest.mock('../services/authRefresh', () => ({
   requestNewTokens: jest.fn(),
@@ -67,44 +70,26 @@ jest.mock('../services/auth', () => ({
 
 // SecureStore es nativo: se reemplaza por un mapa en memoria, que es lo que
 // permite afirmar que al cerrar sesión no queda ningún token en el dispositivo.
-jest.mock('expo-secure-store', () => {
-  const store = new Map<string, string>();
-  return {
-    __reset: () => store.clear(),
-    setItemAsync: jest.fn(async (key: string, value: string) => {
-      store.set(key, value);
-    }),
-    getItemAsync: jest.fn(async (key: string) => store.get(key) ?? null),
-    deleteItemAsync: jest.fn(async (key: string) => {
-      store.delete(key);
-    }),
-  };
-});
+jest.mock('expo-secure-store', () => jest.requireActual('../test-utils').crearMockSecureStore());
 
 const secureStore = jest.requireMock('expo-secure-store') as { __reset: () => void };
 
 // AsyncStorage no existe como módulo nativo en Jest. services/catalog lo usa
 // para la sede seleccionada, y acá interesa que la lectura devuelva null: este
 // flujo no pasa por la pantalla de campus.
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
 const mockParams: Record<string, string> = {};
-const mockReplace = jest.fn();
-const mockPush = jest.fn();
 
-jest.mock('expo-router', () => ({
-  useRouter: jest.fn(() => ({ replace: mockReplace, push: mockPush })),
-  useLocalSearchParams: jest.fn(() => mockParams),
-  useFocusEffect: jest.fn(),
-}));
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
-}));
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 // ---------------------------------------------------------------------------
 // Backend simulado del auth-service
@@ -450,12 +435,6 @@ const adapter: AxiosAdapter = async (config) => {
 // Utilidades de render y de interacción (mismo estilo que cajero-flujo-completo)
 // ---------------------------------------------------------------------------
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 // Sonde la sesión del AuthContext: sin esto no se puede afirmar que el logout
 // cerró la sesión, solo que se llamó al botón.
 function Sonda() {
@@ -490,35 +469,6 @@ async function renderizarConAuth(elemento: ReactElement): Promise<ReactTestRende
   return tree;
 }
 
-async function escribir(tree: ReactTestRenderer, indice: number, valor: string): Promise<void> {
-  const campos = tree.root.findAllByType(TextInput);
-  await act(async () => {
-    campos[indice].props.onChangeText(valor);
-  });
-}
-
-// Las pantallas de auth no tienen testID, así que el botón se localiza por su
-// texto. Se toma el nodo más profundo que renderiza ese texto (el <Text>) y se
-// sube por los padres hasta el primero que tenga onPress: en RN 0.86 Pressable es
-// un memo, así que comparar por tipo de componente no funciona y el recorrido
-// por los padres sí.
-async function pulsarPorTexto(tree: ReactTestRenderer, texto: string): Promise<void> {
-  const candidatos = tree.root.findAll((nodo) => textoDe(nodo).trim() === texto);
-  let nodo: ReactTestInstance | null = candidatos[candidatos.length - 1] ?? null;
-
-  while (nodo && typeof nodo.props?.onPress !== 'function') {
-    nodo = nodo.parent;
-  }
-
-  if (!nodo) {
-    throw new Error(`No se encontró un botón con el texto "${texto}"`);
-  }
-
-  await act(async () => {
-    nodo.props.onPress();
-  });
-}
-
 function pulsarPorTestID(tree: ReactTestRenderer, testID: string): Promise<void> {
   const boton = tree.root.findByProps({ testID });
   return act(async () => {
@@ -536,17 +486,17 @@ function sesionEn(tree: ReactTestRenderer): string {
 async function crearCuentaVerificada(): Promise<void> {
   const registro = await renderizarConAuth(<RegistroScreen />);
 
-  await escribir(registro, 0, 'Ana');
-  await escribir(registro, 1, 'Pérez');
-  await escribir(registro, 2, CORREO);
-  await escribir(registro, 3, '+56 9 1234 5678');
-  await escribir(registro, 4, CLAVE);
-  await escribir(registro, 5, CLAVE);
+  await escribirPorIndice(registro, 0, 'Ana');
+  await escribirPorIndice(registro, 1, 'Pérez');
+  await escribirPorIndice(registro, 2, CORREO);
+  await escribirPorIndice(registro, 3, '+56 9 1234 5678');
+  await escribirPorIndice(registro, 4, CLAVE);
+  await escribirPorIndice(registro, 5, CLAVE);
   await pulsarPorTexto(registro, 'Crear Cuenta');
 
   // El registro navegó a verificar-correo con el email en los params: se sigue
   // el recorrido con esos params, como haría expo-router.
-  expect(mockReplace).toHaveBeenCalledWith({
+  expect(routerMock.replace).toHaveBeenCalledWith({
     pathname: '/(auth)/verificar-correo',
     params: { email: CORREO },
   });
@@ -554,7 +504,7 @@ async function crearCuentaVerificada(): Promise<void> {
 
   mockParams.email = CORREO;
   const verificacion = await renderizarConAuth(<VerificarCorreoScreen />);
-  await escribir(verificacion, 0, TOKEN_VERIFICACION);
+  await escribirPorIndice(verificacion, 0, TOKEN_VERIFICACION);
   await pulsarPorTexto(verificacion, 'Confirmar Correo');
 
   const usuario = backend.usuarios.get(CORREO);
@@ -565,8 +515,8 @@ async function crearCuentaVerificada(): Promise<void> {
 async function iniciarSesionEnPantalla(): Promise<ReactTestRenderer> {
   const login = await renderizarConAuth(<LoginScreen />);
 
-  await escribir(login, 0, CORREO);
-  await escribir(login, 1, CLAVE);
+  await escribirPorIndice(login, 0, CORREO);
+  await escribirPorIndice(login, 1, CLAVE);
   await pulsarPorTexto(login, 'Ingresar');
 
   return login;
@@ -580,6 +530,9 @@ describe('Flujo completo de autenticación (INT4-25)', () => {
     httpClient.defaults.adapter = adapter as AxiosAdapter;
     jest.clearAllMocks();
     mockEliminarRegistroPush.mockClear();
+    // expo-router: la pantalla lee los params de la ruta desde este objeto, que
+    // el propio test va completando al simular la navegación entre pantallas.
+    mockUseLocalSearchParams.mockReturnValue(mockParams);
     // El almacén del dispositivo se limpia entre tests: si quedara un par de
     // tokens, el AuthContext los restauraría al montar y la partida sería falsa.
     secureStore.__reset();
@@ -642,8 +595,8 @@ describe('Flujo completo de autenticación (INT4-25)', () => {
     await crearCuentaVerificada();
 
     const login = await renderizarConAuth(<LoginScreen />);
-    await escribir(login, 0, `  ${CORREO.toUpperCase()}  `);
-    await escribir(login, 1, CLAVE);
+    await escribirPorIndice(login, 0, `  ${CORREO.toUpperCase()}  `);
+    await escribirPorIndice(login, 1, CLAVE);
     await pulsarPorTexto(login, 'Ingresar');
 
     expect(backend.llamadas).toContain('POST /v1/auth/login');
@@ -654,12 +607,12 @@ describe('Flujo completo de autenticación (INT4-25)', () => {
   it('no deja iniciar sesión con la cuenta sin verificar y muestra el motivo', async () => {
     // El backend exige verificar el correo antes del primer login (403).
     const registro = await renderizarConAuth(<RegistroScreen />);
-    await escribir(registro, 0, 'Ana');
-    await escribir(registro, 1, 'Pérez');
-    await escribir(registro, 2, CORREO);
-    await escribir(registro, 3, '+56 9 1234 5678');
-    await escribir(registro, 4, CLAVE);
-    await escribir(registro, 5, CLAVE);
+    await escribirPorIndice(registro, 0, 'Ana');
+    await escribirPorIndice(registro, 1, 'Pérez');
+    await escribirPorIndice(registro, 2, CORREO);
+    await escribirPorIndice(registro, 3, '+56 9 1234 5678');
+    await escribirPorIndice(registro, 4, CLAVE);
+    await escribirPorIndice(registro, 5, CLAVE);
     await pulsarPorTexto(registro, 'Crear Cuenta');
     act(() => registro.unmount());
 
@@ -677,8 +630,8 @@ describe('Flujo completo de autenticación (INT4-25)', () => {
     await crearCuentaVerificada();
 
     const login = await renderizarConAuth(<LoginScreen />);
-    await escribir(login, 0, CORREO);
-    await escribir(login, 1, 'clave-malo');
+    await escribirPorIndice(login, 0, CORREO);
+    await escribirPorIndice(login, 1, 'clave-malo');
     await pulsarPorTexto(login, 'Ingresar');
 
     expect(sesionEn(login)).toBe('sin-sesion');

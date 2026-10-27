@@ -9,13 +9,14 @@
 // acción en vuelo deshabilita los botones para no repetirse; y el resultado
 // (éxito con recarga del historial, o error del backend) se muestra en pantalla.
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 
 import MisComprasScreen from '../app/(cliente)/mis-compras';
 import { cancelarCompra, confirmarCompra, listarCompras } from '../services/compras';
 import { cancelarOrden, confirmarOrden } from '../services/ordenes';
 import { useFocusEffect } from 'expo-router';
 import { ApiError } from '../services/httpClient';
+import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Compra, Orden } from '../types/domain';
 
 jest.mock('../services/compras', () => ({
@@ -29,21 +30,12 @@ jest.mock('../services/ordenes', () => ({
   cancelarOrden: jest.fn(),
 }));
 
-const mockRouter = { push: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
-  useRouter: jest.fn(() => mockRouter),
-}));
-
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 const mockListar = listarCompras as unknown as jest.Mock;
 const mockConfirmarCompra = confirmarCompra as unknown as jest.Mock;
@@ -75,12 +67,6 @@ function compra(id: string, sobre: Partial<Compra> = {}): Compra {
   };
 }
 
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
-
 // Renderiza la pantalla y ejecuta el callback que el mock de useFocusEffect
 // capturó (equivale a que la pantalla gane foco y cargue el historial).
 async function renderizarMisCompras(): Promise<ReactTestRenderer> {
@@ -105,7 +91,7 @@ beforeEach(() => {
   mockConfirmarOrden.mockReset();
   mockCancelarOrden.mockReset();
   mockUseFocusEffect.mockReset();
-  mockRouter.push.mockClear();
+  limpiarRouter();
   mockConfirmarCompra.mockResolvedValue({});
   mockCancelarCompra.mockResolvedValue({});
   mockConfirmarOrden.mockResolvedValue({});
@@ -184,7 +170,7 @@ describe('pantalla de Mis Compras', () => {
       boton.props.onPress();
     });
 
-    expect(mockRouter.push).toHaveBeenCalledWith({
+    expect(routerMock.push).toHaveBeenCalledWith({
       pathname: '/(cliente)/orden/[id]',
       params: { id: 'orden-c1', estado: 'entregado' },
     });
@@ -198,7 +184,7 @@ describe('pantalla de Mis Compras', () => {
     const tree = await renderizarMisCompras();
 
     expect(tree.root.findAllByProps({ testID: 'boleta-orden-orden-c1' })).toHaveLength(0);
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
 
     act(() => tree.unmount());
   });
@@ -209,7 +195,10 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
   it('confirma la compra completa y recarga el historial con el estado nuevo', async () => {
     mockListar
       .mockResolvedValueOnce([
-        compra('c1', { estado: 'reservando', ordenes: [orden('c1', { estado: 'reservando' })] }),
+        compra('c1', {
+          estado: 'revision_requerida',
+          ordenes: [orden('c1', { estado: 'revision_requerida' })],
+        }),
       ])
       .mockResolvedValue([
         compra('c1', { estado: 'pagado', ordenes: [orden('c1', { estado: 'pagado' })] }),
@@ -217,7 +206,7 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
 
     const tree = await renderizarMisCompras();
     expect(textoDe(tree.root.findByProps({ testID: 'compra-item-compra-c1' }))).toContain(
-      '🔵 Reservando'
+      '🟡 Requiere revisión'
     );
 
     await act(async () => {
@@ -242,7 +231,7 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
   });
 
   it('cancelar la compra pide confirmación en pantalla y solo después llama al backend', async () => {
-    mockListar.mockResolvedValue([compra('c1', { estado: 'reservando' })]);
+    mockListar.mockResolvedValue([compra('c1', { estado: 'revision_requerida' })]);
 
     const tree = await renderizarMisCompras();
 
@@ -301,10 +290,8 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
       0
     );
 
-    // En revisión y pendiente de pago: solo cancelar.
-    expect(tree.root.findAllByProps({ testID: 'compra-confirmar-compra-revision' })).toHaveLength(
-      0
-    );
+    // En revisión se puede confirmar o cancelar; en pendiente de pago solo cancelar.
+    expect(tree.root.findByProps({ testID: 'compra-confirmar-compra-revision' })).toBeDefined();
     expect(tree.root.findByProps({ testID: 'compra-cancelar-compra-revision' })).toBeDefined();
     expect(tree.root.findAllByProps({ testID: 'compra-confirmar-compra-pendiente' })).toHaveLength(
       0
@@ -319,7 +306,7 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
       compra('c1', {
         estado: 'pendiente_pago',
         ordenes: [
-          orden('a', { codigoOrden: 'ORD-A', estado: 'reservando' }),
+          orden('a', { codigoOrden: 'ORD-A', estado: 'revision_requerida' }),
           orden('b', { codigoOrden: 'ORD-B', estado: 'pagado' }),
         ],
       }),
@@ -327,7 +314,7 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
 
     const tree = await renderizarMisCompras();
 
-    // La orden reservando sí se puede confirmar; la que ya está pagada no.
+    // La orden en revisión sí se puede confirmar; la que ya está pagada no.
     await act(async () => {
       tree.root.findByProps({ testID: 'orden-confirmar-orden-a' }).props.onPress();
     });
@@ -344,15 +331,15 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
   it('cancela un pedido puntual con su propia confirmación', async () => {
     mockListar.mockResolvedValue([
       compra('c1', {
-        estado: 'reservando',
-        ordenes: [orden('a', { codigoOrden: 'ORD-A', estado: 'reservando' })],
+        estado: 'revision_requerida',
+        ordenes: [orden('a', { codigoOrden: 'ORD-A', estado: 'revision_requerida' })],
       }),
     ]);
 
     const tree = await renderizarMisCompras();
 
     // La orden ya pagada de otra compra no tiene acciones (arriba lo cubre el
-    // caso de la orden pagada); acá la reservando sí.
+    // caso de la orden pagada); acá la de revisión sí.
     await act(async () => {
       tree.root.findByProps({ testID: 'orden-cancelar-orden-a' }).props.onPress();
     });
@@ -372,7 +359,7 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
   });
 
   it('muestra el error del backend y no recarga si la acción falla', async () => {
-    mockListar.mockResolvedValue([compra('c1', { estado: 'reservando' })]);
+    mockListar.mockResolvedValue([compra('c1', { estado: 'revision_requerida' })]);
     mockConfirmarCompra.mockRejectedValue(new ApiError('No se puede confirmar aún', 409));
 
     const tree = await renderizarMisCompras();
@@ -396,7 +383,7 @@ describe('confirmar y cancelar desde Mis Compras (INT4-37)', () => {
   });
 
   it('con la acción en vuelo el botón se deshabilita y no se repite', async () => {
-    mockListar.mockResolvedValue([compra('c1', { estado: 'reservando' })]);
+    mockListar.mockResolvedValue([compra('c1', { estado: 'revision_requerida' })]);
     // Promesa pendiente: el test controla cuándo termina la llamada.
     let terminar!: () => void;
     mockConfirmarCompra.mockImplementation(

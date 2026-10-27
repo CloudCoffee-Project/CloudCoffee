@@ -26,20 +26,12 @@
 // mismo criterio que el detalle, para que comparar no cambie de significado
 // según la pantalla.
 //
-// Diseño: identidad visual del rol cliente (fondo #FAF7F2, azul #0052CC,
-// acentos amarillos y bordes cálidos) replicada del mockup web.
+// Diseño: identidad visual del rol cliente (fondo crema, azul de acción,
+// acentos amarillos y bordes cálidos) replicada del mockup web. Todos los
+// colores y medidas salen de src/theme/tokens.ts (INT4-107).
 
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -55,11 +47,19 @@ import {
 } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import { useCarrito } from '../../context/CarritoContext';
+import { Esqueleto, EsqueletoPulso } from '../../components/Esqueleto';
+import { tokens } from '../../theme/tokens';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
 
 // Filtro de "todas las categorías". No es un id del catálogo: es el valor del
 // estado local que significa "sin filtro", por eso vive acá y no en domain.ts.
 const TODAS_CATEGORIAS = 'todos';
+
+// Anchos y alto de los chips de la silueta de categorías (INT4-108). Son
+// medidas de layout de esta pantalla, no contenido real: solo le dan al
+// esqueleto el ritmo de la fila de pills que va a aparecer.
+const ANCHOS_CHIPS_ESQUELETO = [72, 92, 64, 84, 76];
+const ALTO_CHIP_ESQUELETO = 34;
 
 // Distancia de Levenshtein entre dos cadenas, para tolerar errores de tipeo en
 // la búsqueda. Se usa sobre los datos reales que devuelve el servicio, nunca
@@ -215,9 +215,67 @@ export default function CatalogoProductosScreen() {
     );
   } else if (productos === null) {
     contenido = (
-      <View style={styles.centrado} testID="catalogo-cargando">
-        <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      // INT4-108: la silueta repite la tarjeta real (ícono, nombre,
+      // descripción y las ofertas de cada cafetería) para que la lista no
+      // aparezca de golpe cuando responde el catálogo.
+      <ScrollView
+        contentContainerStyle={styles.listaContent}
+        showsVerticalScrollIndicator={false}
+        testID="catalogo-esqueleto"
+      >
+        <EsqueletoPulso style={styles.esqueletoLista}>
+          {[0, 1, 2].map((indice) => (
+            <View key={indice} style={styles.productCard}>
+              <View style={styles.productHeader}>
+                <Esqueleto
+                  ancho={tokens.tamanos.chipIcono}
+                  alto={tokens.tamanos.chipIcono}
+                  radio={tokens.radios.md}
+                  fuerte
+                />
+                <View style={styles.productDetails}>
+                  <Esqueleto
+                    ancho="55%"
+                    alto={tokens.tipografia.tamano.boton}
+                    radio={tokens.radios.xs}
+                  />
+                  <Esqueleto
+                    ancho="90%"
+                    alto={tokens.tipografia.tamano.detalle}
+                    radio={tokens.radios.xs}
+                    style={styles.esqueletoLinea}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.offerList}>
+                {[0, 1].map((oferta) => (
+                  <View key={oferta} style={styles.offerRow}>
+                    <View style={styles.offerInfo}>
+                      <Esqueleto
+                        ancho="45%"
+                        alto={tokens.tipografia.tamano.detalle}
+                        radio={tokens.radios.xs}
+                      />
+                      <Esqueleto
+                        ancho="30%"
+                        alto={tokens.tipografia.tamano.cuerpo}
+                        radio={tokens.radios.xs}
+                        style={styles.esqueletoLinea}
+                      />
+                    </View>
+                    <Esqueleto
+                      ancho="22%"
+                      alto={tokens.tipografia.tamano.detalle}
+                      radio={tokens.radios.xs}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))}
+        </EsqueletoPulso>
+      </ScrollView>
     );
   } else {
     contenido = (
@@ -343,7 +401,29 @@ export default function CatalogoProductosScreen() {
       </View>
 
       {/* Filtro por categorías */}
-      {categorias !== null && categorias.length > 0 && (
+      {categorias === null && errorCarga === null ? (
+        // INT4-108: mientras llegan las categorías se dibujan sus pills
+        // vacías; el esqueleto de productos sigue visible debajo.
+        <View style={styles.categoriesContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.esqueletoChips}
+            testID="catalogo-esqueleto-categorias"
+          >
+            <EsqueletoPulso style={styles.esqueletoFilaChips}>
+              {ANCHOS_CHIPS_ESQUELETO.map((ancho, indice) => (
+                <Esqueleto
+                  key={indice}
+                  ancho={ancho}
+                  alto={ALTO_CHIP_ESQUELETO}
+                  radio={tokens.radios.pildora}
+                />
+              ))}
+            </EsqueletoPulso>
+          </ScrollView>
+        </View>
+      ) : categorias !== null && categorias.length > 0 ? (
         <View style={styles.categoriesContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <Pressable
@@ -380,7 +460,7 @@ export default function CatalogoProductosScreen() {
             ))}
           </ScrollView>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.lista}>{contenido}</View>
     </SafeAreaView>
@@ -390,268 +470,276 @@ export default function CatalogoProductosScreen() {
 const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
-    backgroundColor: '#FAF7F2',
+    backgroundColor: tokens.colores.fondo,
   },
   topBar: {
-    margin: 16,
-    marginBottom: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFE9DE',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    margin: tokens.espaciado.xxxl,
+    marginBottom: tokens.espaciado.lg,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.xxxl,
+    paddingHorizontal: tokens.espaciado.xxl,
+    paddingVertical: tokens.espaciado.xl,
+    ...tokens.sombras.sutil,
   },
   campusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: tokens.espaciado.lg,
   },
   campusIconMini: {
-    width: 38,
-    height: 38,
-    backgroundColor: '#FFF8DF',
-    borderWidth: 1,
-    borderColor: '#F3DC87',
-    borderRadius: 10,
+    width: tokens.tamanos.chipIcono,
+    height: tokens.tamanos.chipIcono,
+    backgroundColor: tokens.colores.amarilloFondo,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.amarilloBorde,
+    borderRadius: tokens.radios.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
   campusIconText: {
-    fontSize: 17,
+    fontSize: tokens.tipografia.tamano.subtitulo,
   },
   campusTextInfo: {
     flex: 1,
   },
   campusLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#6B7280',
-    letterSpacing: 0.3,
+    fontSize: tokens.tipografia.tamano.pie,
+    fontWeight: tokens.tipografia.peso.negrita,
+    color: tokens.colores.textoNeutro,
+    letterSpacing: tokens.tipografia.tracking.amplio,
   },
   campusName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0052CC',
+    fontSize: tokens.tipografia.tamano.cuerpoMedio,
+    fontWeight: tokens.tipografia.peso.extranegrita,
+    color: tokens.colores.azul,
   },
   campusLink: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0052CC',
+    fontSize: tokens.tipografia.tamano.detalle,
+    fontWeight: tokens.tipografia.peso.negrita,
+    color: tokens.colores.azul,
     textDecorationLine: 'underline',
   },
   searchContainer: {
-    marginHorizontal: 16,
-    marginBottom: 10,
+    marginHorizontal: tokens.espaciado.xxxl,
+    marginBottom: tokens.espaciado.lg,
   },
   searchInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#EFE9DE',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingRight: 40,
-    fontSize: 14,
-    color: '#1D2433',
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.medio,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.xl,
+    paddingHorizontal: tokens.espaciado.xxxl,
+    paddingVertical: tokens.espaciado.xl,
+    // Hueco del botón de limpiar la búsqueda (posición de layout, regla 3).
+    paddingRight: tokens.espaciado['6xl'],
+    fontSize: tokens.tipografia.tamano.cuerpoMedio,
+    color: tokens.colores.tintaCliente,
   },
   clearButton: {
     position: 'absolute',
-    right: 14,
+    right: tokens.espaciado.xxl,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
   },
   clearButtonText: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontWeight: '700',
+    color: tokens.colores.textoNeutro,
+    fontSize: tokens.tipografia.tamano.boton,
+    fontWeight: tokens.tipografia.peso.negrita,
   },
   categoriesContainer: {
-    marginBottom: 10,
+    marginBottom: tokens.espaciado.lg,
+  },
+  // Silueta de la fila de chips mientras cargan las categorías (INT4-108).
+  esqueletoChips: {
+    paddingHorizontal: tokens.espaciado.xxxl,
+  },
+  esqueletoFilaChips: {
+    flexDirection: 'row',
+    gap: tokens.espaciado.md,
   },
   chip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFE9DE',
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginLeft: 16,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.pildora,
+    paddingHorizontal: tokens.espaciado.xxxl,
+    paddingVertical: tokens.espaciado.md,
+    marginLeft: tokens.espaciado.xxxl,
   },
   chipActivo: {
-    backgroundColor: '#0052CC',
-    borderColor: '#0052CC',
+    backgroundColor: tokens.colores.azul,
+    borderColor: tokens.colores.azul,
   },
   chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
+    fontSize: tokens.tipografia.tamano.cuerpo,
+    fontWeight: tokens.tipografia.peso.semibold,
+    color: tokens.colores.textoGris,
   },
   chipTextActivo: {
-    color: '#FFFFFF',
+    color: tokens.colores.superficie,
   },
   lista: {
     flex: 1,
   },
   listaContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 14,
+    paddingHorizontal: tokens.espaciado.xxxl,
+    paddingBottom: tokens.espaciado['3xl'],
+    gap: tokens.espaciado.xxl,
+  },
+  // Silueta de las tarjetas de producto mientras carga la lista (INT4-108).
+  esqueletoLista: {
+    gap: tokens.espaciado.xxl,
+  },
+  esqueletoLinea: {
+    marginTop: tokens.espaciado.xxs,
   },
   productCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFE9DE',
-    borderRadius: 16,
-    padding: 14,
-    gap: 12,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.xxl,
+    padding: tokens.espaciado.xxl,
+    gap: tokens.espaciado.xl,
   },
   productHeader: {
     flexDirection: 'row',
-    gap: 10,
+    gap: tokens.espaciado.lg,
   },
   productIconContainer: {
-    width: 38,
-    height: 38,
-    backgroundColor: '#FFF8DF',
-    borderWidth: 1,
-    borderColor: '#F3DC87',
-    borderRadius: 10,
+    width: tokens.tamanos.chipIcono,
+    height: tokens.tamanos.chipIcono,
+    backgroundColor: tokens.colores.amarilloFondo,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.amarilloBorde,
+    borderRadius: tokens.radios.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
   productIconText: {
-    fontSize: 18,
+    fontSize: tokens.tipografia.tamano.subtitulo,
   },
   productDetails: {
     flex: 1,
   },
   productTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0052CC',
+    fontSize: tokens.tipografia.tamano.boton,
+    fontWeight: tokens.tipografia.peso.negrita,
+    color: tokens.colores.azul,
   },
   productDescription: {
-    fontSize: 12,
-    color: '#4B5563',
-    lineHeight: 16,
-    marginTop: 2,
+    fontSize: tokens.tipografia.tamano.detalle,
+    color: tokens.colores.textoGris,
+    lineHeight: tokens.tipografia.interlineado.normal,
+    marginTop: tokens.espaciado.xxs,
   },
   offerList: {
-    borderTopWidth: 1,
-    borderTopColor: '#EFE9DE',
-    paddingTop: 10,
-    gap: 8,
+    borderTopWidth: tokens.grosores.fino,
+    borderTopColor: tokens.colores.bordeCalido,
+    paddingTop: tokens.espaciado.lg,
+    gap: tokens.espaciado.md,
   },
   offerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FAF7F2',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
+    backgroundColor: tokens.colores.fondo,
+    borderRadius: tokens.radios.md,
+    paddingHorizontal: tokens.espaciado.xl,
+    paddingVertical: tokens.espaciado.lg,
+    gap: tokens.espaciado.lg,
   },
   offerInfo: {
     flex: 1,
   },
   offerCafeName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1D2433',
+    fontSize: tokens.tipografia.tamano.detalle,
+    fontWeight: tokens.tipografia.peso.negrita,
+    color: tokens.colores.tintaCliente,
   },
   offerPrecio: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0052CC',
-    marginTop: 2,
+    fontSize: tokens.tipografia.tamano.cuerpo,
+    fontWeight: tokens.tipografia.peso.extranegrita,
+    color: tokens.colores.azul,
+    marginTop: tokens.espaciado.xxs,
   },
   offerStock: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: tokens.tipografia.tamano.detalle,
+    fontWeight: tokens.tipografia.peso.negrita,
   },
   offerStockDisponible: {
-    color: '#15803D',
+    color: tokens.colores.disponible,
   },
   offerStockAgotado: {
-    color: '#B42318',
+    color: tokens.colores.agotado,
   },
   noOfertas: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: tokens.tipografia.tamano.detalle,
+    color: tokens.colores.textoNeutro,
     textAlign: 'center',
   },
-  centrado: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
   tarjetaError: {
-    marginHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFE9DE',
-    borderRadius: 18,
-    padding: 22,
+    marginHorizontal: tokens.espaciado.xxxl,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.xxxl,
+    padding: tokens.espaciado['22'],
     alignItems: 'center',
-    gap: 8,
+    gap: tokens.espaciado.md,
   },
   errorIcono: {
-    fontSize: 30,
+    fontSize: tokens.tipografia.tamano.iconoMedio,
   },
   errorTitulo: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1D2433',
+    fontSize: tokens.tipografia.tamano.boton,
+    fontWeight: tokens.tipografia.peso.extranegrita,
+    color: tokens.colores.tintaCliente,
   },
   errorMensaje: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: tokens.tipografia.tamano.cuerpo,
+    color: tokens.colores.textoNeutro,
     textAlign: 'center',
   },
   btnReintentar: {
-    marginTop: 8,
-    backgroundColor: '#0052CC',
-    paddingVertical: 11,
-    paddingHorizontal: 26,
-    borderRadius: 12,
+    marginTop: tokens.espaciado.md,
+    backgroundColor: tokens.colores.azul,
+    paddingVertical: tokens.espaciado.xl,
+    paddingHorizontal: tokens.espaciado['3xl'],
+    borderRadius: tokens.radios.lg,
   },
   btnReintentarTexto: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    color: tokens.colores.superficie,
+    fontSize: tokens.tipografia.tamano.cuerpoMedio,
+    fontWeight: tokens.tipografia.peso.negrita,
   },
   btnPresionado: {
-    opacity: 0.85,
+    opacity: tokens.estados.presionado,
   },
   tarjetaVacio: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.fino,
     borderStyle: 'dashed',
-    borderColor: '#EFE9DE',
-    borderRadius: 16,
-    padding: 32,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.xxl,
+    padding: tokens.espaciado['5xl'],
     alignItems: 'center',
-    gap: 8,
+    gap: tokens.espaciado.md,
   },
   vacioIcono: {
-    fontSize: 28,
+    fontSize: tokens.tipografia.tamano.iconoMedio,
   },
   vacioTitulo: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1D2433',
+    fontSize: tokens.tipografia.tamano.boton,
+    fontWeight: tokens.tipografia.peso.extranegrita,
+    color: tokens.colores.tintaCliente,
   },
   vacioTexto: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: tokens.tipografia.tamano.cuerpo,
+    color: tokens.colores.textoNeutro,
     textAlign: 'center',
-    lineHeight: 19,
+    lineHeight: tokens.tipografia.interlineado.holgado,
   },
 });

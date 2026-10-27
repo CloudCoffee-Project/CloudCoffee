@@ -1,0 +1,95 @@
+.catalog > p,
+.catalog [role='status'] {
+  color: var(--color-text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.catalog-filters label {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-weight: 500;
+  min-width: 0;
+}
+
+.catalog-filters .catalog-search {
+  flex-grow: 2;
+}
+
+.catalog-filters input,
+.catalog-filters select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem;
+  border: 1px solid var(--color-text-muted);
+  border-radius: 0.5rem;
+  background: white;
+  color: var(--color-text-main);
+  font: inherit;
+}
+
+.catalog .btn-primary {
+  min-height: 44px;
+}
+
+.catalog :disabled {
+  cursor: default;
+  opacity: 0.5;
+  transform: none;
+}
+
+.catalog :focus-visible {
+  outline: 2px solid var(--color-btn-dark);
+  outline-offset: 3px;
+}
+
+.catalog-products {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 1.5rem;
+  list-style: none;
+}
+
+.catalog-product {
+  overflow: hidden;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background: white;
+  overflow-wrap: anywhere;
+}
+
+.catalog-product img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.catalog-product h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.catalog-product p {
+  color: var(--color-text-muted);
+}
+
+.catalog-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}

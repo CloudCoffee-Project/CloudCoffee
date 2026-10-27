@@ -7,8 +7,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.Optional;
+
+import cl.cloudcoffee.catalog_service.model.enums.ProductStatus;
 
 public interface ProductRepository extends JpaRepository<Product, UUID> {
+
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.category
+        WHERE p.id = :productId
+          AND p.status = :status
+    """)
+    Optional<Product> findByIdAndStatusWithCategory(
+            @Param("productId") UUID productId,
+            @Param("status") ProductStatus status
+    );
     
     @Query("""
         SELECT DISTINCT p FROM Product p

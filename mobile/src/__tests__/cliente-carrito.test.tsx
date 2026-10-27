@@ -5,11 +5,12 @@
 // INT4-38/39 y acá solo se comprueba que el botón que lo dispara muestra el total
 // real y lo llama.
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { View } from 'react-native';
 
 import CarritoScreen from '../app/(cliente)/carrito';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
+import { limpiarRouter, pulsar, routerMock, texto, textoDe } from '../test-utils';
 import type { ItemCarrito, NuevoItemCarrito } from '../types/domain';
 
 // La pantalla no pide nada al backend: todo lo que muestra sale del carrito en
@@ -25,27 +26,12 @@ jest.mock('../context/AuthContext', () => ({
   })),
 }));
 
-const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-jest.mock('expo-router', () => ({
-  // Getter y no un valor fijo: la fábrica del mock corre cuando se importa la
-  // pantalla, antes de que exista la constante mockRouter. Con un getter, router
-  // se resuelve recién cuando el botón lo usa, que es cuando ya está listo.
-  get router() {
-    return mockRouter;
-  },
-  useRouter: jest.fn(() => mockRouter),
-  useFocusEffect: jest.fn(),
-}));
-
-jest.mock('react-native-safe-area-context', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-  return {
-    SafeAreaView: (props: { children?: React.ReactNode } & Record<string, unknown>) =>
-      React.createElement(View, props, props.children),
-  };
-});
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
 function linea(over: Partial<NuevoItemCarrito> = {}): NuevoItemCarrito {
   return {
@@ -69,12 +55,6 @@ const norte = (over: Partial<NuevoItemCarrito> = {}): NuevoItemCarrito =>
     stock: 3,
     ...over,
   });
-
-function textoDe(nodo: ReactTestInstance): string {
-  return nodo.children
-    .map((hijo) => (typeof hijo === 'string' ? hijo : textoDe(hijo as ReactTestInstance)))
-    .join('');
-}
 
 let arbolActual: ReactTestRenderer | null = null;
 
@@ -118,12 +98,6 @@ async function agregar(
   });
 }
 
-async function pulsar(tree: ReactTestRenderer, testID: string): Promise<void> {
-  await act(async () => {
-    tree.root.findByProps({ testID }).props.onPress();
-  });
-}
-
 // Las cafeterías en el orden en que se pintan. findAll devuelve los nodos en
 // orden de render, que es el orden en pantalla, así que no hay que reordenar
 // nada. El prefijo de los grupos también lo usan el badge y el subtotal de cada
@@ -147,17 +121,11 @@ function idsGruposEnPantalla(tree: ReactTestRenderer): string[] {
   return ids.filter((id, i) => ids.indexOf(id) === i);
 }
 
-function texto(tree: ReactTestRenderer, testID: string): string {
-  return textoDe(tree.root.findByProps({ testID }));
-}
-
 let warnSpy: jest.SpyInstance;
 let errorSpy: jest.SpyInstance;
 
 beforeEach(() => {
-  mockRouter.push.mockClear();
-  mockRouter.back.mockClear();
-  mockRouter.replace.mockClear();
+  limpiarRouter();
   // El flujo de pago loguea a propósito; sin esto la salida de la suite se
   // llena de warnings que no dicen nada del comportamiento que se está probando.
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -195,7 +163,7 @@ describe('Carrito agrupado por cafetería (INT4-33)', () => {
 
     await pulsar(tree, 'carrito-ir-catalogo');
 
-    expect(mockRouter.push).toHaveBeenCalledWith('/(cliente)');
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)');
   });
 
   it('vuelve con el botón del encabezado', async () => {
@@ -203,7 +171,7 @@ describe('Carrito agrupado por cafetería (INT4-33)', () => {
 
     await pulsar(tree, 'carrito-volver');
 
-    expect(mockRouter.back).toHaveBeenCalled();
+    expect(routerMock.back).toHaveBeenCalled();
   });
 
   it('arma un grupo por cafetería, con el nombre y sus líneas', async () => {
@@ -426,8 +394,8 @@ describe('El botón de pagar (INT4-35: lleva al checkout)', () => {
     // El carrito ya no habla con el backend ni abre Mercado Pago: registrar la
     // orden (POST /v1/compras) y abrir el checkout vive en la pantalla de
     // checkout (INT4-35). Acá solo se navega.
-    expect(mockRouter.push).toHaveBeenCalledWith('/(cliente)/checkout');
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/checkout');
+    expect(routerMock.replace).not.toHaveBeenCalled();
   });
 
   it('muestra Mercado Pago como único método, ya elegido', async () => {

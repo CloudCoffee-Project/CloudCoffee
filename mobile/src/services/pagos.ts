@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking';
 
 import { httpClient } from './httpClient';
 
+// Scheme del deep link: debe coincidir con "scheme" en app.json (cloudcoffee).
 const DEEP_LINK_RETORNO = 'cloudcoffee://pago/retorno';
 
 export interface ItemCarrito {

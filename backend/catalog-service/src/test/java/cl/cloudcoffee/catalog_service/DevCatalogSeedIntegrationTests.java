@@ -3,16 +3,21 @@ package cl.cloudcoffee.catalog_service;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import javax.sql.DataSource;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -52,6 +57,9 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
     @Autowired
     DataSource dataSource;
 
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     @Test
     void seedCargaDosCampusConSusCafeterias() throws Exception {
         mvc.perform(get("/catalog/campus"))
@@ -69,6 +77,78 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].nombre",
                         contains("Bebidas frías", "Cafés", "Pastelería", "Sándwiches")));
+    }
+
+    @Test
+    void detallePublicoDevuelveSoloDatosPublicosDelProductoActivoSinJwt() throws Exception {
+        String imageUrl = "https://example.com/cafe-americano.png";
+        jdbcTemplate.update("UPDATE product SET image_url = ? WHERE id = ?",
+                imageUrl, UUID.fromString(CAFE_AMERICANO));
+        try {
+            mvc.perform(get("/catalog/productos/{id}", CAFE_AMERICANO))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(CAFE_AMERICANO))
+                    .andExpect(jsonPath("$.nombre").value("Café americano"))
+                    .andExpect(jsonPath("$.descripcion").value("Café de filtro recién preparado"))
+                    .andExpect(jsonPath("$.imagenUrl").value(imageUrl))
+                    .andExpect(jsonPath("$.categoria.id").value(CATEGORIA_CAFES))
+                    .andExpect(jsonPath("$.categoria.nombre").value("Cafés"))
+                    .andExpect(jsonPath("$.estado").doesNotExist())
+                    .andExpect(jsonPath("$.price").doesNotExist())
+                    .andExpect(jsonPath("$.stock").doesNotExist());
+        } finally {
+            jdbcTemplate.update("UPDATE product SET image_url = NULL WHERE id = ?",
+                    UUID.fromString(CAFE_AMERICANO));
+        }
+    }
+
+    @Test
+    void detallePublicoResponde404ConProblemDetailsParaProductoInexistente() throws Exception {
+        mvc.perform(get("/catalog/productos/{id}", "33333333-3333-4333-8333-3333333333ff"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.type").value("/problems/producto-no-encontrado"))
+                .andExpect(jsonPath("$.detail").value(
+                        "No existe un producto activo con el identificador indicado."));
+    }
+
+    @Test
+    void detallePublicoOcultaProductosInactivosComoNoEncontrados() throws Exception {
+        UUID productId = UUID.fromString(CAFE_AMERICANO);
+        jdbcTemplate.update("UPDATE product SET status = 'INACTIVE' WHERE id = ?", productId);
+        try {
+            mvc.perform(get("/catalog/productos/{id}", CAFE_AMERICANO))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.status").value(404))
+                    .andExpect(jsonPath("$.detail").value(
+                            "No existe un producto activo con el identificador indicado."));
+        } finally {
+            jdbcTemplate.update("UPDATE product SET status = 'ACTIVE' WHERE id = ?", productId);
+        }
+    }
+
+    @Test
+    void consultasPublicasAdmitenHeadSinJwt() throws Exception {
+        mvc.perform(head("/catalog/productos/{id}", CAFE_AMERICANO))
+                .andExpect(status().isOk());
+        mvc.perform(head("/catalog/productos").param("campusId", CAMPUS_SAN_FRANCISCO))
+                .andExpect(status().isOk());
+        mvc.perform(head("/catalog/productos/{id}/ofertas", CAFE_AMERICANO)
+                        .param("campusId", CAMPUS_SAN_FRANCISCO))
+                .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "productos",
+            "productos/33333333-3333-4333-8333-333333333333",
+            "productos/33333333-3333-4333-8333-333333333333/ofertas"
+    })
+    void jwtInvalidoSeRechazaEnConsultasPublicas(String endpoint) throws Exception {
+        mvc.perform(get("/catalog/" + endpoint)
+                        .param("campusId", CAMPUS_SAN_FRANCISCO)
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -177,7 +257,6 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
 
     private ResultActions productos(String campusId, String categoriaId, String q) throws Exception {
         var request = get("/catalog/productos")
-                .header("Authorization", "Bearer " + token())
                 .param("campusId", campusId)
                 .param("sort", "name,asc");
         if (categoriaId != null) {
@@ -191,7 +270,6 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
 
     private ResultActions ofertas(String productId, String campusId) throws Exception {
         return mvc.perform(get("/catalog/productos/{id}/ofertas", productId)
-                        .header("Authorization", "Bearer " + token())
                         .param("campusId", campusId))
                 .andExpect(status().isOk());
     }

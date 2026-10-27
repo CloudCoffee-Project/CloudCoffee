@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -12,15 +13,16 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
-import com.jayway.jsonpath.JsonPath;
 import com.nimbusds.jose.JWSAlgorithm;
 
 import cl.cloudcoffee.order_service.model.Compra;
@@ -30,7 +32,7 @@ import cl.cloudcoffee.order_service.repository.CompraRepository;
 import cl.cloudcoffee.order_service.repository.PagoRepository;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
-/** INT2-76: simulación determinista y consulta del pago, solo para el dueño de la compra. */
+/** INT2-76: POST/GET /compras/{id}/pago conforme al contrato de INT2-50 (#112). */
 @SpringBootTest(properties = "management.tracing.enabled=false")
 @AutoConfigureMockMvc
 class PagoSimuladoControllerTest extends JwtTestSupport {
@@ -41,163 +43,193 @@ class PagoSimuladoControllerTest extends JwtTestSupport {
 
     final UUID dueno = UUID.randomUUID();
 
-    @Test
-    void escenarioAprobadoCreaElPagoConElMontoDeLaCompra() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+            "aprobar,   aprobado,  aprobacion_simulada",
+            "rechazar,  rechazado, rechazo_simulado",
+            "pendiente, pendiente, escenario_pendiente"
+    })
+    void cadaEscenarioCreaElPagoConformeAlContrato(String escenario, String estado, String motivo) throws Exception {
         Compra compra = compra("3700.00");
 
-        simular(compra, dueno, "clave-1", "APROBADO")
+        pagar(compra, dueno, clave(), escenario)
                 .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/v1/compras/" + compra.getId() + "/pago"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().doesNotExist("Idempotency-Replayed"))
+                .andExpect(jsonPath("$.pagoId").isNotEmpty())
                 .andExpect(jsonPath("$.compraId").value(compra.getId().toString()))
-                .andExpect(jsonPath("$.estado").value("APROBADO"))
-                .andExpect(jsonPath("$.monto").value(3700.00))
-                .andExpect(jsonPath("$.motivoRechazo").doesNotExist())
-                // Sin proveedor externo: no hay redirección de pago.
-                .andExpect(jsonPath("$.initPoint").doesNotExist());
+                .andExpect(jsonPath("$.estado").value(estado))
+                .andExpect(jsonPath("$.motivo").value(motivo))
+                .andExpect(jsonPath("$.montoTotal").value(3700))
+                .andExpect(jsonPath("$.moneda").value("CLP"))
+                .andExpect(jsonPath("$.simulado").value(true))
+                .andExpect(jsonPath("$.proveedor").value("simulado"))
+                .andExpect(jsonPath("$.creadoAt").isNotEmpty())
+                .andExpect(jsonPath("$.actualizadoAt").isNotEmpty())
+                .andExpect(jsonPath("$.version").isNumber())
+                // Sin proveedor externo: nada de redirecciones ni campos de tarjeta.
+                .andExpect(jsonPath("$.initPoint").doesNotExist())
+                .andExpect(jsonPath("$.length()").value(11));
 
         consultar(compra, dueno)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estado").value("APROBADO"));
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.estado").value(estado))
+                .andExpect(jsonPath("$.motivo").value(motivo));
     }
 
     @Test
-    void escenarioRechazadoEsDeterminista() throws Exception {
+    void laConsultaCoincideConLaRespuestaDeCreacion() throws Exception {
         Compra compra = compra("1500.00");
+        String creado = pagar(compra, dueno, clave(), "pendiente")
+                .andExpect(jsonPath("$.version").value(1))
+                .andReturn().getResponse().getContentAsString();
 
-        simular(compra, dueno, "clave-1", "RECHAZADO")
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.estado").value("RECHAZADO"))
-                .andExpect(jsonPath("$.motivoRechazo").value("Pago rechazado por la simulación."));
-    }
+        String consultado = consultar(compra, dueno).andReturn().getResponse().getContentAsString();
 
-    @Test
-    void pendienteSeResuelveEnElMismoPagoSinCrearOtro() throws Exception {
-        Compra compra = compra("1500.00");
-        String pagoId = id(simular(compra, dueno, "clave-1", "PENDIENTE")
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.estado").value("PENDIENTE")));
-
-        simular(compra, dueno, "clave-2", "APROBADO")
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pagoId").value(pagoId))
-                .andExpect(jsonPath("$.estado").value("APROBADO"));
-
-        assertThat(pagosDe(compra)).hasSize(1);
+        // Mismas fechas (precisión de la base) y versión: nada cambió entre ambas lecturas.
+        assertThat(consultado).isEqualTo(creado);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"APROBADO", "RECHAZADO", "PENDIENTE"})
-    void reintentoConLaMismaClaveNoDuplicaElPago(String escenario) throws Exception {
+    @ValueSource(strings = {"aprobar", "rechazar", "pendiente"})
+    void repetirLaClaveReproduceElCodigoYElCuerpoOriginales(String escenario) throws Exception {
         Compra compra = compra("1500.00");
-        String pagoId = id(simular(compra, dueno, "clave-reintento", escenario).andExpect(status().isCreated()));
+        String clave = clave();
+        MvcResult original = pagar(compra, dueno, clave, escenario).andExpect(status().isCreated()).andReturn();
 
-        simular(compra, dueno, "clave-reintento", escenario)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pagoId").value(pagoId))
-                .andExpect(jsonPath("$.estado").value(escenario));
-        simular(compra, dueno, "clave-reintento", escenario).andExpect(status().isOk());
+        MvcResult repetido = pagar(compra, dueno, clave, escenario)
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotency-Replayed", "true"))
+                .andExpect(header().string("Location", original.getResponse().getHeader("Location")))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andReturn();
 
-        assertThat(pagosDe(compra)).hasSize(1);
+        assertThat(repetido.getResponse().getContentAsString())
+                .isEqualTo(original.getResponse().getContentAsString());
+        assertThat(pagos.findByCompraId(compra.getId())).isPresent();
     }
 
     @Test
-    void mismaClaveConOtroEscenarioResponde409() throws Exception {
+    void laMismaClaveConOtroEscenarioEsUnConflicto() throws Exception {
         Compra compra = compra("1500.00");
-        simular(compra, dueno, "clave-1", "RECHAZADO").andExpect(status().isCreated());
+        String clave = clave();
+        pagar(compra, dueno, clave, "rechazar").andExpect(status().isCreated());
 
-        simular(compra, dueno, "clave-1", "APROBADO")
+        pagar(compra, dueno, clave, "aprobar")
                 .andExpect(status().isConflict())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"));
 
-        assertThat(pagosDe(compra)).extracting(Pago::getEstado).containsExactly(EstadoPago.RECHAZADO);
+        assertThat(estado(compra)).isEqualTo(EstadoPago.RECHAZADO);
     }
 
-    @Test
-    void trasUnRechazoLaCompraQuedaCerrada() throws Exception {
-        // INT2-77: el rechazo libera las reservas; una clave nueva no reabre la compra.
+    @ParameterizedTest
+    @ValueSource(strings = {"aprobar", "rechazar", "pendiente"})
+    void unPendienteNoSeResuelveConOtroEscenarioYOtraClave(String otroEscenario) throws Exception {
         Compra compra = compra("1500.00");
-        simular(compra, dueno, "clave-1", "RECHAZADO").andExpect(status().isCreated());
+        pagar(compra, dueno, clave(), "pendiente").andExpect(status().isCreated());
 
-        simular(compra, dueno, "clave-2", "APROBADO")
+        pagar(compra, dueno, clave(), otroEscenario)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("/problems/compra-cerrada"));
+                .andExpect(jsonPath("$.code").value("PAGO_YA_INICIADO"));
 
-        assertThat(pagosDe(compra)).extracting(Pago::getEstado).containsExactly(EstadoPago.RECHAZADO);
-        consultar(compra, dueno).andExpect(jsonPath("$.estado").value("RECHAZADO"));
+        assertThat(estado(compra)).isEqualTo(EstadoPago.PENDIENTE);
+        consultar(compra, dueno).andExpect(jsonPath("$.estado").value("pendiente"));
     }
 
-    @Test
-    void unaCompraPagadaNoAdmiteOtroPago() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"aprobar", "rechazar"})
+    void unPagoTerminadoNoSeReemplazaConOtraClave(String escenario) throws Exception {
         Compra compra = compra("1500.00");
-        simular(compra, dueno, "clave-1", "APROBADO").andExpect(status().isCreated());
+        String pagoId = pagoId(pagar(compra, dueno, clave(), escenario).andExpect(status().isCreated()));
 
-        simular(compra, dueno, "clave-2", "APROBADO").andExpect(status().isConflict());
-        simular(compra, dueno, "clave-3", "RECHAZADO").andExpect(status().isConflict());
+        pagar(compra, dueno, clave(), "aprobar")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAGO_YA_INICIADO"));
 
-        assertThat(pagosDe(compra)).hasSize(1);
+        assertThat(pagos.findByCompraId(compra.getId())).get()
+                .extracting(pago -> pago.getId().toString()).isEqualTo(pagoId);
     }
 
     @Test
-    void otroUsuarioNoSimulaNiConsultaLaCompra() throws Exception {
+    void otroClienteNoPagaNiConsultaNiReproduceLaCompra() throws Exception {
         Compra compra = compra("1500.00");
         UUID ajeno = UUID.randomUUID();
+        String clave = clave();
 
-        simular(compra, ajeno, "clave-1", "APROBADO").andExpect(status().isNotFound());
-        simular(compra, dueno, "clave-1", "PENDIENTE").andExpect(status().isCreated());
+        pagar(compra, ajeno, clave, "aprobar").andExpect(status().isNotFound());
+        pagar(compra, dueno, clave, "pendiente").andExpect(status().isCreated());
+        // Con la misma clave que usó el dueño, el ajeno tampoco ve el resultado.
+        pagar(compra, ajeno, clave, "pendiente").andExpect(status().isNotFound());
         consultar(compra, ajeno).andExpect(status().isNotFound());
 
-        assertThat(pagosDe(compra)).extracting(Pago::getEstado).containsExactly(EstadoPago.PENDIENTE);
+        assertThat(estado(compra)).isEqualTo(EstadoPago.PENDIENTE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CAJERO", "ADMIN_CAFETERIA", "SUPER_ADMIN"})
+    void soloUnClientePuedePagar(String role) throws Exception {
+        Compra compra = compra("1500.00");
+        String jwt = "Bearer " + sign(claims().subject(dueno.toString()).claim("role", role).build(),
+                KEYS, JWSAlgorithm.RS256);
+
+        mvc.perform(post("/compras/{id}/pago", compra.getId()).header("Authorization", jwt)
+                        .header("Idempotency-Key", clave()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"escenario\":\"aprobar\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ROL_NO_PERMITIDO"));
+
+        assertThat(pagos.findByCompraId(compra.getId())).isEmpty();
     }
 
     @Test
-    void compraInexistenteYCompraSinPagosResponden404() throws Exception {
+    void compraInexistenteYCompraSinPagoResponden404() throws Exception {
         mvc.perform(get("/compras/{id}/pago", UUID.randomUUID()).header("Authorization", bearer(dueno)))
                 .andExpect(status().isNotFound());
-        consultar(compra("1500.00"), dueno).andExpect(status().isNotFound());
+        consultar(compra("1500.00"), dueno)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PAGO_NO_ENCONTRADO"));
     }
 
-    @Test
-    void ignoraTarjetaEImporteEnviadosPorElCliente() throws Exception {
-        Compra compra = compra("2500.00");
-
-        mvc.perform(post("/compras/{id}/pago/simulacion", compra.getId())
-                        .header("Authorization", bearer(dueno))
-                        .header("Idempotency-Key", "clave-1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"escenario": "APROBADO", "monto": 1,
-                                 "numeroTarjeta": "4111111111111111", "cvv": "123"}
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.monto").value(2500.00))
-                .andExpect(jsonPath("$.numeroTarjeta").doesNotExist());
-    }
-
-    @Test
-    void validaClaveDeIdempotenciaYEscenario() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"escenario\":\"aprobar\",\"montoTotal\":1}",
+            "{\"escenario\":\"aprobar\",\"numeroTarjeta\":\"4111111111111111\"}",
+            "{\"escenario\":\"APROBADO\"}",
+            "{\"escenario\":\"reembolsar\"}",
+            "{}"
+    })
+    void soloAceptaElEscenarioDelContrato(String cuerpo) throws Exception {
         Compra compra = compra("1500.00");
 
-        mvc.perform(post("/compras/{id}/pago/simulacion", compra.getId())
-                        .header("Authorization", bearer(dueno))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"escenario\":\"APROBADO\"}"))
-                .andExpect(status().isBadRequest());
-        simular(compra, dueno, "clave con espacios", "APROBADO").andExpect(status().isBadRequest());
-        simular(compra, dueno, "x".repeat(101), "APROBADO").andExpect(status().isBadRequest());
-        simular(compra, dueno, "clave-1", "REEMBOLSADO").andExpect(status().isBadRequest());
-        mvc.perform(post("/compras/{id}/pago/simulacion", compra.getId())
-                        .header("Authorization", bearer(dueno)).header("Idempotency-Key", "clave-1")
-                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mvc.perform(post("/compras/{id}/pago", compra.getId()).header("Authorization", bearer(dueno))
+                        .header("Idempotency-Key", clave()).contentType(MediaType.APPLICATION_JSON).content(cuerpo))
                 .andExpect(status().isBadRequest());
 
-        assertThat(pagosDe(compra)).isEmpty();
+        assertThat(pagos.findByCompraId(compra.getId())).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"clave-1", "123", "not-a-uuid-at-all"})
+    void laClaveDebeSerUnUuid(String clave) throws Exception {
+        Compra compra = compra("1500.00");
+
+        pagar(compra, dueno, clave, "aprobar").andExpect(status().isBadRequest());
+        mvc.perform(post("/compras/{id}/pago", compra.getId()).header("Authorization", bearer(dueno))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"escenario\":\"aprobar\"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(pagos.findByCompraId(compra.getId())).isEmpty();
     }
 
     @Test
     void sinJwtResponde401() throws Exception {
         Compra compra = compra("1500.00");
 
-        mvc.perform(post("/compras/{id}/pago/simulacion", compra.getId())
-                        .header("Idempotency-Key", "clave-1")
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"escenario\":\"APROBADO\"}"))
+        mvc.perform(post("/compras/{id}/pago", compra.getId()).header("Idempotency-Key", clave())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"escenario\":\"aprobar\"}"))
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/compras/{id}/pago", compra.getId())).andExpect(status().isUnauthorized());
     }
@@ -206,12 +238,12 @@ class PagoSimuladoControllerTest extends JwtTestSupport {
         return compras.saveAndFlush(new Compra(dueno, new BigDecimal(monto)));
     }
 
-    private java.util.List<Pago> pagosDe(Compra compra) {
-        return pagos.findByCompraIdOrderByCreatedAtAsc(compra.getId());
+    private EstadoPago estado(Compra compra) {
+        return pagos.findByCompraId(compra.getId()).map(Pago::getEstado).orElseThrow();
     }
 
-    private ResultActions simular(Compra compra, UUID usuario, String clave, String escenario) throws Exception {
-        return mvc.perform(post("/compras/{id}/pago/simulacion", compra.getId())
+    private ResultActions pagar(Compra compra, UUID usuario, String clave, String escenario) throws Exception {
+        return mvc.perform(post("/compras/{id}/pago", compra.getId())
                 .header("Authorization", bearer(usuario))
                 .header("Idempotency-Key", clave)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -222,8 +254,12 @@ class PagoSimuladoControllerTest extends JwtTestSupport {
         return mvc.perform(get("/compras/{id}/pago", compra.getId()).header("Authorization", bearer(usuario)));
     }
 
-    private static String id(ResultActions result) throws Exception {
-        return JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.pagoId");
+    private static String pagoId(ResultActions result) throws Exception {
+        return com.jayway.jsonpath.JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.pagoId");
+    }
+
+    private static String clave() {
+        return UUID.randomUUID().toString();
     }
 
     private static String bearer(UUID usuario) {

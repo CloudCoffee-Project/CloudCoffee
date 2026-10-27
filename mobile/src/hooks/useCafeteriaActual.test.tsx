@@ -8,13 +8,10 @@ import { useCafeteriaActual } from './useCafeteriaActual';
 import type { Rol } from '../types/domain';
 
 // AsyncStorage no existe como módulo nativo en Jest; se mockea su superficie.
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-  clear: jest.fn(async () => undefined),
-  getAllKeys: jest.fn(async () => []),
-}));
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
 const mockGetItem = AsyncStorage.getItem as unknown as jest.Mock;
 
@@ -45,18 +42,36 @@ describe('useCafeteriaActual', () => {
     expect(tree.root.findByType(Text).props.children).toBe('c-1');
   });
 
-  it('para un cliente devuelve la cafetería del campus guardado', async () => {
+  it('para un cliente devuelve la primera cafetería del campus guardado (IDs reales)', async () => {
     mockGetItem.mockResolvedValue(
-      JSON.stringify({ id: 'san-francisco', nombre: 'Campus San Francisco' })
+      JSON.stringify({
+        id: 'san-francisco',
+        nombre: 'Campus San Francisco',
+        direccion: 'Manuel Montt 056',
+        cafeterias: [
+          { id: 'cafeteria-real-1', nombre: 'Cafetería Central' },
+          { id: 'cafeteria-real-2', nombre: 'Cafetería Norte' },
+        ],
+      })
     );
 
     const tree = await renderizarSonda({ rol: 'cliente', cafeteriaIdSesion: null });
 
-    expect(tree.root.findByType(Text).props.children).toBe('cafe-2');
+    expect(tree.root.findByType(Text).props.children).toBe('cafeteria-real-1');
   });
 
   it('para un cliente sin campus guardado devuelve null', async () => {
     mockGetItem.mockResolvedValue(null);
+
+    const tree = await renderizarSonda({ rol: 'cliente', cafeteriaIdSesion: null });
+
+    expect(tree.root.findByType(Text).props.children).toBe('nada');
+  });
+
+  it('para un cliente con campus sin cafeterías devuelve null', async () => {
+    mockGetItem.mockResolvedValue(
+      JSON.stringify({ id: 'san-francisco', nombre: 'Campus San Francisco', cafeterias: [] })
+    );
 
     const tree = await renderizarSonda({ rol: 'cliente', cafeteriaIdSesion: null });
 

@@ -35,6 +35,11 @@ public class Pago {
     @Column(name = "motivo_rechazo")
     private String motivoRechazo;
 
+    // INT2-76: motivo del estado según el contrato (aprobacion_simulada, rechazo_simulado, ...).
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private MotivoPago motivo;
+
     // Bloqueo optimista: dos resultados concurrentes no pueden sobrescribirse.
     @Version
     @Column(nullable = false)
@@ -55,7 +60,7 @@ public class Pago {
         this.referenciaProveedor = referenciaProveedor;
         this.monto = compra.getMontoTotal();
         this.estado = EstadoPago.PENDIENTE;
-        this.createdAt = Instant.now();
+        this.createdAt = ahora();
     }
 
     /**
@@ -73,11 +78,21 @@ public class Pago {
         }
         this.estado = resultado;
         this.motivoRechazo = resultado == EstadoPago.RECHAZADO ? motivoRechazo : null;
-        this.updatedAt = Instant.now();
+        this.updatedAt = ahora();
         return true;
     }
 
+    // Precisión de la base (microsegundos): la respuesta y las lecturas posteriores coinciden.
+    private static Instant ahora() {
+        return Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    }
+
+    public void registrarMotivo(MotivoPago motivo) {
+        this.motivo = Objects.requireNonNull(motivo, "El motivo del pago es obligatorio");
+    }
+
     public UUID getId() { return id; }
+    public MotivoPago getMotivo() { return motivo; }
     public Compra getCompra() { return compra; }
     public EstadoPago getEstado() { return estado; }
     public BigDecimal getMonto() { return monto; }
