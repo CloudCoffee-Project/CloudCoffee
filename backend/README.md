@@ -537,8 +537,9 @@ sin rutas ni barra final.
 
 El Gateway responde los preflight `OPTIONS` sin exigir autenticación ni enviarlos al
 microservicio. Permite los métodos `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` y `OPTIONS`,
-y los encabezados `Authorization`, `Content-Type` y `Accept`. No habilita cookies entre
-orígenes y las rutas protegidas conservan su requisito de autenticación.
+los encabezados `Authorization`, `Content-Type`, `Accept` e `Idempotency-Key`, y expone
+`Location`, `Idempotency-Replayed` y `Retry-After` a los orígenes configurados. No habilita
+cookies entre orígenes y las rutas protegidas conservan su requisito de autenticación.
 
 ## Rate limiting en API Gateway (INT2-16)
 
