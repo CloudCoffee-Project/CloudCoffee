@@ -20,6 +20,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
     @Query(value = """
         UPDATE offer
         SET stock = stock - :quantity,
+            version = version + 1,
             status = CASE WHEN stock - :quantity = 0 THEN 'OUT_OF_STOCK' ELSE status END
         WHERE id = :offerId
           AND status = 'AVAILABLE'
