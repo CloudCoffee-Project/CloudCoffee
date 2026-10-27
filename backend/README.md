@@ -90,7 +90,9 @@ perfil lo carga. En Docker Compose se activa con `CATALOG_SPRING_PROFILES=docker
 en `.env` (valor de `.env.example`); si la variable falta, se usa solo `docker`.
 
 El seed es una migración repetible con UUID fijos: se reaplica sola al editarla y
-no duplica filas. Los UUID del primer campus, categoría y producto coinciden con
+no duplica filas. Al reaplicarse no toca el stock ni el estado de las ofertas que ya
+existen, porque las reservas (INT2-51/74/75) los mantienen; para volver a los valores
+del seed hay que recrear la base (`docker compose down -v`). Los UUID del primer campus, categoría y producto coinciden con
 los ejemplos de Swagger. `DevCatalogSeedIntegrationTests` documenta los resultados
 esperados de filtros, búsqueda y comparación de precios sobre estos datos.
 
@@ -148,7 +150,9 @@ personal. El registro público siempre crea un `CLIENTE` sin asignación e ignor
 `rol` o `cafeteriaId` enviados.
 
 Configuración: `INTERNAL_SERVICE_TOKEN` en auth-service y en cada servicio que
-consulta (hoy catalog-service, que además usa `AUTH_SERVICE_URL`). Docker Compose
+consulta (hoy catalog-service, que además usa `AUTH_SERVICE_URL`). El mismo filtro
+protege las reservas internas de catalog-service (INT2-51/74/75), así que
+order-service necesitará el token cuando las invoque. Docker Compose
 exige definirlo en `.env`; el valor de `.env.example` es solo para desarrollo.
 
 Primer uso: `GET /catalog/cafeterias/{cafeteriaId}/ofertas`, inventario completo
@@ -165,10 +169,12 @@ cuentas verificadas, todas con contraseña `CafeDemo123!`:
 | `cajero.patio@cloudcoffee.dev` | `CAJERO` | Cafetería Patio Norte |
 | `admin.patio@cloudcoffee.dev` | `ADMIN_CAFETERIA` | Cafetería Patio Norte |
 | `cajero.sinasignar@cloudcoffee.dev` | `CAJERO` | sin asignación |
+| `superadmin@cloudcoffee.dev` | `SUPER_ADMIN` | — (historial de notificaciones, INT2-67) |
 
 Las cafeterías son las del seed de catálogo, así que conviene activar ambos perfiles
-`dev`. La asignación viaja en el access token: un cambio rige desde el siguiente
-login o refresh (máximo 15 minutos).
+`dev`. Un cambio de asignación rige para la autorización en la siguiente solicitud;
+el claim `cafeteriaId` que usa la UI se actualiza en el siguiente login o refresh.
+`SUPER_ADMIN` no tiene cafetería y recibe `403` en las rutas de personal.
 
 ### Pagos simulados en order-service (INT2-53)
 
@@ -184,8 +190,10 @@ un resultado contradictorio responde `409`. `@Version` impide que dos resultados
 concurrentes se sobrescriban.
 
 Conforme al contrato de INT2-50 (#112), una compra tiene como máximo un pago, que no
-se reemplaza ni se reinicia: iniciar otro pago responde `409 /problems/pago-existente`
-en cualquier estado, también tras un rechazo. Para volver a intentar hay que crear
+se reemplaza ni se reinicia: iniciar otro pago responde `409 PAGO_YA_INICIADO`
+(`/problems/pago-ya-iniciado`) en cualquier estado, también tras un rechazo.
+Los demás errores del servicio también llevan `code`: `COMPRA_NO_ENCONTRADA`,
+`PAGO_NO_ENCONTRADO` y `ESTADO_INVALIDO` (transición no permitida). Para volver a intentar hay que crear
 una compra nueva.
 
 `PagoService.iniciarPago` solo recibe la compra: el importe sale de `monto_total`,
@@ -215,7 +223,9 @@ cualquier otro campo (tarjeta, importe, estado) o valor responde `400`. Requiere
 | `pendiente` | `pendiente` | `escenario_pendiente` |
 
 `Pago`: `pagoId, compraId, estado, motivo, montoTotal` (CLP entero)`, moneda: CLP,
-simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`.
+simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`. El escenario
+se aplica antes de insertar el pago, así que la respuesta de creación trae
+`version: 1` en los tres escenarios.
 
 - **Solo el CLIENTE propietario:** el dueño se toma del `sub` del JWT. Una compra
   ajena o inexistente responde `404`; otro rol, `403 ROL_NO_PERMITIDO`.

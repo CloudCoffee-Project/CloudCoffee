@@ -83,10 +83,8 @@ public class SimulacionPagoService {
                     "PAGO_YA_INICIADO");
         }
 
-        Pago pago = pagoService.iniciarPago(compra.getId(), escenario.motivo());
-        if (escenario != EscenarioPago.PENDIENTE) {
-            pagoService.registrarResultado(pago.getId(), escenario.estado(), null);
-        }
+        // El escenario se resuelve antes de insertar: un solo INSERT, versión 1.
+        Pago pago = pagoService.iniciarPago(compra.getId(), escenario.motivo(), escenario.estado());
         // Fija versión y fechas antes de tomar la instantánea de la respuesta.
         pagoRepository.flush();
 

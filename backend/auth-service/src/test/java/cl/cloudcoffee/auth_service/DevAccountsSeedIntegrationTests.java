@@ -94,6 +94,15 @@ class DevAccountsSeedIntegrationTests extends JwtTestSupport {
     }
 
     @Test
+    void superAdminRecibeSuRolSinCafeteria() throws Exception {
+        // INT2-67: el historial de notificaciones exige SUPER_ADMIN.
+        Jwt jwt = login("superadmin@cloudcoffee.dev");
+
+        assertThat(jwt.getClaimAsString("role")).isEqualTo("SUPER_ADMIN");
+        assertThat(jwt.getClaims()).doesNotContainKey("cafeteriaId");
+    }
+
+    @Test
     void seedEsIdempotente() throws Exception {
         long totalUsuarios = usuarios.count();
 
