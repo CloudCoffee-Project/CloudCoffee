@@ -56,9 +56,12 @@ public class CatalogOpenApiConfiguration {
                 operation.getResponses().addApiResponse("401", problem(
                         path.startsWith("/catalog/productos") ? "JWT ausente o inválido" : "Bearer inválido si se envía; sin Bearer la consulta es pública", 401, path));
                 if ("/catalog/productos/{id}".equals(path)) {
-                    operation.getResponses().remove("401");
                     operation.getResponses().addApiResponse("404", problem(
                             "No existe un producto activo con el identificador indicado.", 404, path));
+                }
+                if (path.startsWith("/catalog/productos")) {
+                    operation.getResponses().addApiResponse("401", problem(
+                            "JWT inválido (si se envía); sin JWT la consulta es pública", 401, path));
                 }
                 operation.getResponses().addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
             }));

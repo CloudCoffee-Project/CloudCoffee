@@ -3,6 +3,7 @@ package cl.cloudcoffee.catalog_service;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,6 +11,8 @@ import javax.sql.DataSource;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -125,6 +128,30 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
     }
 
     @Test
+    void consultasPublicasAdmitenHeadSinJwt() throws Exception {
+        mvc.perform(head("/catalog/productos/{id}", CAFE_AMERICANO))
+                .andExpect(status().isOk());
+        mvc.perform(head("/catalog/productos").param("campusId", CAMPUS_SAN_FRANCISCO))
+                .andExpect(status().isOk());
+        mvc.perform(head("/catalog/productos/{id}/ofertas", CAFE_AMERICANO)
+                        .param("campusId", CAMPUS_SAN_FRANCISCO))
+                .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "productos",
+            "productos/33333333-3333-4333-8333-333333333333",
+            "productos/33333333-3333-4333-8333-333333333333/ofertas"
+    })
+    void jwtInvalidoSeRechazaEnConsultasPublicas(String endpoint) throws Exception {
+        mvc.perform(get("/catalog/" + endpoint)
+                        .param("campusId", CAMPUS_SAN_FRANCISCO)
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void productosSoloIncluyeOfertasPublicadasDelCampus() throws Exception {
         // Fuera: Brownie (cafetería cerrada), Agua mineral (OUT_OF_STOCK) y los de otro campus.
         productos(CAMPUS_SAN_FRANCISCO, null, null)
@@ -230,7 +257,6 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
 
     private ResultActions productos(String campusId, String categoriaId, String q) throws Exception {
         var request = get("/catalog/productos")
-                .header("Authorization", "Bearer " + token())
                 .param("campusId", campusId)
                 .param("sort", "name,asc");
         if (categoriaId != null) {
@@ -244,7 +270,6 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
 
     private ResultActions ofertas(String productId, String campusId) throws Exception {
         return mvc.perform(get("/catalog/productos/{id}/ofertas", productId)
-                        .header("Authorization", "Bearer " + token())
                         .param("campusId", campusId))
                 .andExpect(status().isOk());
     }
