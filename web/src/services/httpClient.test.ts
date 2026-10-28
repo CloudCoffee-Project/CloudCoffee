@@ -59,6 +59,24 @@ describe('cliente HTTP del API Gateway', () => {
     expect(headers.get('Authorization')).toBe('Bearer token-de-sesion');
   });
 
+  it.each(['/v1/auth/verificacion', '/v1/auth/verificacion/reenviar'])(
+    'no adjunta la sesión a la ruta pública %s',
+    async (path) => {
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn().mockReturnValue('token-de-sesion'),
+      });
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(null, { status: 202 }),
+      );
+
+      await createHttpClient('http://localhost:18080', fetcher)
+        .request(path, { method: 'POST', body: '{}' });
+
+      const headers = new Headers(fetcher.mock.calls[0][1]?.headers);
+      expect(headers.has('Authorization')).toBe(false);
+    },
+  );
+
   it.each(['', '/v1', '/auth/login', 'https://otro.example/v1/auth/login',
     '//otro.example/v1/auth/login', '/v1/../internal', '/v1/%2e%2e/internal',
     '/v1/auth/login#fragmento'])('rechaza la ruta %s antes de enviar', async (path) => {

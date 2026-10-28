@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { request, ApiRequestError } from '../services/httpClient';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
@@ -13,6 +14,7 @@ export function RegisterPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,6 +47,7 @@ export function RegisterPage() {
       });
 
       setSuccessMsg('Cuenta creada exitosamente! Por favor revisa tu bandeja de entrada para verificar tu correo antes de iniciar sesion.');
+      setRegisteredEmail(formData.email);
 
       setFormData({ firstName: '', lastName: '', email: '', phone: '', password: '' });
 
@@ -71,6 +74,12 @@ export function RegisterPage() {
       {successMsg && (
         <div style={{ padding: '1rem', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #bbf7d0' }}>
           {successMsg}
+          <p style={{ marginTop: '0.75rem' }}>
+            ¿No recibiste el correo?{' '}
+            <Link to={`/verificar-correo?email=${encodeURIComponent(registeredEmail)}`}>
+              Solicitar un nuevo enlace
+            </Link>
+          </p>
         </div>
       )}
 

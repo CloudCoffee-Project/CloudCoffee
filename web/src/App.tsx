@@ -5,6 +5,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { LoginPage } from './pages/LoginPage';
+import { VerificationPage } from './pages/VerificationPage';
 
 export function App() {
   return (
@@ -21,6 +22,7 @@ export function App() {
 
         <Route path="/registro" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/verificar-correo" element={<VerificationPage />} />
 
       </Route>
     </Routes>
