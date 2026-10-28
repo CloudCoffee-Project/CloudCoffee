@@ -150,6 +150,8 @@ public class JwtSecurityAutoConfiguration {
                         // Conservar los endpoints de monitoreo ya expuestos por Notification.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/actuator/info").permitAll()
+                        // SockJS necesita negociar HTTP antes del STOMP CONNECT, que autentica el JWT.
+                        .requestMatchers("/notifications/ws", "/notifications/ws/**").permitAll()
                         // Solo servicios con el token interno; un JWT de usuario recibe 403.
                         .requestMatchers(InternalServiceAuthenticationFilter.PATH_PREFIX + "**")
                             .hasRole(InternalServiceAuthenticationFilter.ROLE)

@@ -35,6 +35,26 @@ La respuesta conserva la paginación de Spring Data (`page` y `size`). El payloa
 elimina recursivamente campos de tokens y credenciales, y los detalles de error
 se saneán antes de persistirse y de responder.
 
+### Eventos WebSocket autorizados (INT2-80)
+
+`/v1/notifications/ws` expone STOMP sobre SockJS a través del Gateway. El cliente
+envía `Authorization: Bearer <JWT>` en el frame STOMP `CONNECT` (no en la URL).
+Cada `SUBSCRIBE` se valida contra el propietario o la asignación vigente del
+cajero; solo se aceptan destinos contractuales exactos, y los frames `SEND` a
+destinos de negocio se rechazan. La conexión se cierra al vencer el JWT.
+
+| Destino | Acceso |
+|---|---|
+| `/topic/orden/{ordenId}/estado` | Comprador propietario o cajero asignado a la cafetería. |
+| `/topic/compra/{compraId}/estado` | Comprador propietario. |
+| `/topic/cafeteria/{cafeteriaId}/ordenes` | Cajero asignado a esa cafetería. |
+| `/topic/cafeteria/{cafeteriaId}/stock` | Comprador autenticado o cajero asignado. |
+
+`WEBSOCKET_ALLOWED_ORIGINS` limita los orígenes permitidos sin comodines; por defecto
+se admiten `http://localhost:3000` y `http://127.0.0.1:3000`. La autorización del comprador se alimenta
+de los eventos de órdenes consumidos por notification-service y queda persistida
+para poder validar suscripciones después de reinicios.
+
 ## Requisitos
 
 - JDK 21

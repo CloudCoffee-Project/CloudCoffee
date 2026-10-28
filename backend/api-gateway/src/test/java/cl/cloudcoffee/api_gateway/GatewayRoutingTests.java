@@ -134,6 +134,16 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertThat(BACKENDS.get("catalog").take().userAgent()).startsWith("Apache-HttpClient/");
     }
 
+    @Test
+    void sockJsHandshakeIsForwardedWithoutHttpJwt() throws Exception {
+        mvc.perform(get("/v1/notifications/ws/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("notifications"));
+
+        assertThat(BACKENDS.get("notifications").take().path()).isEqualTo("/notifications/ws/info");
+        assertNoBackendRequests();
+    }
+
     @ParameterizedTest
     @CsvSource({"GET, campus", "GET, categorias", "HEAD, campus", "HEAD, categorias"})
     void catalogQueriesArePublic(String method, String endpoint) throws Exception {
