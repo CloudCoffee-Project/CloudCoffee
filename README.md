@@ -11,6 +11,8 @@ El backend utiliza Docker Compose para ejecutar los microservicios y su infraest
 - Docker Engine
 - Docker Compose v2
 - OpenSSL
+- curl
+- GNU coreutils (`timeout`)
 
 Verificar la instalación:
 
@@ -94,6 +96,44 @@ curl --fail http://localhost:18080/actuator/health
 curl --fail http://localhost:18080/v1/catalog/campus
 curl --fail http://localhost:3000/
 ```
+
+### Smoke test automatizado
+
+Después de preparar `.env`, se puede construir, iniciar y comprobar todo el entorno
+con un solo comando:
+
+```bash
+./scripts/smoke-compose.sh
+```
+
+El script aplica un timeout explícito y verifica:
+
+- los healthchecks de infraestructura, bases de datos, microservicios, Gateway y web;
+- `GET /actuator/health` del API Gateway;
+- `GET /v1/catalog/campus` sin token ni cuenta de prueba;
+- la aplicación web servida por Vite.
+
+Si los contenedores ya están iniciados, se puede omitir la construcción y el arranque:
+
+```bash
+./scripts/smoke-compose.sh --check-only
+```
+
+El timeout y el intervalo de consulta son configurables. Las URL se obtienen desde
+los puertos publicados por Compose, aunque también pueden sobrescribirse para una
+comprobación puntual:
+
+```bash
+SMOKE_TIMEOUT_SECONDS=120 \
+SMOKE_POLL_SECONDS=1 \
+./scripts/smoke-compose.sh
+```
+
+El proceso termina con código `0` únicamente cuando todas las comprobaciones pasan;
+usa código `1` ante un fallo de arranque, healthcheck, routing o contenido, y código
+`2` ante argumentos, variables o herramientas inválidas. Al fallar muestra
+`docker compose ps` y deja los contenedores disponibles para diagnóstico. No elimina
+volúmenes, no crea cuentas y no utiliza credenciales reales ni endpoints privados.
 
 Para consultar manualmente salud e información no sensible, sustituir el puerto
 por el del servicio correspondiente:

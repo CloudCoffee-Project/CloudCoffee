@@ -111,6 +111,10 @@ services:
             DB_PASSWORD: ${CATALOG_DB_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_PORT: 5672
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
         secrets:
             - jwt_public_key
         ports:
@@ -123,6 +127,8 @@ services:
             start_period: 30s
         depends_on:
             catalog-db:
+                condition: service_healthy
+            rabbitmq:
                 condition: service_healthy
         networks:
             - backend
