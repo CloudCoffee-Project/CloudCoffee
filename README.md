@@ -120,6 +120,51 @@ Un servicio específico:
 docker compose logs -f auth-service
 ```
 
+### Correo local con Mailpit
+
+El entorno de desarrollo usa Mailpit para capturar correos sin conectarse a un
+servidor SMTP real. Notification entrega internamente a `mailpit:1025` sin
+autenticación ni STARTTLS y la bandeja se consulta únicamente desde el computador
+en http://localhost:8025.
+
+Las direcciones incluidas en los mensajes se configuran en `.env`:
+
+```dotenv
+WEB_PUBLIC_URL=http://localhost:3000
+WEB_PASSWORD_RESET_URL=http://localhost:3000/restablecer-contrasena
+SMTP_FROM=noreply@cloudcoffee.local
+```
+
+`WEB_PUBLIC_URL` es la base del enlace `/verificar-correo`; la recuperación usa
+directamente `WEB_PASSWORD_RESET_URL`. Así las rutas pueden cambiar cuando la web
+implemente sus pantallas sin modificar Notification.
+
+Para generar y revisar un correo de recuperación usando la cuenta seed:
+
+```bash
+curl --fail --request POST \
+  http://localhost:18080/v1/auth/password/recovery \
+  --header 'Content-Type: application/json' \
+  --data '{"email":"comprador@cloudcoffee.dev"}'
+```
+
+La API responde `202`. El mensaje y su enlace aparecen en Mailpit; ningún correo
+sale a Internet. Los mensajes se conservan en el volumen local `mailpit_data`.
+
+Para reproducir una caída SMTP y observar el reintento:
+
+```bash
+docker compose stop mailpit
+# Repetir la solicitud anterior.
+docker compose logs -f notification-service
+docker compose start mailpit
+```
+
+Mientras Mailpit está detenido, el healthcheck de correo informa el fallo y el
+consumidor aplica su política RabbitMQ de reintentos. Al restaurarlo antes de agotar
+los intentos, el correo se entrega; si se agotan, el mensaje sigue la política DLQ
+documentada para Notification.
+
 ### Trazabilidad distribuida con Zipkin
 
 Micrometer genera y propaga trazas automáticamente en las solicitudes HTTP. Auth y
@@ -185,6 +230,8 @@ al ejecutar Gateway directamente con su TLS predeterminado, usar HTTPS.
 | Catalog Service | http://localhost:18082 |
 | Order Service | http://localhost:18083 |
 | Notification Service | http://localhost:18084 |
+| Mailpit SMTP | localhost:1025 |
+| Mailpit Web | http://localhost:8025 |
 | Auth PostgreSQL | localhost:15432 |
 | Catalog PostgreSQL | localhost:15433 |
 | Order PostgreSQL | localhost:15434 |
@@ -203,6 +250,7 @@ Los contenedores se comunican mediante nombres internos de Docker:
 - `catalog-service` → `catalog-db:5432`
 - `order-service` → `order-db:5432`
 - `notification-service` → `notification-db:5432`
+- `notification-service` → `mailpit:1025`
 - `api-gateway` → nombres internos de los microservicios
 
 La documentación técnica se encuentra en `docs/infraestructura-docker.md`.
