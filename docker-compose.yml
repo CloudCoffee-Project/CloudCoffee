@@ -188,6 +188,7 @@ services:
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
             SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
+            FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
             MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
         secrets:
             - jwt_public_key
