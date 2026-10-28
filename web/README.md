@@ -78,6 +78,12 @@ Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/produc
 
 INT2-96 incorpora el listado mínimo porque la base de INT2-48 aún estaba pendiente. La comparación de ofertas, el carrito y los cambios de seguridad del backend quedan en sus respectivos issues.
 
+## Verificación de correo
+
+El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado.
+
+En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. Para probar el flujo en otro origen, configura `FRONTEND_URL` antes de iniciar los servicios y asegúrate de que apunte al sitio web accesible desde el navegador.
+
 ## Scripts
 
 ```bash
@@ -115,7 +121,7 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 ## Estructura
 
-- `src/pages/`: páginas asociadas a rutas; inicialmente `/` y `/catalogo`.
+- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login` y `/verificar-correo`.
 - `src/components/`: componentes reutilizables.
 - `src/services/`: cliente HTTP común para acceder al API Gateway.
 - `src/hooks/`: hooks reutilizables.
