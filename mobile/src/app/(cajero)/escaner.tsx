@@ -13,7 +13,7 @@
 // (docs: "unmount Camera components whenever a screen is unfocused").
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 
@@ -130,14 +130,23 @@ export default function EscanerQRScreen() {
           <Text style={styles.cardIcono}>📷</Text>
           <Text style={styles.cardTitulo}>Permiso de cámara requerido</Text>
           <Text style={styles.cardTexto}>
-            Para escanear el código QR de retiro, otorga acceso a la cámara del dispositivo.
+            Para escanear el código QR de retiro, necesitamos acceso a la cámara de tu dispositivo.
+            Si lo denegaste anteriormente, puedes volver a solicitarlo o abrir los ajustes del
+            teléfono para habilitarlo.
           </Text>
           <Pressable
             style={styles.botonPrimario}
             onPress={() => void requestPermission()}
             testID="cajero-escaner-pedir-permiso"
           >
-            <Text style={styles.botonPrimarioTexto}>Solicitar permiso de cámara</Text>
+            <Text style={styles.botonPrimarioTexto}>Volver a solicitar permiso</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.botonSecundario, styles.botonSecundarioTop]}
+            onPress={() => void Linking.openSettings()}
+            testID="cajero-escaner-abrir-ajustes"
+          >
+            <Text style={styles.botonSecundarioTexto}>Abrir ajustes del teléfono</Text>
           </Pressable>
         </View>
       </View>
@@ -275,6 +284,24 @@ const styles = StyleSheet.create({
   },
   botonPrimarioTexto: {
     color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  botonSecundario: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  botonSecundarioTop: {
+    marginTop: 10,
+  },
+  botonSecundarioTexto: {
+    color: '#1D2433',
     fontSize: 14,
     fontWeight: '800',
   },
