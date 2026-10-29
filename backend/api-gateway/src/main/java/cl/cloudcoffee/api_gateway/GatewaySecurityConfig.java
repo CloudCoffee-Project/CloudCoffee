@@ -77,6 +77,8 @@ public class GatewaySecurityConfig {
                                 "/v1/catalog/campus", "/v1/catalog/categorias",
                                 "/v1/catalog/productos", "/v1/catalog/productos/*",
                                 "/v1/catalog/productos/*/ofertas").permitAll()
+                        // SockJS handshake is anonymous; STOMP CONNECT authenticates its JWT.
+                        .requestMatchers("/v1/notifications/ws", "/v1/notifications/ws/**").permitAll()
                         // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
                         .requestMatchers("/v1/notifications", "/v1/notifications/**").hasRole("SUPER_ADMIN")
                         // Solo un JWT validado con la llave publica autentica estas rutas.

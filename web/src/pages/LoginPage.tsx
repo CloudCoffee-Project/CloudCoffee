@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { request, ApiRequestError } from '../services/httpClient';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
@@ -20,6 +20,7 @@ export function LoginPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -28,6 +29,7 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setUnverifiedEmail('');
 
     // Criterio: Se validan campos antes del envío.
     if (!formData.email || !formData.password) {
@@ -58,6 +60,7 @@ export function LoginPage() {
         // Criterio: Cuenta no verificada muestra estado específico.
         if (error.type === '/problems/cuenta-no-verificada' || error.status === 403) {
           setErrorMsg('Tu cuenta no ha sido verificada. Revisa tu correo electrónico con las instrucciones.');
+          setUnverifiedEmail(formData.email);
         }
         // Criterio: Credenciales incorrectas muestran error claro.
         else if (error.type === '/problems/credenciales-invalidas' || error.status === 401) {
@@ -80,6 +83,13 @@ export function LoginPage() {
       {errorMsg && (
         <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #fecaca' }}>
           {errorMsg}
+          {unverifiedEmail && (
+            <p style={{ marginTop: '0.75rem' }}>
+              <Link to={`/verificar-correo?email=${encodeURIComponent(unverifiedEmail)}`}>
+                Reenviar correo de verificación
+              </Link>
+            </p>
+          )}
         </div>
       )}
 
