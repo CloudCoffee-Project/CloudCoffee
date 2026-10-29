@@ -201,6 +201,7 @@ services:
             SMTP_FROM: ${SMTP_FROM:-noreply@cloudcoffee.local}
             FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
             RESET_PASSWORD_URL: ${RESET_PASSWORD_URL:-http://localhost:3000/restablecer-contrasena}
+            WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
             MANAGEMENT_HEALTH_MAIL_ENABLED: "true"
         secrets:
             - jwt_public_key

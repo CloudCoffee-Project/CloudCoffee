@@ -44,6 +44,13 @@ class NotificationServiceApplicationTests extends ServiceJwtTests {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void sockJsHandshakeIsPublicBeforeAuthenticatedStompConnect() throws Exception {
+        mvc.perform(get("/notifications/ws/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.websocket").value(true));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"CLIENTE", "CAJERO", "ADMIN_CAFETERIA"})
     void notificationHistoryRejectsNonSuperAdminRoles(String role) throws Exception {
