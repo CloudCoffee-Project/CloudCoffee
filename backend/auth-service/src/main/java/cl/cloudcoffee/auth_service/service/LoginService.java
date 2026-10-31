@@ -40,6 +40,7 @@ public class LoginService {
     @Transactional
     public LoginResponse iniciarSesion(String email, String password) {
         Usuario usuario = usuarioRepository.findByEmail(email)
+                .filter(u -> u.isActivo() && !u.isEliminado())
                 .filter(u -> passwordEncoder.matches(password, u.getPasswordHash()))
                 .orElseThrow(LoginService::credencialesInvalidas);
 

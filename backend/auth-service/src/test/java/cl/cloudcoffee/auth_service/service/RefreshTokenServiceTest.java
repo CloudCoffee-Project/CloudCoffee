@@ -15,6 +15,9 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -139,5 +142,23 @@ class RefreshTokenServiceTest {
                 .satisfies(exception -> assertThat(((BusinessException) exception).getStatus().value()).isEqualTo(401));
 
         verify(tokenAuthRepository, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"activo", "eliminado"})
+    void rechazaCuentaInhabilitadaSinRotarLaSesion(String indicador) {
+        Usuario usuario = usuarioDePrueba();
+        ReflectionTestUtils.setField(usuario, indicador, indicador.equals("eliminado"));
+        String tokenPlano = TokenHasher.generarTokenPlano();
+        TokenAuth tokenActual = tokenVigente(usuario, TokenHasher.hash(tokenPlano));
+        when(tokenAuthRepository.findForUpdate(TokenHasher.hash(tokenPlano), TipoToken.REFRESH))
+                .thenReturn(Optional.of(tokenActual));
+
+        assertThatThrownBy(() -> refreshTokenService.renovar(tokenPlano))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getStatus().value()).isEqualTo(401));
+        assertThat(tokenActual.getRevokedAt()).isNull();
+        verify(tokenAuthRepository, never()).save(any());
+        verify(jwtTokenService, never()).emitir(any());
     }
 }
