@@ -123,12 +123,33 @@ protegidas por `X-Internal-Service-Token`:
 
 | Operación | Ruta | Comportamiento |
 |---|---|---|
-| Reservar | `POST /internal/servicios/catalogo/reservas` | Recibe `orderId`, `offerId` y `quantity`; primera reserva responde `201`, un reintento idéntico `200`. |
-| Confirmar | `POST /internal/servicios/catalogo/reservas/{orderId}/{offerId}/confirmar` | Confirma una reserva vigente sin devolver stock. |
-| Liberar | `POST /internal/servicios/catalogo/reservas/{orderId}/{offerId}/liberar` | Devuelve al inventario el stock de una reserva pendiente. |
+| Reservar | `POST /internal/servicios/catalogo/reservas` | Recibe `orderId`, `offerId`, `quantity` y `attemptId` opcional; primera reserva responde `201`, repetición del mismo intento `200`. |
+| Confirmar | `POST /internal/servicios/catalogo/reservas/{reservationId}/confirmar` | Confirma esa reserva vigente sin volver a descontar stock. |
+| Liberar | `POST /internal/servicios/catalogo/reservas/{reservationId}/liberar` | Devuelve al inventario el stock de esa reserva pendiente una sola vez. |
 
-La combinación `orderId` + `offerId` identifica la reserva y permite que una orden
-tenga varios ítems. Repetir esa combinación con una cantidad distinta responde `409`.
+Desde INT2-106, `orderId` + `offerId` + `attemptId` identifica un intento. Order debe
+conservar un UUID de intento durante los reintentos de transporte; después de
+compensar o vencer una reserva puede iniciar otra intención con un UUID nuevo.
+La misma clave devuelve siempre la misma reserva, incluso `RELEASED` o `EXPIRED`;
+cambiar su cantidad devuelve `409`. Una reserva `RESERVED` o `CONFIRMED` impide
+crear otro intento para la misma orden/oferta (`409 RESERVA_INTENTO_CONFLICTIVO`),
+aunque quede stock. Las operaciones se serializan bloqueando la oferta antes de
+consultar/modificar sus reservas.
+
+Compatibilidad: omitir `attemptId` (o enviarlo `null`) selecciona el intento legado
+`00000000-0000-0000-0000-000000000000`. Las rutas anteriores
+`/{orderId}/{offerId}/confirmar` y `/{orderId}/{offerId}/liberar` operan **solo sobre
+ese intento legado**; no seleccionan el último intento. Para intentos explícitos,
+Order debe guardar el `reservationId` de la respuesta y usar las rutas por ID.
+Una confirmación/liberación tardía de una reserva histórica nunca modifica el
+intento nuevo. La respuesta incluye `attemptId` además de los campos anteriores.
+
+`V4__add_reservation_attempts.sql` conserva las filas existentes como intentos
+legados y cambia la unicidad al triple anterior. Desplegar Catalog antes de que
+Order empiece a enviar claves explícitas. Volver al binario anterior después de
+crear múltiples intentos no es compatible con sus consultas por orden/oferta;
+cualquier reversión de datos requiere conciliación previa, sin borrar historial.
+
 Solo se admiten cantidades positivas y ofertas `AVAILABLE`
 con producto `ACTIVE`, cafetería `OPEN` y stock suficiente. El descuento se ejecuta
 en una actualización condicional de la base de datos, por lo que solicitudes
@@ -201,6 +222,50 @@ Las cafeterías son las del seed de catálogo, así que conviene activar ambos p
 `dev`. Un cambio de asignación rige para la autorización en la siguiente solicitud;
 el claim `cafeteriaId` que usa la UI se actualiza en el siguiente login o refresh.
 `SUPER_ADMIN` no tiene cafetería y recibe `403` en las rutas de personal.
+
+### Modelo de compras, órdenes e ítems (INT2-52)
+
+`V4__complete_compras_ordenes_items.sql` amplía las migraciones V1–V3 existentes.
+Una compra nueva se construye con órdenes por cafetería y snapshots de sus ítems:
+oferta/producto, nombres, cantidad, precio unitario y subtotal. Los totales se
+calculan desde esos snapshots; no hay joins ni claves foráneas hacia las bases de
+Auth o Catalog. Los estados siguen el contrato INT2-50. Compra y órdenes comparten
+el vencimiento de reserva de 15 minutos, tienen timestamps y bloqueo optimista
+(`version` JPA empieza en 0; el DTO público deberá exponer `version + 1`).
+
+Los importes conservan `BigDecimal`/`NUMERIC(12,2)` para compatibilidad con pagos,
+con restricciones que exigen pesos CLP enteros entre 0 y 2.000.000.000, sin redondear.
+Los pagos siguen exigiendo un importe positivo. Una compra cancelada tiene total
+cobrable cero; sus órdenes/ítems y el pago conservan los importes históricos.
+Hay unicidad por compra/cafetería y orden/oferta, índices para historial/pedidos y
+claves foráneas que impiden borrar el historial con dependencias.
+
+Al actualizar una base V3, V4 conserva compras, pagos e idempotencia. Deriva el
+estado de las compras desde el pago existente (aprobado → pagado; rechazado →
+cancelado con total cobrable cero) y el vencimiento desde `created_at`. No inventa
+órdenes ni snapshots que la base anterior nunca guardó. Los datos de desarrollo
+de pagos y el constructor mínimo de `Compra` se mantienen para INT2-53/76; la
+creación completa de INT2-71 debe usar el constructor con órdenes. El seed solo
+inserta compras ausentes, sin sobrescribir las ya existentes.
+
+La migración rechaza importes históricos fraccionarios: deben revisarse antes de
+desplegar, no redondearse automáticamente. No se modifican checksums de V1–V3.
+Ante un rollback de aplicación se conserva V4; revertir el esquema requiere un
+respaldo porque eliminar órdenes/snapshots perdería historial.
+
+Las pruebas cubren persistencia completa desde una base vacía, actualización
+V3→V4 con pagos e idempotencia, restricciones de la base y compatibilidad del pago
+con las nuevas compras. Ejecutar desde `backend`:
+
+```bash
+./auth-service/mvnw -pl order-service -am clean verify
+```
+
+`ComprasUpgradeMigrationTests` usa un schema temporal aislado y admite las mismas
+variables `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y
+`SPRING_DATASOURCE_PASSWORD` que CI para verificar PostgreSQL 16. Las APIs de
+creación/consulta/revisión, reservas, outbox y aplicación del pago se completan en
+INT2-71/72/73/64/77; esta issue implementa el modelo persistente.
 
 ### Pagos simulados en order-service (INT2-53)
 
