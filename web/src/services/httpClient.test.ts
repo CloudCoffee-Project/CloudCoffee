@@ -59,6 +59,21 @@ describe('cliente HTTP del API Gateway', () => {
     expect(headers.get('Authorization')).toBe('Bearer token-de-sesion');
   });
 
+  it('omite el access token almacenado cuando la consulta es pública', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue('token-de-sesion'),
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
+    await createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/catalog/productos', { omitAccessToken: true });
+
+    const headers = new Headers(fetcher.mock.calls[0][1]?.headers);
+    expect(headers.has('Authorization')).toBe(false);
+  });
+
   it.each(['/v1/auth/verificacion', '/v1/auth/verificacion/reenviar'])(
     'no adjunta la sesión a la ruta pública %s',
     async (path) => {

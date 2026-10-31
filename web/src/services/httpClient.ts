@@ -5,6 +5,10 @@ export interface ValidationError {
   message: string;
 }
 
+export interface GatewayRequestInit extends RequestInit {
+  omitAccessToken?: boolean;
+}
+
 export class ApiRequestError extends Error {
   constructor(
     readonly status: number | null,
@@ -110,9 +114,10 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
   const origin = gatewayOrigin(baseUrl);
 
   return {
-    async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    async request<T>(path: string, options: GatewayRequestInit = {}): Promise<T> {
+      const { omitAccessToken = false, ...fetchOptions } = options;
       const url = gatewayUrl(origin, path);
-      const headers = new Headers(options.headers);
+      const headers = new Headers(fetchOptions.headers);
       if (!headers.has('Accept')) {
         headers.set('Accept', 'application/json');
       }
@@ -121,12 +126,12 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
         path.startsWith('/v1/auth/register') ||
         path.startsWith('/v1/auth/refresh') ||
         path.startsWith('/v1/auth/verificacion');
-      if (token && !isAuthRoute && !headers.has('Authorization')) {
+      if (token && !omitAccessToken && !isAuthRoute && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${token}`);
       }
       let response: Response;
       try {
-        response = await fetcher(url, { ...options, headers });
+        response = await fetcher(url, { ...fetchOptions, headers });
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
           throw error;
@@ -159,7 +164,7 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
 
 let defaultClient: ReturnType<typeof createHttpClient> | undefined;
 
-export function request<T>(path: string, options?: RequestInit): Promise<T> {
+export function request<T>(path: string, options?: GatewayRequestInit): Promise<T> {
   defaultClient ??= createHttpClient(env.apiBaseUrl);
   return defaultClient.request<T>(path, options);
 }
