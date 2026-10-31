@@ -16,17 +16,24 @@ import jakarta.persistence.LockModeType;
 
 public interface StockReservationRepository extends JpaRepository<StockReservation, UUID> {
 
-    Optional<StockReservation> findByOrderIdAndOfferId(UUID orderId, UUID offerId);
+    Optional<StockReservation> findByOrderIdAndOfferIdAndAttemptId(UUID orderId, UUID offerId, UUID attemptId);
+
+    boolean existsByOrderIdAndOfferIdAndStatusIn(UUID orderId, UUID offerId,
+            List<StockReservationStatus> statuses);
+
+    @Query("SELECT r.offer.id FROM StockReservation r WHERE r.id = :reservationId")
+    Optional<UUID> findOfferIdByReservationId(@Param("reservationId") UUID reservationId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM StockReservation r WHERE r.id = :reservationId")
     Optional<StockReservation> findByIdForUpdate(@Param("reservationId") UUID reservationId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT r FROM StockReservation r WHERE r.orderId = :orderId AND r.offer.id = :offerId")
-    Optional<StockReservation> findByOrderIdAndOfferIdForUpdate(
+    @Query("SELECT r FROM StockReservation r WHERE r.orderId = :orderId AND r.offer.id = :offerId AND r.attemptId = :attemptId")
+    Optional<StockReservation> findByOrderIdAndOfferIdAndAttemptIdForUpdate(
             @Param("orderId") UUID orderId,
-            @Param("offerId") UUID offerId);
+            @Param("offerId") UUID offerId,
+            @Param("attemptId") UUID attemptId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
