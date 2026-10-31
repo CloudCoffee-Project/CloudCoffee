@@ -23,7 +23,7 @@ public class Pago {
     @Column(nullable = false, length = 20)
     private EstadoPago estado;
 
-    @Column(nullable = false, precision = 10, scale = 2, updatable = false)
+    @Column(nullable = false, precision = 12, scale = 2, updatable = false)
     private BigDecimal monto;
 
     @Column(nullable = false, length = 30, updatable = false)
