@@ -21,10 +21,12 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "stock_reservation", uniqueConstraints = @UniqueConstraint(
-        name = "uq_stock_reservation_order_offer", columnNames = {"order_id", "offer_id"}))
+        name = "uq_stock_reservation_attempt", columnNames = {"order_id", "offer_id", "attempt_id"}))
 @Getter
 @Setter
 public class StockReservation {
+
+    public static final UUID LEGACY_ATTEMPT_ID = new UUID(0, 0);
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -33,6 +35,9 @@ public class StockReservation {
 
     @Column(name = "order_id", nullable = false)
     private UUID orderId;
+
+    @Column(name = "attempt_id", nullable = false)
+    private UUID attemptId = LEGACY_ATTEMPT_ID;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "offer_id", nullable = false)

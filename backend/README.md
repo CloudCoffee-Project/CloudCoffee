@@ -123,12 +123,33 @@ protegidas por `X-Internal-Service-Token`:
 
 | Operación | Ruta | Comportamiento |
 |---|---|---|
-| Reservar | `POST /internal/servicios/catalogo/reservas` | Recibe `orderId`, `offerId` y `quantity`; primera reserva responde `201`, un reintento idéntico `200`. |
-| Confirmar | `POST /internal/servicios/catalogo/reservas/{orderId}/{offerId}/confirmar` | Confirma una reserva vigente sin devolver stock. |
-| Liberar | `POST /internal/servicios/catalogo/reservas/{orderId}/{offerId}/liberar` | Devuelve al inventario el stock de una reserva pendiente. |
+| Reservar | `POST /internal/servicios/catalogo/reservas` | Recibe `orderId`, `offerId`, `quantity` y `attemptId` opcional; primera reserva responde `201`, repetición del mismo intento `200`. |
+| Confirmar | `POST /internal/servicios/catalogo/reservas/{reservationId}/confirmar` | Confirma esa reserva vigente sin volver a descontar stock. |
+| Liberar | `POST /internal/servicios/catalogo/reservas/{reservationId}/liberar` | Devuelve al inventario el stock de esa reserva pendiente una sola vez. |
 
-La combinación `orderId` + `offerId` identifica la reserva y permite que una orden
-tenga varios ítems. Repetir esa combinación con una cantidad distinta responde `409`.
+Desde INT2-106, `orderId` + `offerId` + `attemptId` identifica un intento. Order debe
+conservar un UUID de intento durante los reintentos de transporte; después de
+compensar o vencer una reserva puede iniciar otra intención con un UUID nuevo.
+La misma clave devuelve siempre la misma reserva, incluso `RELEASED` o `EXPIRED`;
+cambiar su cantidad devuelve `409`. Una reserva `RESERVED` o `CONFIRMED` impide
+crear otro intento para la misma orden/oferta (`409 RESERVA_INTENTO_CONFLICTIVO`),
+aunque quede stock. Las operaciones se serializan bloqueando la oferta antes de
+consultar/modificar sus reservas.
+
+Compatibilidad: omitir `attemptId` (o enviarlo `null`) selecciona el intento legado
+`00000000-0000-0000-0000-000000000000`. Las rutas anteriores
+`/{orderId}/{offerId}/confirmar` y `/{orderId}/{offerId}/liberar` operan **solo sobre
+ese intento legado**; no seleccionan el último intento. Para intentos explícitos,
+Order debe guardar el `reservationId` de la respuesta y usar las rutas por ID.
+Una confirmación/liberación tardía de una reserva histórica nunca modifica el
+intento nuevo. La respuesta incluye `attemptId` además de los campos anteriores.
+
+`V4__add_reservation_attempts.sql` conserva las filas existentes como intentos
+legados y cambia la unicidad al triple anterior. Desplegar Catalog antes de que
+Order empiece a enviar claves explícitas. Volver al binario anterior después de
+crear múltiples intentos no es compatible con sus consultas por orden/oferta;
+cualquier reversión de datos requiere conciliación previa, sin borrar historial.
+
 Solo se admiten cantidades positivas y ofertas `AVAILABLE`
 con producto `ACTIVE`, cafetería `OPEN` y stock suficiente. El descuento se ejecuta
 en una actualización condicional de la base de datos, por lo que solicitudes
