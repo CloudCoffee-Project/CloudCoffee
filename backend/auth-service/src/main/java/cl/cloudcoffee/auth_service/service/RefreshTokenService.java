@@ -35,6 +35,7 @@ public class RefreshTokenService {
         TokenAuth tokenActual = tokenAuthRepository
                 .findForUpdate(TokenHasher.hash(refreshTokenPlano), TipoToken.REFRESH)
                 .filter(TokenAuth::estaVigente)
+                .filter(t -> t.getUsuario().isActivo() && !t.getUsuario().isEliminado())
                 .orElseThrow(RefreshTokenService::refreshTokenInvalido);
 
         // Rotación: el token presentado queda invalidado de inmediato, sin tocar
