@@ -196,6 +196,50 @@ Las cafeterías son las del seed de catálogo, así que conviene activar ambos p
 el claim `cafeteriaId` que usa la UI se actualiza en el siguiente login o refresh.
 `SUPER_ADMIN` no tiene cafetería y recibe `403` en las rutas de personal.
 
+### Modelo de compras, órdenes e ítems (INT2-52)
+
+`V4__complete_compras_ordenes_items.sql` amplía las migraciones V1–V3 existentes.
+Una compra nueva se construye con órdenes por cafetería y snapshots de sus ítems:
+oferta/producto, nombres, cantidad, precio unitario y subtotal. Los totales se
+calculan desde esos snapshots; no hay joins ni claves foráneas hacia las bases de
+Auth o Catalog. Los estados siguen el contrato INT2-50. Compra y órdenes comparten
+el vencimiento de reserva de 15 minutos, tienen timestamps y bloqueo optimista
+(`version` JPA empieza en 0; el DTO público deberá exponer `version + 1`).
+
+Los importes conservan `BigDecimal`/`NUMERIC(12,2)` para compatibilidad con pagos,
+con restricciones que exigen pesos CLP enteros entre 0 y 2.000.000.000, sin redondear.
+Los pagos siguen exigiendo un importe positivo. Una compra cancelada tiene total
+cobrable cero; sus órdenes/ítems y el pago conservan los importes históricos.
+Hay unicidad por compra/cafetería y orden/oferta, índices para historial/pedidos y
+claves foráneas que impiden borrar el historial con dependencias.
+
+Al actualizar una base V3, V4 conserva compras, pagos e idempotencia. Deriva el
+estado de las compras desde el pago existente (aprobado → pagado; rechazado →
+cancelado con total cobrable cero) y el vencimiento desde `created_at`. No inventa
+órdenes ni snapshots que la base anterior nunca guardó. Los datos de desarrollo
+de pagos y el constructor mínimo de `Compra` se mantienen para INT2-53/76; la
+creación completa de INT2-71 debe usar el constructor con órdenes. El seed solo
+inserta compras ausentes, sin sobrescribir las ya existentes.
+
+La migración rechaza importes históricos fraccionarios: deben revisarse antes de
+desplegar, no redondearse automáticamente. No se modifican checksums de V1–V3.
+Ante un rollback de aplicación se conserva V4; revertir el esquema requiere un
+respaldo porque eliminar órdenes/snapshots perdería historial.
+
+Las pruebas cubren persistencia completa desde una base vacía, actualización
+V3→V4 con pagos e idempotencia, restricciones de la base y compatibilidad del pago
+con las nuevas compras. Ejecutar desde `backend`:
+
+```bash
+./auth-service/mvnw -pl order-service -am clean verify
+```
+
+`ComprasUpgradeMigrationTests` usa un schema temporal aislado y admite las mismas
+variables `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y
+`SPRING_DATASOURCE_PASSWORD` que CI para verificar PostgreSQL 16. Las APIs de
+creación/consulta/revisión, reservas, outbox y aplicación del pago se completan en
+INT2-71/72/73/64/77; esta issue implementa el modelo persistente.
+
 ### Pagos simulados en order-service (INT2-53)
 
 La migración `V2__create_compras_y_pagos.sql` crea `compras` (base mínima con
