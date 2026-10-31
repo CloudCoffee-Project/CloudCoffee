@@ -12,12 +12,13 @@ retiro. `catalog-service` es dueño de ofertas, precios y reservas de stock.
 Auth determina identidad, rol y asignación del personal a cafeterías; Notification
 consume eventos para correo y WebSocket. Cada servicio conserva su propia base.
 
-Esta entrega define el contrato; **no publica endpoints nuevos**. En `main`,
-Order solo tiene infraestructura y la migración inicial. Gateway todavía no
-enruta compras/órdenes ni admite `Idempotency-Key` en CORS. Las implementaciones
-corresponden a INT2-51/52/53/54/55/64/65/71–81/98. Swagger de Sprint 1 sigue
-documentando únicamente Auth y Catálogo; el JSON adjunto puede importarse en un
-visor OpenAPI sin iniciar servicios.
+El contrato distingue definición e implementación. INT2-52 completa el modelo
+persistente de compras, órdenes e ítems mediante V4, conservando las migraciones
+y pagos de INT2-53/76. Gateway ya enruta compras/órdenes y admite `Idempotency-Key`
+en CORS (INT2-55/98). Order expone la simulación y consulta de pago; las APIs de
+creación, consulta, revisión y retiro y la aplicación integrada del pago siguen
+en sus issues de implementación. Swagger de Sprint 1 documenta Auth y Catálogo;
+el JSON adjunto es el contrato objetivo, no evidencia de endpoints ejecutables.
 
 El único método de entrega es retiro en cafetería. El pago es una simulación
 interna a Order: no pide tarjeta, no crea un `payment-service`, no devuelve
