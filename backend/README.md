@@ -170,7 +170,13 @@ personal. El registro público siempre crea un `CLIENTE` sin asignación e ignor
 `rol` o `cafeteriaId` enviados.
 
 Configuración: `INTERNAL_SERVICE_TOKEN` en auth-service y en cada servicio que
-consulta (hoy catalog-service, que además usa `AUTH_SERVICE_URL`). El mismo filtro
+consulta (`catalog-service` y `notification-service`, ambos con `AUTH_SERVICE_URL`).
+En Docker, Notification consulta `http://auth-service:8081` y espera a que Auth
+esté saludable. Debe recibir el mismo token interno que Auth para validar cada
+suscripción del cajero; una asignación ausente, otra cafetería o un error de Auth
+continúan rechazando la suscripción. Para ejecución fuera de Docker configura
+`AUTH_SERVICE_URL` con la URL alcanzable de Auth e `INTERNAL_SERVICE_TOKEN` con el
+secreto compartido, sin incluir su valor en logs ni documentación. El mismo filtro
 protege las reservas internas de catalog-service (INT2-51/74/75), así que
 order-service necesitará el token cuando las invoque. Docker Compose
 exige definirlo en `.env`; el valor de `.env.example` es solo para desarrollo.
