@@ -270,10 +270,26 @@ export interface Orden {
   codigoOrden: string;
   cafeteriaId: string;
   cafeteriaNombre: string;
+  // El contrato de órdenes (GET /v1/orders) NO trae el nombre del cliente, así
+  // que es opcional y la pantalla lo oculta cuando falta: no se inventa.
   clienteNombre?: string;
   estado: EstadoOrden;
   montoTotal: number;
   items: OrdenItem[];
+}
+
+// Envoltura paginada del contrato de órdenes (PaginaOrdenes de
+// backend/docs/compra-pago-retiro.openapi.json). GET /v1/orders devuelve esta
+// página, no un arreglo plano, ordenada por creadoAt DESC e id DESC.
+export interface PaginaOrdenes {
+  content: Orden[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
 }
 
 // Eventos STOMP de tiempo real (contrato a fijar con el backend cuando
