@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.UUID;
 
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -664,5 +665,34 @@ class AuthControllerTest extends JwtTestSupport {
 
         assertThat(tokenAuthRepository.findById(verificacion.getId()).orElseThrow().estaVigente()).isTrue();
         assertThat(tokenAuthRepository.findById(recuperacion.getId()).orElseThrow().estaVigente()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"activo", "eliminado"})
+    void cuentaInhabilitadaRechazaLoginYRefreshSinRotacion(String indicador) throws Exception {
+        String email = emailUnico("inhabilitada");
+        registrarYVerificarCliente(email);
+        String body = mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String refresh = objectMapper.readTree(body).get("refreshToken").asText();
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseThrow();
+        ReflectionTestUtils.setField(usuario, indicador, indicador.equals("eliminado"));
+        usuarioRepository.saveAndFlush(usuario);
+        String refreshHash = sha256(refresh);
+        long tokensAntes = tokenAuthRepository.count();
+
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(email, "password123")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.type").value("/problems/credenciales-invalidas"));
+        mvc.perform(post("/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshJson(refresh)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.type").value("/problems/refresh-token-invalido"));
+        assertThat(tokenAuthRepository.count()).isEqualTo(tokensAntes);
+        assertThat(tokenAuthRepository.findAll().stream()
+                .filter(t -> t.getTokenHash().equals(refreshHash))
+                .findFirst().orElseThrow().getRevokedAt()).isNull();
     }
 }

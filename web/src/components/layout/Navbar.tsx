@@ -20,7 +20,15 @@ export function Navbar() {
         </NavLink>
       </div>
 
-      {/* Botones de acción derecha (según Mockup) */}
+      <div className="navbar-links">
+        <NavLink
+          to="/catalogo"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+        >
+          Catálogo
+        </NavLink>
+      </div>
+
       <div className="navbar-actions">
         <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
           Registrarse

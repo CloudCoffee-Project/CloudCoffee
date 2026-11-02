@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
@@ -68,8 +69,8 @@ public class StockReservationService {
 
         expireReservationsForOffer(offer, clock.instant());
 
-        var existing = reservationRepository.findByOrderIdAndOfferIdForUpdate(
-                request.orderId(), request.offerId());
+        var existing = reservationRepository.findByOrderIdAndOfferIdAndAttemptIdForUpdate(
+                request.orderId(), request.offerId(), request.attemptId());
         if (existing.isPresent()) {
             StockReservation reservation = existing.get();
             if (!reservation.getQuantity().equals(request.quantity())) {
@@ -78,6 +79,13 @@ public class StockReservationService {
                         "RESERVA_IDEMPOTENTE_CONFLICTIVA");
             }
             return new ReservationResult(reservation, false);
+        }
+
+        if (reservationRepository.existsByOrderIdAndOfferIdAndStatusIn(request.orderId(), request.offerId(),
+                List.of(StockReservationStatus.RESERVED, StockReservationStatus.CONFIRMED))) {
+            throw error(HttpStatus.CONFLICT, "La orden ya tiene una reserva activa o confirmada",
+                    "Libera el intento anterior antes de crear otro; una reserva confirmada no admite otro intento.",
+                    "RESERVA_INTENTO_CONFLICTIVO");
         }
 
         if (offer.getStatus() != OfferStatus.AVAILABLE
@@ -91,6 +99,7 @@ public class StockReservationService {
         Instant reservedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         StockReservation reservation = new StockReservation();
         reservation.setOrderId(request.orderId());
+        reservation.setAttemptId(request.attemptId());
         reservation.setOffer(offer);
         reservation.setQuantity(request.quantity());
         reservation.setStatus(StockReservationStatus.RESERVED);
@@ -105,6 +114,10 @@ public class StockReservationService {
     public StockReservation confirm(UUID orderId, UUID offerId) {
         Offer offer = lockOffer(offerId);
         StockReservation reservation = lockReservation(orderId, offerId);
+        return confirmLocked(offer, reservation);
+    }
+
+    private StockReservation confirmLocked(Offer offer, StockReservation reservation) {
         expireReservationsForOffer(offer, clock.instant());
         if (reservation.getStatus() == StockReservationStatus.EXPIRED) {
             return reservation;
@@ -121,14 +134,18 @@ public class StockReservationService {
 
     @Transactional
     public StockReservation confirm(UUID reservationId) {
-        StockReservation reservation = findReservation(reservationId);
-        return confirm(reservation.getOrderId(), reservation.getOffer().getId());
+        Offer offer = lockOfferForReservation(reservationId);
+        return confirmLocked(offer, lockReservation(reservationId));
     }
 
     @Transactional
     public StockReservation release(UUID orderId, UUID offerId) {
         Offer offer = lockOffer(offerId);
         StockReservation reservation = lockReservation(orderId, offerId);
+        return releaseLocked(offer, reservation);
+    }
+
+    private StockReservation releaseLocked(Offer offer, StockReservation reservation) {
         expireReservationsForOffer(offer, clock.instant());
         if (reservation.getStatus() == StockReservationStatus.EXPIRED
                 || reservation.getStatus() == StockReservationStatus.RELEASED) {
@@ -146,8 +163,8 @@ public class StockReservationService {
 
     @Transactional
     public StockReservation release(UUID reservationId) {
-        StockReservation reservation = findReservation(reservationId);
-        return release(reservation.getOrderId(), reservation.getOffer().getId());
+        Offer offer = lockOfferForReservation(reservationId);
+        return releaseLocked(offer, lockReservation(reservationId));
     }
 
     @Transactional
@@ -157,7 +174,8 @@ public class StockReservationService {
     }
 
     private StockReservation lockReservation(UUID orderId, UUID offerId) {
-        return reservationRepository.findByOrderIdAndOfferIdForUpdate(orderId, offerId)
+        return reservationRepository.findByOrderIdAndOfferIdAndAttemptIdForUpdate(
+                orderId, offerId, StockReservation.LEGACY_ATTEMPT_ID)
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Reserva no encontrada",
                         "No existe una reserva para esa orden y oferta.", "RESERVA_NO_ENCONTRADA"));
     }
@@ -184,8 +202,15 @@ public class StockReservationService {
         stockEventPublisher.publishStockUpdated(offer);
     }
 
-    private StockReservation findReservation(UUID reservationId) {
-        return reservationRepository.findById(reservationId)
+    private Offer lockOfferForReservation(UUID reservationId) {
+        UUID offerId = reservationRepository.findOfferIdByReservationId(reservationId)
+                .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Reserva no encontrada",
+                        "No existe una reserva con el identificador indicado.", "RESERVA_NO_ENCONTRADA"));
+        return lockOffer(offerId);
+    }
+
+    private StockReservation lockReservation(UUID reservationId) {
+        return reservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Reserva no encontrada",
                         "No existe una reserva con el identificador indicado.", "RESERVA_NO_ENCONTRADA"));
     }

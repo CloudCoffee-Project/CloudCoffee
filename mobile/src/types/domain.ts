@@ -62,8 +62,7 @@ export function esEstadoOrdenNoRetirado(estado: EstadoOrden): boolean {
 }
 
 // Mismo enum EstadoCompra del contrato: toda compra nace en
-// 'revision_requerida' o 'pendiente_pago' (no existe 'reservando' como estado
-// de negocio estable).
+// 'revision_requerida' o 'pendiente_pago' (ver backend/order-service/model/EstadoCompra).
 export type EstadoCompra = 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
 
 // Estados en los que el cliente todavía puede actuar sobre su compra (INT4-37):

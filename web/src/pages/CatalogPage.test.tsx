@@ -30,7 +30,11 @@ function page(number = 0, totalElements = 13, nombre = `Producto página ${numbe
 function productRequests() {
   return vi.mocked(request).mock.calls
     .filter(([path]) => path.startsWith('/v1/catalog/productos?'))
-    .map(([path, options]) => ({ params: new URL(path, 'http://gateway.test').searchParams, signal: options?.signal }));
+    .map(([path, options]) => ({
+      params: new URL(path, 'http://gateway.test').searchParams,
+      signal: options?.signal,
+      omitAccessToken: options?.omitAccessToken,
+    }));
 }
 
 function lastRequest() {
@@ -68,6 +72,7 @@ describe('catálogo web', () => {
     render(<CatalogPage />);
     await screen.findByRole('option', { name: 'San Francisco' });
     expect(productRequests()).toHaveLength(0);
+    expect(vi.mocked(request).mock.calls.every(([, options]) => options?.omitAccessToken === true)).toBe(true);
     expect((screen.getByLabelText('Categoría') as HTMLSelectElement).disabled).toBe(true);
     expect((screen.getByRole('searchbox') as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText('Selecciona un campus para ver sus productos.')).toBeTruthy();
@@ -75,6 +80,7 @@ describe('catálogo web', () => {
 
   it('pagina según los metadatos del servidor y respeta ambos límites', async () => {
     await selectCampus();
+    expect(lastRequest().omitAccessToken).toBe(true);
     expect(screen.getByText('13 productos · Página 1 de 2')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Anterior' }) as HTMLButtonElement).disabled).toBe(true);
     expect(lastRequest().params.get('size')).toBe('12');

@@ -174,6 +174,9 @@ services:
             args:
                 SERVICE_NAME: notification-service
         environment:
+            # INT2-107: validar la asignación vigente del cajero en Auth.
+            AUTH_SERVICE_URL: http://auth-service:8081
+            INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
@@ -214,6 +217,8 @@ services:
             retries: 5
             start_period: 30s
         depends_on:
+            auth-service:
+                condition: service_healthy
             notification-db:
                 condition: service_healthy
             rabbitmq:

@@ -5,8 +5,9 @@
 --   66666666-6666-4666-8666-666666666601  comprador@cloudcoffee.dev
 --   66666666-6666-4666-8666-666666666602  cajero.central@cloudcoffee.dev (compra ajena al comprador)
 --
--- Migración repetible e idempotente: UUID fijos y MERGE por id. No crea pagos:
--- se generan con POST /v1/compras/{compraId}/pago/simulacion.
+-- Migración repetible e idempotente: UUID fijos y MERGE por id. No reemplaza
+-- compras existentes ni sus importes/estados después de una simulación.
+-- No crea pagos: se generan con POST /v1/compras/{compraId}/pago.
 
 MERGE INTO compras t
 USING (VALUES
@@ -15,8 +16,6 @@ USING (VALUES
     ('77777777-7777-4777-8777-777777777703', '66666666-6666-4666-8666-666666666602', 1500.00)
 ) AS s (id, usuario_id, monto_total)
 ON t.id = CAST(s.id AS UUID)
-WHEN MATCHED THEN
-    UPDATE SET usuario_id = CAST(s.usuario_id AS UUID), monto_total = s.monto_total
 WHEN NOT MATCHED THEN
     INSERT (id, usuario_id, monto_total, created_at)
     VALUES (CAST(s.id AS UUID), CAST(s.usuario_id AS UUID), s.monto_total, CURRENT_TIMESTAMP);
