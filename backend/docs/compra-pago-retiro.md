@@ -16,8 +16,11 @@ El contrato distingue definición e implementación. INT2-52 completa el modelo
 persistente de compras, órdenes e ítems mediante V4, conservando las migraciones
 y pagos de INT2-53/76. Gateway ya enruta compras/órdenes y admite `Idempotency-Key`
 en CORS (INT2-55/98). Order expone la simulación y consulta de pago; las APIs de
-creación, consulta, revisión y retiro y la aplicación integrada del pago siguen
-en sus issues de implementación. Swagger de Sprint 1 documenta Auth y Catálogo;
+creación, revisión y retiro y la aplicación integrada del pago siguen
+en sus issues de implementación. INT2-72 incorpora historial y detalle de compras
+y detalle de órdenes para el CLIENTE propietario; el acceso del CAJERO queda
+para INT2-78. Ejemplos y errores en [Consultas del comprador](consultas-compras.md).
+Swagger de Sprint 1 documenta Auth y Catálogo;
 el JSON adjunto es el contrato objetivo, no evidencia de endpoints ejecutables.
 
 El único método de entrega es retiro en cafetería. El pago es una simulación
@@ -172,6 +175,11 @@ Páginas: `page >= 0`, `1 <= size <= 100`, predeterminado 20. Forma:
 rango devuelve contenido vacío; sin resultados `totalPages: 0`, `first/last: true`.
 Compras y órdenes se ordenan por `creadoAt DESC, id DESC`.
 No hay parámetro público `clienteId` ni `cafeteriaId` para ampliar acceso.
+
+Compatibilidad de lectura: las compras anteriores a V4 y los seeds mínimos de
+pagos no guardaron órdenes ni ítems. Se devuelven con `ordenes: []`, conservando
+importe y pago históricos; no se reconstruyen snapshots desde el catálogo actual.
+Las compras nuevas del flujo completo mantienen al menos una orden.
 
 Order valida propiedad y asignación en servidor, además del rol JWT. No confía en
 claims de cafetería ni campos de UI: la asignación persistida de INT2-65 se obtiene
