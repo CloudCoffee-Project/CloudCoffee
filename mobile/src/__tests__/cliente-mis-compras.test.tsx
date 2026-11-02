@@ -121,6 +121,23 @@ describe('pantalla de Mis Compras', () => {
     act(() => tree.unmount());
   });
 
+  it('desde el estado vacío lleva al catálogo', async () => {
+    mockListar.mockResolvedValue([]);
+
+    const tree = await renderizarMisCompras();
+
+    const boton = tree.root.findByProps({ testID: 'compras-vacio-accion' });
+    expect(textoDe(boton)).toContain('Ir al catálogo');
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)');
+
+    act(() => tree.unmount());
+  });
+
   it('lista las compras con su N°, estado y monto total', async () => {
     mockListar.mockResolvedValue([
       compra('c1'),
