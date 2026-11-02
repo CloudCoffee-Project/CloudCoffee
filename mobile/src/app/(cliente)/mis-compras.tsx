@@ -27,9 +27,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
+import { EstadoLista } from '../../components/EstadoLista';
 import { cancelarCompra, confirmarCompra, listarCompras } from '../../services/compras';
 import { cancelarOrden, confirmarOrden } from '../../services/ordenes';
 import { ApiProblem, toApiError } from '../../services/httpClient';
+import { tokens } from '../../theme/tokens';
 import {
   puedeCancelarCompra,
   puedeCancelarOrden,
@@ -197,17 +199,15 @@ export default function MisComprasScreen() {
   let contenido: ReactNode;
   if (errorCarga !== null) {
     contenido = (
-      <View style={styles.tarjetaError} testID="compras-error">
-        <Text style={styles.errorTitulo}>No pudimos cargar tu historial</Text>
-        <Text style={styles.errorMensaje}>{errorCarga}</Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnReintentar, pressed && styles.btnPresionado]}
-          onPress={reintentar}
-          testID="reintentar-compras"
-        >
-          <Text style={styles.btnReintentarTexto}>Reintentar</Text>
-        </Pressable>
-      </View>
+      <EstadoLista
+        variante="error"
+        icono="🛍️"
+        titulo="No pudimos cargar tu historial"
+        mensaje={errorCarga}
+        accion={{ etiqueta: 'Reintentar', onPress: reintentar, testID: 'reintentar-compras' }}
+        testID="compras-error"
+        style={styles.tarjetaEstado}
+      />
     );
   } else if (compras === null) {
     contenido = (
@@ -217,13 +217,18 @@ export default function MisComprasScreen() {
     );
   } else if (compras.length === 0) {
     contenido = (
-      <View style={styles.tarjetaVacio} testID="compras-vacio">
-        <Text style={styles.vacioIcono}>🛍️</Text>
-        <Text style={styles.vacioTitulo}>Aún no tienes compras</Text>
-        <Text style={styles.vacioTexto}>
-          Cuando realices una compra en el carrito, tu historial aparecerá aquí con sus boletas.
-        </Text>
-      </View>
+      <EstadoLista
+        icono="🛍️"
+        titulo="Aún no tienes compras"
+        mensaje="Cuando realices una compra en el carrito, tu historial aparecerá aquí con sus boletas."
+        accion={{
+          etiqueta: 'Ir al catálogo',
+          onPress: () => router.push('/(cliente)'),
+          testID: 'compras-vacio-accion',
+        }}
+        testID="compras-vacio"
+        style={styles.tarjetaEstado}
+      />
     );
   } else {
     contenido = (
@@ -688,66 +693,9 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
-  tarjetaError: {
-    marginHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#EFE9DE',
-    borderRadius: 18,
-    padding: 20,
-    alignItems: 'center',
-    gap: 8,
-  },
-  errorTitulo: {
-    color: '#1D2433',
-    fontSize: 16,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  errorMensaje: {
-    color: '#6B7280',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  btnReintentar: {
-    marginTop: 6,
-    backgroundColor: '#0052CC',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    alignItems: 'center',
-  },
-  btnReintentarTexto: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  tarjetaVacio: {
-    marginHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#EFE9DE',
-    borderStyle: 'dashed',
-    borderRadius: 18,
-    paddingVertical: 48,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    gap: 10,
-  },
-  vacioIcono: {
-    fontSize: 44,
-  },
-  vacioTitulo: {
-    color: '#1D2433',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  vacioTexto: {
-    color: '#6B7280',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
+  // INT4-110: la tarjeta de estado conserva el margen lateral de la pantalla.
+  tarjetaEstado: {
+    marginHorizontal: tokens.espaciado['2xl'],
   },
 
   // INT4-37: acciones de confirmar/cancelar (compra completa u orden puntual).
