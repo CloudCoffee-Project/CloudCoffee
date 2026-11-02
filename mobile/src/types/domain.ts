@@ -235,6 +235,30 @@ export interface Producto {
   offers?: Oferta[];
 }
 
+// Estado de una oferta en el inventario de la cafetería (OfferStatus del
+// catalog-service). Es el enum que devuelve GET
+// /v1/catalog/cafeterias/{cafeteriaId}/ofertas; la app no inventa otros.
+export type EstadoOferta = 'AVAILABLE' | 'OUT_OF_STOCK';
+
+// Ítem del inventario del cajero (INT4-100). El endpoint de personal devuelve
+// todas las ofertas de su cafetería, incluidas las agotadas, ordenadas por
+// nombre de producto. No trae categoría (vive en el producto, no en la oferta)
+// ni el nombre de la cafetería: la pantalla no los inventa.
+export interface InventarioItem {
+  ofertaId: string;
+  productoId: string;
+  productoNombre: string;
+  precio: number;
+  stock: number;
+  estado: EstadoOferta;
+}
+
+// Una oferta está agotada si el backend la marcó así o si no quedan unidades.
+// Las dos condiciones importan: el seed tiene ofertas AVAILABLE con stock 0.
+export function esOfertaAgotada(item: Pick<InventarioItem, 'estado' | 'stock'>): boolean {
+  return item.estado === 'OUT_OF_STOCK' || item.stock <= 0;
+}
+
 export interface OrdenItem {
   ordenItemId: string;
   productoNombre: string;
