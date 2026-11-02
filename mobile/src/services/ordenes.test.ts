@@ -59,7 +59,7 @@ describe('fetchPedidosEntrantes', () => {
     const resultado = await fetchPedidosEntrantes('token-real');
 
     expect(resultado[0].estado).toMatch(
-      /^(reservando|pagado|listo_para_retiro|no_retirado_pendiente_revision|entregado|no_retirado_final|cancelado)$/
+      /^(revision_requerida|pendiente_pago|pagado|listo_para_retiro|entregado|no_retirado_pendiente_revision|no_retirado_final|cancelado)$/
     );
   });
 });
