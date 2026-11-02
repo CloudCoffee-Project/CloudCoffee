@@ -45,7 +45,7 @@ async function login(email: string, password: string) {
 }
 ```
 
-La respuesta JSON se entrega como el tipo solicitado. Una respuesta sin contenido devuelve `undefined`. Los errores HTTP y de conexión se entregan como `ApiRequestError`: `status` es el código HTTP o `null` cuando falla la conexión; `title` y `detail` son mensajes seguros para la UI. Si el Gateway responde con Problem Details, también quedan disponibles `type`, `instance` y `errors` de validación. Las cancelaciones con `AbortError` se propagan para que quien hizo la petición pueda ignorarlas.
+La respuesta JSON se entrega como el tipo solicitado. Una respuesta sin contenido devuelve `undefined`. Los errores HTTP y de conexión se entregan como `ApiRequestError`: `status` es el código HTTP o `null` cuando falla la conexión; `title` y `detail` son mensajes seguros para la UI. Si el Gateway responde con Problem Details, también quedan disponibles `type`, `instance` y `errors` de validación. Las cancelaciones con `AbortError` se propagan para que quien hizo la petición pueda ignorarlas. Las consultas públicas que deban ignorar una sesión local pueden usar `omitAccessToken: true`.
 
 ### Verificación local con el Gateway
 
@@ -74,9 +74,9 @@ En `/catalogo`, seleccionar un campus carga sus productos mediante el Gateway. E
 
 La paginación solicita 12 productos por página con índices desde cero y orden estable por `name,id`. El listado y los botones **Anterior/Siguiente** usan `content`, `number`, `totalElements`, `totalPages`, `first` y `last` de la respuesta Spring Data Page. Se conservan campus, categoría y búsqueda al navegar. Cambiar búsqueda o categoría vuelve a la primera página; cambiar campus también limpia categoría y texto. Las consultas anteriores se cancelan y sus respuestas se descartan.
 
-Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos`. La configuración actual del backend exige sesión para el listado de productos, pendiente de INT2-66; el cliente HTTP adjunta el token existente. El catálogo contempla resultados vacíos, carga y errores con reintento.
+Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos` a través del Gateway. Como son consultas públicas, no se adjunta el token almacenado: explorar el catálogo no requiere iniciar sesión ni depende de que una sesión previa siga vigente. El catálogo contempla resultados vacíos, carga y errores con reintento.
 
-INT2-96 incorpora el listado mínimo porque la base de INT2-48 aún estaba pendiente. La comparación de ofertas, el carrito y los cambios de seguridad del backend quedan en sus respectivos issues.
+INT2-48 cubre la exploración pública del catálogo; INT2-96 añade búsqueda y paginación. La comparación de ofertas y el carrito quedan en sus respectivos issues.
 
 ## Verificación de correo
 
