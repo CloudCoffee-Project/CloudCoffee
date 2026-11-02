@@ -263,9 +263,10 @@ con las nuevas compras. Ejecutar desde `backend`:
 
 `ComprasUpgradeMigrationTests` usa un schema temporal aislado y admite las mismas
 variables `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y
-`SPRING_DATASOURCE_PASSWORD` que CI para verificar PostgreSQL 16. Las APIs de
-creación/consulta/revisión, reservas, outbox y aplicación del pago se completan en
-INT2-71/72/73/64/77; esta issue implementa el modelo persistente.
+`SPRING_DATASOURCE_PASSWORD` que CI para verificar PostgreSQL 16. INT2-52 implementa
+el modelo persistente e INT2-72 incorpora las consultas del comprador. Creación,
+revisión, integración de reservas, outbox y aplicación del pago se completan en
+INT2-71/73/64/77.
 
 ### Pagos simulados en order-service (INT2-53)
 
@@ -338,14 +339,28 @@ compras de prueba para las cuentas de INT2-65:
 | `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
 | `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
 
+## Consultas del comprador (INT2-72)
+
+Order implementa `GET /v1/compras?page=0&size=20`, `GET /v1/compras/{compraId}`
+y `GET /v1/orders/{ordenId}` a través del Gateway. Requieren JWT de `CLIENTE` y
+filtran por el propietario de `sub`. El historial incluye órdenes con sus snapshots
+y pago actual o `null`; recursos ajenos e inexistentes responden `404`.
+
+La página empieza en cero, admite entre 1 y 100 compras (20 por defecto) y tiene
+orden fijo por fecha e ID descendentes. Las lecturas usan `Cache-Control: no-store`
+y no ejecutan pagos, vencimientos ni cambios de estado. El acceso del cajero queda
+para INT2-78. Las compras mínimas anteriores conservan `ordenes: []`.
+
+Consultar [ejemplos HTTP, respuestas y errores](docs/consultas-compras.md).
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El contrato objetivo del Sprint 2 está en
 [Compra, pago simulado y retiro (INT2-50)](docs/compra-pago-retiro.md), con
 [OpenAPI importable](docs/compra-pago-retiro.openapi.json) y
 [ejemplos de eventos](docs/compra-pago-retiro.eventos.json). Define rutas, estados,
-idempotencia, permisos y QR para las siguientes implementaciones; todavía no
-agrega endpoints de Order ni los incorpora al Swagger de Sprint 1.
+idempotencia, permisos y QR. Order implementa las consultas del comprador y el pago
+simulado documentados arriba; estas rutas aún no se incorporan al Swagger de Sprint 1.
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1
 lo genera desde los controladores y DTO de Auth y Catalog; Swagger UI se sirve
