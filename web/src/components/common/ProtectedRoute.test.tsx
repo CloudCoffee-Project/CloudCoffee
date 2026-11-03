@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App';
 import { AuthProvider } from '../../contexts/AuthContext';
 import { UserRole } from '../../utils/jwt';
+
+vi.mock('../../config/env', () => ({
+  env: {
+    appTitle: 'CloudCoffee',
+    apiBaseUrl: 'http://localhost:18080',
+  },
+}));
 
 function createTestJwt(payload: { sub?: string; role?: UserRole | string; exp?: number; cafeteriaId?: string }): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -93,5 +100,64 @@ describe('protección de rutas web según sesión y rol (INT2-94)', () => {
     expect(screen.getByRole('alert')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Acceso restringido' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Mis Compras' })).toBeNull();
+  });
+  it('recupera la sesión rotando el refresh token cuando el access token venció (INT2-93)', async () => {
+    const expiredToken = createTestJwt({
+      role: 'CLIENTE',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+    const renewedToken = createTestJwt({
+      role: 'CLIENTE',
+      exp: Math.floor(Date.now() / 1000) + 900,
+    });
+
+    localStorage.setItem('accessToken', expiredToken);
+    localStorage.setItem('refreshToken', 'refresh-token-vigente');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accessToken: renewedToken,
+          refreshToken: 'refresh-token-rotado',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    renderAppAt('/compras');
+
+    expect(await screen.findByRole('heading', { name: 'Mis Compras' })).toBeTruthy();
+    expect(localStorage.getItem('accessToken')).toBe(renewedToken);
+    expect(localStorage.getItem('refreshToken')).toBe('refresh-token-rotado');
+    vi.restoreAllMocks();
+  });
+
+  it('limpia la sesión y redirige a /login si el refresh token es inválido al recuperar sesión (INT2-93)', async () => {
+    const expiredToken = createTestJwt({
+      role: 'CLIENTE',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+
+    localStorage.setItem('accessToken', expiredToken);
+    localStorage.setItem('refreshToken', 'refresh-token-invalido');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          type: '/problems/refresh-token-invalido',
+          title: 'Refresh token inválido',
+          status: 401,
+          detail: 'El refresh token expiró.',
+        }),
+        { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+      ),
+    );
+
+    renderAppAt('/compras');
+
+    expect(await screen.findByRole('heading', { name: 'Iniciar Sesión' })).toBeTruthy();
+    expect(localStorage.getItem('accessToken')).toBeNull();
+    expect(localStorage.getItem('refreshToken')).toBeNull();
+    vi.restoreAllMocks();
   });
 });
