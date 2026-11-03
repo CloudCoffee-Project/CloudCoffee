@@ -6,6 +6,8 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { LoginPage } from './pages/LoginPage';
 import { VerificationPage } from './pages/VerificationPage';
+import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
+import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { ProfilePage } from './pages/ProfilePage';
 
@@ -21,6 +23,8 @@ export function App() {
         <Route path="/registro" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/verificar-correo" element={<VerificationPage />} />
+        <Route path="/recuperar-contrasena" element={<PasswordRecoveryPage />} />
+        <Route path="/restablecer-contrasena" element={<PasswordResetPage />} />
 
         {/* Rutas privadas para cualquier usuario con sesión */}
         <Route element={<ProtectedRoute />}>

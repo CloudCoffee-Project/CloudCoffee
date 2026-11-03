@@ -102,12 +102,51 @@ al recargar la página, vuelve a consultar los datos persistidos. Un fallo de
 guardado conserva el borrador para reintentar. Si el servidor responde `401`,
 se limpia la sesión y la ruta protegida redirige al login.
 
+## Recuperación de contraseña (INT2-68)
+
+Desde **¿Olvidaste tu contraseña?** en `/login` se abre `/recuperar-contrasena`
+con el correo ingresado. El formulario solicita el enlace mediante
+`POST /v1/auth/password/recovery` y muestra carga, aceptación y errores, incluido
+el límite de solicitudes. La confirmación es la misma exista o no la cuenta.
+
+El correo abre `/restablecer-contrasena?token=...`. La página pide una nueva
+contraseña de al menos 8 caracteres y su confirmación; envía `{ token,
+nuevaPassword }` a `POST /v1/auth/password/reset`. Con la respuesta `204` muestra
+el éxito y el acceso al login. Los tokens inválidos, expirados o consumidos ofrecen
+solicitar otro enlace; los errores de conexión o del servicio permiten reintentar.
+Sin token no se envía ninguna petición de reset. Ambas operaciones son públicas
+y omiten el JWT local para permitir recuperar el acceso con una sesión vencida.
+
+La URL del correo se configura **en notification-service**, mediante
+`RESET_PASSWORD_URL`. Docker Compose y `.env.example` ya usan
+`http://localhost:3000/restablecer-contrasena`; para otro despliegue, usar el origen
+web público seguido de `/restablecer-contrasena` y reiniciar notification-service.
+La variable no es `VITE_*`. Se conserva el respaldo `mobile://restaurar-contrasena`
+del servicio cuando se ejecuta fuera de Compose sin configurar la variable.
+
+Para comprobar el flujo con Mailpit y una cuenta verificada:
+
+1. Iniciar Docker Compose y abrir `/login`; solicitar la recuperación.
+2. Abrir el mensaje en `http://localhost:8025` y seguir el enlace en el navegador.
+3. Guardar una contraseña nueva y comprobar que permite iniciar sesión; la anterior
+   debe ser rechazada.
+4. Volver a abrir el enlace utilizado e intentar otro reset: debe mostrar que ya
+   no es válido y ofrecer solicitar uno nuevo.
+5. Para comprobar expiración, usar un enlace de más de una hora o uno reemplazado
+   por una solicitud posterior. Abrir `/restablecer-contrasena` sin parámetros
+   también debe ofrecer un enlace nuevo.
+
+Las pruebas web cubren navegación, cuerpos y headers reales de las peticiones,
+validación, envíos duplicados y estados de carga, éxito, token inválido y errores.
+`PasswordRecoveryControllerTest` en auth-service ya comprueba el cambio de contraseña,
+el login con la nueva clave y el rechazo de tokens consumidos o expirados.
+
 ## Scripts
 
 ```bash
 npm run dev        # servidor de desarrollo
 npm run typecheck  # revisión de tipos
-npm test           # pruebas de la web
+npm test           # pruebas web: HTTP, catálogo, autenticación, perfil y recuperación
 npm run build      # revisión de tipos y compilación de producción en dist/
 npm run preview    # vista local de la compilación
 ```
@@ -139,7 +178,7 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 ## Estructura
 
-- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login` y `/verificar-correo`.
+- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena` y `/restablecer-contrasena`.
 - `src/components/`: componentes reutilizables.
 - `src/services/`: cliente HTTP común para acceder al API Gateway.
 - `src/hooks/`: hooks reutilizables.
@@ -147,4 +186,4 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 - `src/config/`: lectura centralizada de configuración pública.
 - `src/App.tsx`: definición de rutas. El layout y la navegación visual corresponden a INT2-42.
 
-Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`.
+Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.

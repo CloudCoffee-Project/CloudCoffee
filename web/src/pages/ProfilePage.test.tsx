@@ -9,6 +9,13 @@ import { ApiRequestError, request } from '../services/httpClient';
 import type { Profile } from '../services/profile';
 import type { UserRole } from '../utils/jwt';
 
+vi.mock('../config/env', () => ({
+  env: {
+    appTitle: 'CloudCoffee',
+    apiBaseUrl: 'http://localhost:18080',
+  },
+}));
+
 vi.mock('../services/httpClient', async (importOriginal) => ({
   ...await importOriginal<typeof import('../services/httpClient')>(),
   request: vi.fn(),
@@ -21,8 +28,10 @@ const profile: Profile = {
 
 function storeSession(role: UserRole = 'CLIENTE', exp = Math.floor(Date.now() / 1000) + 900) {
   const payload = btoa(JSON.stringify({ sub: profile.id, role, exp }));
-  localStorage.setItem('accessToken', `e30.${payload}.firma`);
+  const accessToken = `e30.${payload}.firma`;
+  localStorage.setItem('accessToken', accessToken);
   localStorage.setItem('refreshToken', 'refresh-de-prueba');
+  return accessToken;
 }
 
 function renderProfile() {
@@ -52,11 +61,13 @@ beforeEach(() => {
   storeSession();
   vi.resetAllMocks();
   vi.mocked(request).mockResolvedValue(profile);
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
 });
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 describe('perfil propio en web (INT2-47)', () => {
@@ -81,13 +92,47 @@ describe('perfil propio en web (INT2-47)', () => {
     },
   );
 
-  it.each(['ausente', 'vencida', 'inválida'])('redirige al login sin consultar el perfil con sesión %s', (session) => {
+  it.each(['ausente', 'vencida', 'inválida'])('redirige al login sin consultar el perfil si no recupera la sesión %s', async (session) => {
     if (session === 'ausente') localStorage.clear();
     if (session === 'vencida') storeSession('CLIENTE', Math.floor(Date.now() / 1000) - 60);
     if (session === 'inválida') localStorage.setItem('accessToken', 'token-invalido');
     renderProfile();
-    expect(screen.getByRole('heading', { name: 'Iniciar Sesión' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Iniciar Sesión' })).toBeTruthy();
     expect(request).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(session === 'ausente' ? 0 : 1);
+    expect(localStorage.getItem('accessToken')).toBeNull();
+    expect(localStorage.getItem('refreshToken')).toBeNull();
+  });
+
+  it.each(['vencida', 'inválida'])('recupera la sesión %s antes de consultar el perfil', async (session) => {
+    const renewedToken = storeSession();
+    if (session === 'vencida') storeSession('CLIENTE', Math.floor(Date.now() / 1000) - 60);
+    if (session === 'inválida') localStorage.setItem('accessToken', 'token-invalido');
+    let resolveRefresh!: (value: Response) => void;
+    vi.mocked(fetch).mockReturnValue(new Promise((resolve) => { resolveRefresh = resolve; }));
+
+    renderProfile();
+
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.queryByRole('form')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Iniciar Sesión' })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, options] = vi.mocked(fetch).mock.calls[0];
+    expect(String(url)).toBe('http://localhost:18080/v1/auth/refresh');
+    expect(options?.method).toBe('POST');
+    expect(JSON.parse(options?.body as string)).toEqual({ refreshToken: 'refresh-de-prueba' });
+
+    await act(async () => {
+      resolveRefresh(new Response(JSON.stringify({
+        accessToken: renewedToken, refreshToken: 'refresh-rotado',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    await screen.findByRole('form', { name: 'Datos del perfil' });
+    expect(input('Nombre').value).toBe(profile.nombre);
+    expect(request).toHaveBeenCalledWith('/v1/auth/users/me', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(localStorage.getItem('accessToken')).toBe(renewedToken);
+    expect(localStorage.getItem('refreshToken')).toBe('refresh-rotado');
   });
 
   it('guarda solo los campos editables y recarga los valores devueltos por el servidor', async () => {
