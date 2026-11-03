@@ -10,6 +10,7 @@ import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { ProfilePage } from './pages/ProfilePage';
+import { ProductDetailPage } from './pages/ProductDetailPage';
 
 export function App() {
   return (
@@ -20,6 +21,7 @@ export function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<HomePage />} />
         <Route path="/catalogo" element={<CatalogPage />} />
+        <Route path="/catalogo/productos/:id" element={<ProductDetailPage />} />
         <Route path="/registro" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/verificar-correo" element={<VerificationPage />} />
