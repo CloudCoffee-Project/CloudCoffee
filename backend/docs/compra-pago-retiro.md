@@ -16,8 +16,11 @@ El contrato distingue definición e implementación. INT2-52 completa el modelo
 persistente de compras, órdenes e ítems mediante V4, conservando las migraciones
 y pagos de INT2-53/76. Gateway ya enruta compras/órdenes y admite `Idempotency-Key`
 en CORS (INT2-55/98). Order expone la simulación y consulta de pago; las APIs de
-revisión y retiro y la aplicación integrada del pago siguen
-en sus issues de implementación. INT2-71 incorpora la creación idempotente con
+retiro y la aplicación integrada del pago siguen
+en sus issues de implementación. INT2-73 incorpora confirmación/cancelación solo
+para compras sin pago iniciado; la cancelación con pago pendiente queda para
+INT2-77. Ver [Revisión de compras](revision-compras.md).
+INT2-71 incorpora la creación idempotente con
 reservas y compensación durable; ver [Creación de compras](creacion-compras.md).
 INT2-72 incorpora historial y detalle de compras
 y detalle de órdenes para el CLIENTE propietario; el acceso del CAJERO queda

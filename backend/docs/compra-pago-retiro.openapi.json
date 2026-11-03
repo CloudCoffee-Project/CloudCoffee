@@ -434,7 +434,7 @@
           "Compras"
         ],
         "summary": "Confirmar compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reservar todas las órdenes en revisión. Compensa nuevas reservas si alguna falla; PRECIO_CAMBIO incluye compra actualizada y exige nueva confirmación.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reservar todas las órdenes en revisión. Compensa nuevas reservas si alguna falla; PRECIO_CAMBIO incluye compra actualizada y exige nueva confirmación. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -550,7 +550,7 @@
           "Compras"
         ],
         "summary": "Cancelar compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Cancela revisión o pendiente, rechaza pago pendiente y libera reservas. Si aprobación ya ganó, 409. Total cobrable resultante 0.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Cancela revisión o pendiente, rechaza pago pendiente y libera reservas. Si aprobación ya ganó, 409. Total cobrable resultante 0. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -1057,7 +1057,7 @@
           "Órdenes y retiro"
         ],
         "summary": "Confirmar orden de una compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reserva de orden en revisión. Revalida cotización. Solo antes de iniciar pago. Actualiza también estado y versión de compra.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reserva de orden en revisión. Revalida cotización. Solo antes de iniciar pago. Actualiza también estado y versión de compra. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -1159,7 +1159,7 @@
           "Órdenes y retiro"
         ],
         "summary": "Cancelar orden de una compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Libera reserva y actualiza total cobrable de compra; última orden activa cancela compra. Solo antes de iniciar pago. Actualiza también estado y versión de compra.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Libera reserva y actualiza total cobrable de compra; última orden activa cancela compra. Solo antes de iniciar pago. Actualiza también estado y versión de compra. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],

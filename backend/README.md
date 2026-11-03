@@ -349,6 +349,15 @@ conservan las mismas identidades y no duplican compras ni descuentos de stock.
 
 Consultar [ejemplos HTTP, errores, recuperación y configuración](docs/creacion-compras.md).
 
+## Confirmar/cancelar compras sin pago (INT2-73)
+
+Order implementa las acciones `confirmar` y `cancelar` por compra y orden para el
+CLIENTE propietario, con `Idempotency-Key`. La confirmación revalida precios y
+reservas; la cancelación libera stock y recalcula el total. Si ya hay un pago,
+responde `409 ESTADO_INVALIDO`; actuar sobre pagos queda para INT2-77.
+
+Consultar [alcance, ejemplos, recuperación y eventos](docs/revision-compras.md).
+
 ## Consultas del comprador (INT2-72)
 
 Order implementa `GET /v1/compras?page=0&size=20`, `GET /v1/compras/{compraId}`
