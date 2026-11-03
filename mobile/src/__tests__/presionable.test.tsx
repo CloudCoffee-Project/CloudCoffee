@@ -37,7 +37,7 @@ test('al soltar vuelve al estilo propio del control', () => {
 });
 
 test('respeta el estilo dinámico que ya usa la pantalla', () => {
-  const style = ({ pressed }: { pressed: boolean; hovered: boolean }) => ({
+  const style = ({ pressed }: { pressed: boolean }) => ({
     backgroundColor: pressed ? '#000000' : '#FFFFFF',
   });
 
