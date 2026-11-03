@@ -474,4 +474,93 @@ class StockReservationIntegrationTests extends JwtTestSupport {
                 .andExpect(status().isNotFound());
         assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
     }
+
+    @Test
+    void cotizacionInternaIncluyeAgotadasPeroNoProductosInactivosNiCafeteriasCerradas() throws Exception {
+        String ids = "[\"" + offer.getId() + "\"]";
+        offer.setStock(0);
+        offer.setStatus(OfferStatus.OUT_OF_STOCK);
+        offerRepository.saveAndFlush(offer);
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON).content(ids))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].ofertaId").value(offer.getId().toString()))
+                .andExpect(jsonPath("$[0].productoNombre").isNotEmpty()).andExpect(jsonPath("$[0].campusId").isNotEmpty());
+        Product producto = productRepository.findById(offer.getProduct().getId()).orElseThrow();
+        producto.setStatus(ProductStatus.INACTIVE);
+        productRepository.saveAndFlush(producto);
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON).content(ids))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFERTA_NO_DISPONIBLE"));
+        producto.setStatus(ProductStatus.ACTIVE);
+        productRepository.saveAndFlush(producto);
+        Cafeteria cafeteria = cafeteriaRepository.findById(offer.getCafeteria().getId()).orElseThrow();
+        cafeteria.setStatus(CafeteriaStatus.CLOSED);
+        cafeteriaRepository.saveAndFlush(cafeteria);
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON).content(ids))
+                .andExpect(status().isConflict());
+        assertThat(reservationRepository.count()).isZero();
+    }
+
+    @Test
+    void cotizacionRechazaOfertasDesconocidasDuplicadasCampusDistintosYJwtDeUsuario() throws Exception {
+        String ids = "[\"" + offer.getId() + "\"]";
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones").contentType(MediaType.APPLICATION_JSON).content(ids))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones").header("Authorization", "Bearer " + token())
+                        .contentType(MediaType.APPLICATION_JSON).content(ids)).andExpect(status().isForbidden());
+        for (String body : List.of("[]", "[null]", "[\"" + offer.getId() + "\",\"" + offer.getId() + "\"]"))
+            mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
+                            .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON)
+                        .content("[\"" + UUID.randomUUID() + "\"]"))
+                .andExpect(status().isConflict());
+        Campus campus = new Campus(); campus.setName("Otro campus"); campus.setLocation("Temuco");
+        campus = campusRepository.saveAndFlush(campus);
+        Cafeteria cafeteria = new Cafeteria(); cafeteria.setName("Otra cafetería");
+        cafeteria.setCampus(campus); cafeteria.setStatus(CafeteriaStatus.OPEN);
+        cafeteria = cafeteriaRepository.saveAndFlush(cafeteria);
+        Offer otra = new Offer(); otra.setCafeteria(cafeteria); otra.setProduct(offer.getProduct());
+        otra.setPrice(offer.getPrice()); otra.setStock(2); otra.setStatus(OfferStatus.AVAILABLE);
+        otra = offerRepository.saveAndFlush(otra);
+        mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON)
+                        .content("[\"" + offer.getId() + "\",\"" + otra.getId() + "\"]"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFERTA_NO_DISPONIBLE"));
+    }
+
+    @Test
+    void compraRespetaVencimientoComunYRepeticionNoLoExtiendeNiRecotiza() {
+        UUID orden = UUID.randomUUID(), intento = UUID.randomUUID();
+        Instant vencimiento = NOW.plusSeconds(900);
+        var request = new ReserveStockRequest(orden, offer.getId(), 1, intento, vencimiento, offer.getPrice());
+        var reserva = reservationService.reserve(request).reservation();
+        assertThat(reserva.getExpiresAt()).isEqualTo(vencimiento);
+        offer = offerRepository.findById(offer.getId()).orElseThrow();
+        offer.setPrice(offer.getPrice().add(java.math.BigDecimal.ONE));
+        offerRepository.saveAndFlush(offer);
+        when(clock.instant()).thenReturn(NOW.plusSeconds(30));
+        var replay = reservationService.reserve(request).reservation();
+        assertThat(replay.getId()).isEqualTo(reserva.getId());
+        assertThat(replay.getExpiresAt()).isEqualTo(vencimiento);
+        assertThat(reservationRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void cambioDePrecioYVencimientoInvalidoNoDescuentanStock() {
+        int stock = offer.getStock();
+        assertThatThrownBy(() -> reservationService.reserve(new ReserveStockRequest(UUID.randomUUID(), offer.getId(),
+                1, UUID.randomUUID(), NOW.plusSeconds(900), offer.getPrice().add(java.math.BigDecimal.ONE))))
+                .isInstanceOf(BusinessException.class).satisfies(e ->
+                        assertThat(((BusinessException) e).getCode()).isEqualTo("OFERTA_NO_DISPONIBLE"));
+        for (Instant vence : List.of(NOW, NOW.minusSeconds(1), NOW.plusSeconds(901)))
+            assertThatThrownBy(() -> reservationService.reserve(new ReserveStockRequest(UUID.randomUUID(), offer.getId(),
+                    1, UUID.randomUUID(), vence, offer.getPrice())))
+                    .isInstanceOf(BusinessException.class).satisfies(e ->
+                            assertThat(((BusinessException) e).getCode()).isEqualTo("RESERVA_VENCIDA"));
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(stock);
+        assertThat(reservationRepository.count()).isZero();
+    }
 }
