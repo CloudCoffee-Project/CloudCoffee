@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../utils/jwt';
+import { LoadingSpinner } from './LoadingSpinner';
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
@@ -9,8 +10,13 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
-  const { isLoggedIn, role } = useAuth();
+  const { isLoggedIn, isLoading, role } = useAuth();
   const location = useLocation();
+
+  // Esperar si la sesión se está recuperando en segundo plano
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
 
   if (!isLoggedIn || !role) {
     return <Navigate to="/login" state={{ from: location }} replace />;
