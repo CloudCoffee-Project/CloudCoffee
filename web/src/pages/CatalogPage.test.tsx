@@ -68,6 +68,51 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('catálogo web', () => {
+  it('anuncia la carga de las opciones mientras espera campus y categorías', async () => {
+    let resolveCampus!: (value: typeof campus) => void;
+    let resolveCategories!: (value: typeof categories) => void;
+    vi.mocked(request).mockReturnValueOnce(new Promise<typeof campus>((resolve) => {
+      resolveCampus = resolve;
+    }));
+    vi.mocked(request).mockReturnValueOnce(new Promise<typeof categories>((resolve) => {
+      resolveCategories = resolve;
+    }));
+
+    render(<CatalogPage />);
+
+    const catalog = screen.getByRole('region', { name: 'Catálogo' });
+    expect(catalog.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByText('Cargando catálogo…')).toBeTruthy();
+
+    await act(async () => {
+      resolveCampus(campus);
+      resolveCategories(categories);
+    });
+
+    await screen.findByRole('option', { name: 'San Francisco' });
+    expect(catalog.getAttribute('aria-busy')).toBe('false');
+  });
+
+  it('marca como ocupado el catálogo mientras carga los productos del campus', async () => {
+    render(<CatalogPage />);
+    await screen.findByRole('option', { name: 'San Francisco' });
+
+    let resolveProducts!: (value: ProductPage) => void;
+    vi.mocked(request).mockReturnValueOnce(new Promise<ProductPage>((resolve) => {
+      resolveProducts = resolve;
+    }));
+    fireEvent.change(screen.getByLabelText('Campus'), { target: { value: campusA } });
+
+    const loadingMessage = screen.getByText('Cargando productos…');
+    const productsRegion = loadingMessage.closest('[aria-busy]');
+    expect(productsRegion?.getAttribute('aria-busy')).toBe('true');
+
+    await act(async () => { resolveProducts(page()); });
+
+    await screen.findByRole('heading', { name: 'Producto página 1' });
+    expect(productsRegion?.getAttribute('aria-busy')).toBe('false');
+  });
+
   it('espera un campus antes de consultar productos y deshabilita los filtros dependientes', async () => {
     render(<CatalogPage />);
     await screen.findByRole('option', { name: 'San Francisco' });

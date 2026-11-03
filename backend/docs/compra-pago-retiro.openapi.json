@@ -854,7 +854,7 @@
           "Órdenes y retiro"
         ],
         "summary": "Listar pedidos de la cafetería asignada",
-        "description": "Solo CAJERO con asignación persistida a la cafetería. 403 sin asignación y 404 para cafetería ajena. Orden creadoAt DESC e ID DESC como desempate. No admite cafeteriaId del frontend.",
+        "description": "Solo CAJERO con asignación persistida en Auth, consultada en cada solicitud. 403 si no tiene asignación o no se puede verificar. Orden creadoAt DESC e ID DESC como desempate. No admite cafeteriaId del frontend ni autoriza con claims de cafetería. Búsqueda exacta por codigoOrden, combinable con estado; un código ajeno o inexistente devuelve una página vacía. Lectura sin cambios de estado ni validación de retiro.",
         "x-roles": [
           "CAJERO"
         ],
@@ -952,6 +952,18 @@
             "schema": {
               "$ref": "#/components/schemas/EstadoOrden"
             }
+          },
+          {
+            "name": "codigoOrden",
+            "in": "query",
+            "required": false,
+            "description": "Código legible de la orden, no el token QR. Coincidencia exacta y sensible a mayúsculas tras quitar espacios exteriores. Un valor vacío o de más de 64 caracteres devuelve 400.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "example": "CC-000001"
           }
         ]
       }

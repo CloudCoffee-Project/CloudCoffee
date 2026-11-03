@@ -84,6 +84,24 @@ El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página 
 
 En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. Para probar el flujo en otro origen, configura `FRONTEND_URL` antes de iniciar los servicios y asegúrate de que apunte al sitio web accesible desde el navegador.
 
+## Perfil propio (INT2-47)
+
+Con una sesión válida, abrir **Mi Perfil** en la navegación o ir a `/perfil`.
+La página consulta `GET /v1/auth/users/me` y permite guardar nombre, apellido y
+teléfono mediante `PATCH /v1/auth/users/me`, usando el access token del cliente
+HTTP. Correo y rol se muestran como solo lectura y nunca se envían en la edición.
+
+Las validaciones siguen el contrato actual: nombre y apellido de hasta 100
+caracteres; teléfono de 6 a 20 caracteres con números, `+`, espacios, paréntesis
+o guiones. Los valores se recortan antes del envío; los campos vacíos se omiten
+para conservar el dato guardado. Se muestran también los errores por campo
+devueltos por el backend.
+
+Después de guardar, el formulario muestra el perfil devuelto por el servidor;
+al recargar la página, vuelve a consultar los datos persistidos. Un fallo de
+guardado conserva el borrador para reintentar. Si el servidor responde `401`,
+se limpia la sesión y la ruta protegida redirige al login.
+
 ## Recuperación de contraseña (INT2-68)
 
 Desde **¿Olvidaste tu contraseña?** en `/login` se abre `/recuperar-contrasena`
@@ -128,7 +146,7 @@ el login con la nueva clave y el rechazo de tokens consumidos o expirados.
 ```bash
 npm run dev        # servidor de desarrollo
 npm run typecheck  # revisión de tipos
-npm test           # pruebas web: HTTP, catálogo, autenticación y recuperación
+npm test           # pruebas web: HTTP, catálogo, autenticación, perfil y recuperación
 npm run build      # revisión de tipos y compilación de producción en dist/
 npm run preview    # vista local de la compilación
 ```
@@ -160,7 +178,7 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 ## Estructura
 
-- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/verificar-correo`, `/recuperar-contrasena` y `/restablecer-contrasena`.
+- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena` y `/restablecer-contrasena`.
 - `src/components/`: componentes reutilizables.
 - `src/services/`: cliente HTTP común para acceder al API Gateway.
 - `src/hooks/`: hooks reutilizables.
