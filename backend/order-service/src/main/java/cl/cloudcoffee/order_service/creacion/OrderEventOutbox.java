@@ -23,11 +23,17 @@ public class OrderEventOutbox {
     private final JdbcTemplate jdbc;
     private final RabbitTemplate rabbit;
     private final TransactionTemplate tx;
+    private final String exchange;
+    @org.springframework.beans.factory.annotation.Autowired
     public OrderEventOutbox(JdbcTemplate jdbc, RabbitTemplate rabbit, PlatformTransactionManager manager) {
+        this(jdbc, rabbit, manager, "cloudcoffee.events");
+    }
+    OrderEventOutbox(JdbcTemplate jdbc, RabbitTemplate rabbit, PlatformTransactionManager manager, String exchange) {
         this.jdbc = jdbc; this.rabbit = rabbit; this.tx = new TransactionTemplate(manager);
+        this.exchange = exchange;
     }
     @Bean
-    TopicExchange orderEventsExchange() { return new TopicExchange("cloudcoffee.events", true, false); }
+    TopicExchange orderEventsExchange() { return new TopicExchange(exchange, true, false); }
 
     @Scheduled(fixedDelayString = "${cloudcoffee.creation.publish-ms:2000}", initialDelayString = "${cloudcoffee.creation.publish-ms:2000}")
     public void publicar() {
@@ -44,7 +50,7 @@ public class OrderEventOutbox {
                             .setContentType(MessageProperties.CONTENT_TYPE_JSON).setContentEncoding("UTF-8")
                             .setDeliveryMode(MessageDeliveryMode.PERSISTENT).setMessageId(evento.id().toString()).build();
                     var correlation = new CorrelationData(evento.id().toString());
-                    rabbit.send("cloudcoffee.events", evento.tipo(), message, correlation);
+                    rabbit.send(exchange, evento.tipo(), message, correlation);
                     try {
                         if (!correlation.getFuture().get(2, TimeUnit.SECONDS).ack() || correlation.getReturned() != null)
                             throw new IllegalStateException("Broker no confirmó la entrega del evento");
