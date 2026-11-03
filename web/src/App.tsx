@@ -6,6 +6,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { LoginPage } from './pages/LoginPage';
 import { VerificationPage } from './pages/VerificationPage';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
 
 export function App() {
   return (
@@ -13,16 +14,54 @@ export function App() {
       {/* Todo lo que esté DENTRO de esta ruta compartira el Navbar y Footer */}
       <Route element={<MainLayout />}>
 
-        {/* Rutas específicas */}
+        {/* Rutas públicas */}
         <Route path="/" element={<HomePage />} />
         <Route path="/catalogo" element={<CatalogPage />} />
-
-        {/* Pagina 404 para rutas inexistentes */}
-        <Route path="*" element={<NotFoundPage />} />
-
         <Route path="/registro" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/verificar-correo" element={<VerificationPage />} />
+
+        {/* Rutas privadas para cualquier usuario con sesión */}
+        <Route element={<ProtectedRoute />}>
+          <Route
+            path="/perfil"
+            element={
+              <section style={{ padding: '2rem' }}>
+                <h1>Mi Perfil</h1>
+                <p>Gestión de cuenta y seguridad del usuario autenticado.</p>
+              </section>
+            }
+          />
+        </Route>
+
+        {/* Rutas exclusivas de comprador (CLIENTE) */}
+        <Route element={<ProtectedRoute allowedRoles={['CLIENTE']} />}>
+          <Route
+            path="/compras"
+            element={
+              <section style={{ padding: '2rem' }}>
+                <h1>Mis Compras</h1>
+                <p>Historial y seguimiento de pedidos del cliente.</p>
+              </section>
+            }
+          />
+        </Route>
+
+        {/* Rutas exclusivas de personal de cafetería (CAJERO) */}
+        <Route element={<ProtectedRoute allowedRoles={['CAJERO']} />}>
+          <Route
+            path="/cajero"
+            element={
+              <section style={{ padding: '2rem' }}>
+                <h1>Panel de Cajero</h1>
+                <p>Gestión de pedidos y validación de retiro en cafetería.</p>
+              </section>
+            }
+          />
+        </Route>
+
+        {/* Pagina 404 para rutas inexistentes */}
+        <Route path="*" element={<NotFoundPage />} />
 
       </Route>
     </Routes>

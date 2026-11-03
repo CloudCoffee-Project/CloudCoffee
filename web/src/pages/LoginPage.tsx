@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { request, ApiRequestError } from '../services/httpClient';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
+import { decodeSessionToken } from '../utils/jwt';
 
 interface LoginResponse {
   accessToken: string;
@@ -11,6 +12,7 @@ interface LoginResponse {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -52,8 +54,13 @@ export function LoginPage() {
 
       login(response.accessToken, response.refreshToken);
 
+      const state = location.state as { from?: { pathname?: string } } | null;
+      const fromPath = state?.from?.pathname;
+      const session = decodeSessionToken(response.accessToken);
+      const defaultPath = session?.role === 'CAJERO' ? '/cajero' : '/';
+
       // Redirigir tras inicio exitoso
-      navigate('/');
+      navigate(fromPath && fromPath !== '/login' ? fromPath : defaultPath, { replace: true });
 
     } catch (error) {
       if (error instanceof ApiRequestError) {
