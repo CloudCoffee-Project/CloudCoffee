@@ -6,6 +6,13 @@ import { App } from '../../App';
 import { AuthProvider } from '../../contexts/AuthContext';
 import { UserRole } from '../../utils/jwt';
 
+vi.mock('../../config/env', () => ({
+  env: {
+    appTitle: 'CloudCoffee',
+    apiBaseUrl: 'http://localhost:18080',
+  },
+}));
+
 function createTestJwt(payload: { sub?: string; role?: UserRole | string; exp?: number; cafeteriaId?: string }): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const body = btoa(

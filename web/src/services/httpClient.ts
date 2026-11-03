@@ -143,7 +143,10 @@ function gatewayUrl(origin: string, path: string): URL {
   return url;
 }
 
-export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch) {
+export function createHttpClient(
+  baseUrl: string,
+  fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init),
+) {
   const origin = gatewayOrigin(baseUrl);
   let refreshInFlight: Promise<string | null> | null = null;
 
