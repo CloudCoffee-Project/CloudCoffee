@@ -191,13 +191,29 @@ describe('grosores (INT4-106)', () => {
 
 describe('estados (INT4-106)', () => {
   it('todas las opacidades están estrictamente entre 0 y 1 y no se repiten', () => {
-    const valores = Object.values(estados);
+    const valores = Object.entries(estados)
+      .filter(([nombre]) => nombre !== 'escalaPresionado')
+      .map(([, valor]) => valor);
 
     for (const valor of valores) {
       expect(valor).toBeGreaterThan(0);
       expect(valor).toBeLessThan(1);
     }
     expect(new Set(valores).size).toBe(valores.length);
+  });
+});
+
+describe('feedback de pulsado (INT4-111)', () => {
+  it('define una opacidad y una escala de pulsado válidas', () => {
+    expect(estados.presionado).toBeGreaterThan(0);
+    expect(estados.presionado).toBeLessThan(1);
+    expect(estados.escalaPresionado).toBeGreaterThan(0);
+    expect(estados.escalaPresionado).toBeLessThan(1);
+  });
+
+  it('la escala es sutil: reduce el tamaño sin hacer desaparecer el control', () => {
+    expect(estados.escalaPresionado).toBeGreaterThanOrEqual(0.95);
+    expect(estados.escalaPresionado).toBeLessThanOrEqual(0.99);
   });
 });
 
