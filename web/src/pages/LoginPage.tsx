@@ -131,6 +131,10 @@ export function LoginPage() {
           />
         </div>
 
+        <Link to={`/recuperar-contrasena?email=${encodeURIComponent(formData.email.trim())}`}>
+          ¿Olvidaste tu contraseña?
+        </Link>
+
         <button
           type="submit"
           className="btn-primary"
