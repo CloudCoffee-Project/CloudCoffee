@@ -45,6 +45,12 @@ export const colores = {
   // --- Marca y navegación ---
   /** Turquesa del logotipo y títulos de las pantallas de acceso. */
   marca: '#0284C7',
+  /**
+   * Turquesa oscuro para enlaces de texto de las pantallas de acceso.
+   * INT4-109: cumple 4.5:1 sobre `fondoAuth` y `crema` (el `marca` solo
+   * alcanza para títulos grandes, de 24 px o más).
+   */
+  marcaEnlace: '#0369A1',
   /** Azul principal: acciones, enlaces, badges e íconos del rol cliente. */
   azul: '#0052CC',
   /** Azul de texto fuerte sobre fondos azules claros. */
@@ -71,24 +77,36 @@ export const colores = {
   tintaPresionada: '#1E120D',
   /** Casi negro: textos principales del rol cliente. */
   tintaCliente: '#1D2433',
-  /** Gris cálido: textos de apoyo de las pantallas de acceso. */
-  textoSecundario: '#7A7067',
+  /**
+   * Gris cálido: textos de apoyo de las pantallas de acceso.
+   * INT4-109: oscurecido para cumplir 4.5:1 sobre `fondoAuth` (4.23 antes).
+   */
+  textoSecundario: '#6B6158',
   /** Gris neutro: textos secundarios y placeholders del cliente. */
   textoNeutro: '#6B7280',
   /** Gris medio: metadatos y textos terciarios del cliente. */
   textoGris: '#4B5563',
   /** Gris claro: textos terciarios y deshabilitados. */
   textoClaro: '#9CA3AF',
-  /** Gris del placeholder de los inputs. */
-  placeholder: '#A89F95',
+  /**
+   * Gris del placeholder de los inputs de acceso.
+   * INT4-109: oscurecido para cumplir 4.5:1 sobre `superficie` (2.61 antes).
+   */
+  placeholder: '#6F655B',
   /** Texto oscuro sobre superficies crema (botón secundario). */
   tintaSuave: '#26211D',
 
   // --- Bordes ---
   /** Borde cálido de tarjetas y separadores del cliente/POS. */
   bordeCalido: '#EFE9DE',
-  /** Borde de inputs y botones de las pantallas de acceso. */
+  /** Borde cálido de separadores y paneles de las pantallas de acceso. */
   bordeAuth: '#E5DDD3',
+  /**
+   * Borde de inputs y botones secundarios de acceso.
+   * INT4-109: cumple 3:1 contra `fondoAuth` y `superficie`, el mínimo de
+   * contraste para distinguir un control (WCAG 1.4.11).
+   */
+  bordeControl: '#8E8378',
 
   // --- Acentos amarillos (identidad cliente, del mockup web) ---
   /** Fondo amarillo claro de avisos y chips destacados. */
@@ -109,8 +127,11 @@ export const colores = {
   errorBorde: '#FCA5A5',
   /** Texto de mensajes de error. */
   errorTexto: '#991B1B',
-  /** Texto de error en línea de la pantalla de inicio de sesión. */
-  errorAcceso: '#B25329',
+  /**
+   * Texto de error en línea de la pantalla de inicio de sesión.
+   * INT4-109: oscurecido para cumplir 4.5:1 sobre `fondoAuth` (4.41 antes).
+   */
+  errorAcceso: '#A34720',
   /** Rojo intenso de campos inválidos y fallos de pago. */
   errorFuerte: '#D32F2F',
   /** Fondo rosado muy claro del campo con error. */
@@ -310,6 +331,12 @@ export const espaciado = {
 export const tamanos = {
   /** 24 px — botón del stepper de cantidad (+ / −). */
   botonStepper: 24,
+  /**
+   * 48 px — alto mínimo de un control pulsable (botones, enlaces y campos).
+   * INT4-109: garantiza un área táctil cómoda, por sobre el mínimo de 44 px
+   * que recomienda WCAG 2.5.5.
+   */
+  areaTactil: 48,
   /** 38 px — chip cuadrado de ícono (campus y producto del catálogo). */
   chipIcono: 38,
   /** 44 px — ícono cuadrado de las tarjetas de campus (INT4-108). */
