@@ -2,7 +2,8 @@
 
 Implementación de las lecturas de [INT2-50](compra-pago-retiro.md), con los schemas
 `Compra`, `Orden` y `PaginaCompras` del [contrato OpenAPI](compra-pago-retiro.openapi.json).
-El acceso del cajero, su listado y la validación de asignación quedan en INT2-78.
+El listado del cajero y la validación de asignación se implementan en
+[INT2-78](../README.md#listado-y-búsqueda-de-pedidos-del-cajero-int2-78).
 No se agregan pantallas web o móvil ni comandos de creación/revisión.
 
 ## Rutas implementadas
