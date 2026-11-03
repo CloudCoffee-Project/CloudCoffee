@@ -9,6 +9,13 @@ export interface GatewayRequestInit extends RequestInit {
   omitAccessToken?: boolean;
 }
 
+interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export const AUTH_SESSION_EVENT = 'auth:session-change';
+
 export class ApiRequestError extends Error {
   constructor(
     readonly status: number | null,
@@ -31,6 +38,32 @@ function isValidationError(value: unknown): value is ValidationError {
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function isRefreshTokenResponse(value: unknown): value is RefreshTokenResponse {
+  return typeof value === 'object' && value !== null &&
+    'accessToken' in value && typeof value.accessToken === 'string' && value.accessToken.trim().length > 0 &&
+    'refreshToken' in value && typeof value.refreshToken === 'string' && value.refreshToken.trim().length > 0;
+}
+
+function notifySessionChange(): void {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
+  }
+}
+
+export function saveSessionTokens(accessToken: string, refreshToken?: string): void {
+  localStorage.setItem?.('accessToken', accessToken);
+  if (refreshToken) {
+    localStorage.setItem?.('refreshToken', refreshToken);
+  }
+  notifySessionChange();
+}
+
+export function clearSessionTokens(): void {
+  localStorage.removeItem?.('accessToken');
+  localStorage.removeItem?.('refreshToken');
+  notifySessionChange();
 }
 
 async function responseError(response: Response): Promise<ApiRequestError> {
@@ -112,8 +145,79 @@ function gatewayUrl(origin: string, path: string): URL {
 
 export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch) {
   const origin = gatewayOrigin(baseUrl);
+  let refreshInFlight: Promise<string | null> | null = null;
+
+  async function executeRefresh(): Promise<string | null> {
+    const storedRefreshToken = localStorage.getItem('refreshToken')?.trim();
+    if (!storedRefreshToken) {
+      clearSessionTokens();
+      return null;
+    }
+
+    const refreshUrl = gatewayUrl(origin, '/v1/auth/refresh');
+    let response: Response;
+    try {
+      response = await fetcher(refreshUrl, {
+        method: 'POST',
+        headers: new Headers({
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ refreshToken: storedRefreshToken }),
+      });
+    } catch {
+      return null;
+    }
+
+    if (!response.ok) {
+      clearSessionTokens();
+      return null;
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      clearSessionTokens();
+      return null;
+    }
+
+    if (!isRefreshTokenResponse(payload)) {
+      clearSessionTokens();
+      return null;
+    }
+
+    saveSessionTokens(payload.accessToken, payload.refreshToken);
+    return payload.accessToken;
+  }
+
+  function refreshAccessToken(): Promise<string | null> {
+    if (!refreshInFlight) {
+      refreshInFlight = executeRefresh().finally(() => {
+        refreshInFlight = null;
+      });
+    }
+    return refreshInFlight;
+  }
+
+  async function sendFetch(url: URL, options: RequestInit, headers: Headers): Promise<Response> {
+    try {
+      return await fetcher(url, { ...options, headers });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error;
+      }
+      throw new ApiRequestError(
+        null,
+        'Error de conexión',
+        'No se pudo conectar con el API Gateway.',
+      );
+    }
+  }
 
   return {
+    refreshSession: refreshAccessToken,
+
     async request<T>(path: string, options: GatewayRequestInit = {}): Promise<T> {
       const { omitAccessToken = false, ...fetchOptions } = options;
       const url = gatewayUrl(origin, path);
@@ -121,27 +225,32 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
       if (!headers.has('Accept')) {
         headers.set('Accept', 'application/json');
       }
+      const hasCustomAuthHeader = headers.has('Authorization');
       const token = localStorage.getItem('accessToken');
       const isAuthRoute = path.startsWith('/v1/auth/login') ||
         path.startsWith('/v1/auth/register') ||
         path.startsWith('/v1/auth/refresh') ||
         path.startsWith('/v1/auth/verificacion');
-      if (token && !omitAccessToken && !isAuthRoute && !headers.has('Authorization')) {
+      const canUseSessionToken = !omitAccessToken && !isAuthRoute && !hasCustomAuthHeader;
+
+      if (token && canUseSessionToken) {
         headers.set('Authorization', `Bearer ${token}`);
       }
-      let response: Response;
-      try {
-        response = await fetcher(url, { ...fetchOptions, headers });
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw error;
+
+      let response = await sendFetch(url, fetchOptions, headers);
+
+      if (response.status === 401 && canUseSessionToken && localStorage.getItem('refreshToken')) {
+        const newAccessToken = await refreshAccessToken();
+        if (newAccessToken) {
+          const retryHeaders = new Headers(fetchOptions.headers);
+          if (!retryHeaders.has('Accept')) {
+            retryHeaders.set('Accept', 'application/json');
+          }
+          retryHeaders.set('Authorization', `Bearer ${newAccessToken}`);
+          response = await sendFetch(url, fetchOptions, retryHeaders);
         }
-        throw new ApiRequestError(
-          null,
-          'Error de conexión',
-          'No se pudo conectar con el API Gateway.',
-        );
       }
+
       if (!response.ok) {
         throw await responseError(response);
       }
@@ -164,7 +273,15 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
 
 let defaultClient: ReturnType<typeof createHttpClient> | undefined;
 
-export function request<T>(path: string, options?: GatewayRequestInit): Promise<T> {
+function getDefaultClient() {
   defaultClient ??= createHttpClient(env.apiBaseUrl);
-  return defaultClient.request<T>(path, options);
+  return defaultClient;
+}
+
+export function request<T>(path: string, options?: GatewayRequestInit): Promise<T> {
+  return getDefaultClient().request<T>(path, options);
+}
+
+export function refreshSession(): Promise<string | null> {
+  return getDefaultClient().refreshSession();
 }
