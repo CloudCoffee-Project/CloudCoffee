@@ -434,6 +434,12 @@ export const estados = {
   deshabilitado: 0.6,
   /** Opacidad de un control pulsado (feedback mientras se mantiene). */
   presionado: 0.85,
+  /**
+   * Escala de un control pulsado. Se combina con `presionado` en el componente
+   * `Presionable` (INT4-111) para que todos los toques de la app respondan
+   * igual, sin importar la pantalla.
+   */
+  escalaPresionado: 0.98,
   /** Opacidad de un control en su límite (stepper sin más margen). */
   apagado: 0.4,
   /** Opacidad de íconos de acciones secundarias que no compiten con el contenido. */

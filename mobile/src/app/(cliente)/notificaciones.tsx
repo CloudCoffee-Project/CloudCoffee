@@ -14,7 +14,8 @@
 // FCM, INT4-41), útil durante el desarrollo.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -170,20 +171,20 @@ export default function NotificacionesScreen() {
         ) : (
           <View style={styles.lista} testID="lista-notificaciones">
             <View style={styles.acciones}>
-              <TouchableOpacity
+              <Presionable
                 style={styles.botonAccion}
                 onPress={marcarTodas}
                 testID="marcar-todas-leidas"
               >
                 <Text style={styles.botonAccionTexto}>✓ Marcar todas leídas</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.botonAccion} onPress={vaciar} testID="vaciar-bandeja">
+              </Presionable>
+              <Presionable style={styles.botonAccion} onPress={vaciar} testID="vaciar-bandeja">
                 <Text style={styles.botonAccionTexto}>Vaciar</Text>
-              </TouchableOpacity>
+              </Presionable>
             </View>
 
             {historial.map((notificacion) => (
-              <Pressable
+              <Presionable
                 key={notificacion.id}
                 onPress={() => abrirNotificacion(notificacion)}
                 style={[styles.item, notificacion.leida ? styles.itemLeida : null]}
@@ -205,7 +206,7 @@ export default function NotificacionesScreen() {
                     {formatearTiempoRelativo(notificacion.fechaIso)}
                   </Text>
                 </View>
-              </Pressable>
+              </Presionable>
             ))}
           </View>
         )}

@@ -4,7 +4,8 @@
 // (cloudcoffee-react/App → vista "inicio"): marca turquesa, ilustración,
 // subtítulo y dos acciones: Crear cuenta / Iniciar sesión.
 
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -33,21 +34,21 @@ export default function PortadaScreen() {
         </Text>
 
         <View style={styles.actions}>
-          <Pressable
+          <Presionable
             onPress={() => router.push('/(auth)/registro')}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
+            style={styles.primaryButton}
             accessibilityRole="button"
           >
             <Text style={styles.primaryText}>Crear cuenta</Text>
-          </Pressable>
+          </Presionable>
 
-          <Pressable
+          <Presionable
             onPress={() => router.push('/(auth)/login')}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryPressed]}
+            style={styles.secondaryButton}
             accessibilityRole="button"
           >
             <Text style={styles.secondaryText}>Iniciar sesión</Text>
-          </Pressable>
+          </Presionable>
         </View>
       </View>
     </ScrollView>
@@ -114,9 +115,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryPressed: {
-    backgroundColor: tokens.colores.tintaPresionada,
-  },
   primaryText: {
     ...tokens.tipografia.texto.boton,
     color: tokens.colores.crema,
@@ -130,9 +128,6 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.espaciado['15'],
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  secondaryPressed: {
-    backgroundColor: tokens.colores.cremaPresionada,
   },
   secondaryText: {
     ...tokens.tipografia.texto.botonSecundario,

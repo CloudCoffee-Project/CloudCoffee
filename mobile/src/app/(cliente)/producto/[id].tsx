@@ -36,7 +36,8 @@
 // acentos amarillos y bordes cálidos) replicada del mockup web.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../../components/Presionable';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -286,13 +287,13 @@ export default function DetalleProductoScreen() {
         <Text style={styles.avisoIcono}>☕</Text>
         <Text style={styles.avisoTitulo}>No pudimos cargar el producto</Text>
         <Text style={styles.avisoTexto}>{errorCarga}</Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnPrimario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnPrimario}
           onPress={() => void cargar()}
           testID="producto-detalle-reintentar"
         >
           <Text style={styles.btnPrimarioTexto}>Reintentar</Text>
-        </Pressable>
+        </Presionable>
       </View>
     );
   } else if (!campus) {
@@ -305,13 +306,13 @@ export default function DetalleProductoScreen() {
         <Text style={styles.avisoTexto}>
           Para ver el precio y el stock de este producto necesitamos saber en qué campus estás.
         </Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnPrimario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnPrimario}
           onPress={() => router.push('/(cliente)/campus')}
           testID="producto-detalle-ir-campus"
         >
           <Text style={styles.btnPrimarioTexto}>Ir a seleccionar sede</Text>
-        </Pressable>
+        </Presionable>
       </View>
     );
   } else if (ofertas.length === 0) {
@@ -322,13 +323,13 @@ export default function DetalleProductoScreen() {
         <Text style={styles.avisoTexto}>
           Este producto todavía no tiene precio ni stock disponible en {campus.nombre}.
         </Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnSecundario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnSecundario}
           onPress={() => router.push('/(cliente)')}
           testID="producto-detalle-volver-catalogo"
         >
           <Text style={styles.btnSecundarioTexto}>Volver al catálogo</Text>
-        </Pressable>
+        </Presionable>
       </View>
     );
   } else {
@@ -360,13 +361,12 @@ export default function DetalleProductoScreen() {
               const disponible = Math.max(oferta.stock - cantidadDe(oferta.ofertaId), 0);
 
               return (
-                <Pressable
+                <Presionable
                   key={oferta.ofertaId}
-                  style={({ pressed }) => [
+                  style={[
                     styles.ofertaCard,
                     seleccionadaActual && styles.ofertaCardActiva,
                     agotada && styles.ofertaCardAgotada,
-                    pressed && !agotada && styles.btnPresionado,
                   ]}
                   onPress={() => elegirOferta(oferta)}
                   disabled={agotada}
@@ -394,7 +394,7 @@ export default function DetalleProductoScreen() {
                     </Text>
                   </View>
                   <Text style={styles.ofertaPrecio}>{formatearPrecio(oferta.precio)}</Text>
-                </Pressable>
+                </Presionable>
               );
             })}
           </View>
@@ -404,29 +404,25 @@ export default function DetalleProductoScreen() {
           <View style={styles.cantidadWrapper} testID="producto-detalle-cantidad">
             <Text style={styles.cantidadLabel}>Cantidad:</Text>
             <View style={styles.stepper}>
-              <Pressable
-                style={({ pressed }) => [styles.stepperBoton, pressed && styles.btnPresionado]}
+              <Presionable
+                style={styles.stepperBoton}
                 onPress={() => cambiarCantidad(-1)}
                 disabled={!activa || cantidad <= 1}
                 testID="producto-detalle-menos"
               >
                 <Text style={styles.stepperBotonTexto}>−</Text>
-              </Pressable>
+              </Presionable>
               <Text style={styles.stepperValor}>{cantidad}</Text>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.stepperBoton,
-                  !puedeSumar && styles.stepperBotonApagado,
-                  pressed && styles.btnPresionado,
-                ]}
+              <Presionable
+                style={[styles.stepperBoton, !puedeSumar && styles.stepperBotonApagado]}
                 onPress={() => cambiarCantidad(1)}
                 disabled={!puedeSumar}
                 testID="producto-detalle-mas"
               >
                 <Text style={styles.stepperBotonTexto}>+</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.trashBtn, pressed && styles.btnPresionado]}
+              </Presionable>
+              <Presionable
+                style={styles.trashBtn}
                 onPress={() => {
                   setCantidad(1);
                   if (activa) {
@@ -437,7 +433,7 @@ export default function DetalleProductoScreen() {
                 accessibilityLabel={`Eliminar ${producto?.nombre} del carrito`}
               >
                 <Text style={styles.trashBtnText}>🗑️</Text>
-              </Pressable>
+              </Presionable>
             </View>
           </View>
         ) : null}
@@ -470,13 +466,13 @@ export default function DetalleProductoScreen() {
 
   return (
     <SafeAreaView style={styles.pantalla} edges={['top']}>
-      <Pressable
-        style={({ pressed }) => [styles.botonVolver, pressed && styles.btnPresionado]}
+      <Presionable
+        style={styles.botonVolver}
         onPress={() => router.back()}
         testID="producto-detalle-volver"
       >
         <Text style={styles.botonVolverTexto}>← Volver al menú</Text>
-      </Pressable>
+      </Presionable>
 
       <View style={styles.cuerpo}>{contenido}</View>
 
@@ -499,12 +495,8 @@ export default function DetalleProductoScreen() {
           está, deshabilitado y diciendo "Agotado" cuando no hay nada comprable. */}
       {!cargando && campus !== null && errorCarga === null && ofertas.length > 0 ? (
         <View style={styles.footer}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.btnAgregar,
-              botonAgregarDisabled && styles.btnAgregarDeshabilitado,
-              pressed && !botonAgregarDisabled && styles.btnPresionado,
-            ]}
+          <Presionable
+            style={[styles.btnAgregar, botonAgregarDisabled && styles.btnAgregarDeshabilitado]}
             onPress={agregarAlCarrito}
             disabled={botonAgregarDisabled}
             testID="producto-detalle-agregar"
@@ -516,7 +508,7 @@ export default function DetalleProductoScreen() {
                   ? `Ya tienes todo el stock · ${activa.stock} en el carrito`
                   : `Agregar ${cantidad} al carrito · ${formatearPrecio(total)}`}
             </Text>
-          </Pressable>
+          </Presionable>
         </View>
       ) : null}
     </SafeAreaView>
@@ -750,9 +742,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  btnPresionado: {
-    opacity: 0.85,
-  },
+
   tarjetaAviso: {
     marginHorizontal: 16,
     backgroundColor: '#FFFFFF',
