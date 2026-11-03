@@ -36,6 +36,7 @@ export default function PortadaScreen() {
           <Pressable
             onPress={() => router.push('/(auth)/registro')}
             style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
+            accessibilityRole="button"
           >
             <Text style={styles.primaryText}>Crear cuenta</Text>
           </Pressable>
@@ -43,6 +44,7 @@ export default function PortadaScreen() {
           <Pressable
             onPress={() => router.push('/(auth)/login')}
             style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryPressed]}
+            accessibilityRole="button"
           >
             <Text style={styles.secondaryText}>Iniciar sesión</Text>
           </Pressable>
@@ -107,8 +109,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: tokens.colores.tinta,
     borderRadius: tokens.radios.xl,
+    minHeight: tokens.tamanos.areaTactil,
     paddingVertical: tokens.espaciado['15'],
     alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryPressed: {
     backgroundColor: tokens.colores.tintaPresionada,
@@ -120,10 +124,12 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: tokens.colores.crema,
     borderWidth: tokens.grosores.fino,
-    borderColor: tokens.colores.bordeAuth,
+    borderColor: tokens.colores.bordeControl,
     borderRadius: tokens.radios.xl,
+    minHeight: tokens.tamanos.areaTactil,
     paddingVertical: tokens.espaciado['15'],
     alignItems: 'center',
+    justifyContent: 'center',
   },
   secondaryPressed: {
     backgroundColor: tokens.colores.cremaPresionada,
