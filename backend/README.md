@@ -339,6 +339,16 @@ compras de prueba para las cuentas de INT2-65:
 | `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
 | `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
 
+## Creación idempotente de compra (INT2-71)
+
+`POST /v1/compras` crea una compra y una orden por cafetería, con importes del
+Catálogo y propietario del JWT. Requiere `Idempotency-Key` UUID. Si una cafetería
+no consigue reservar todos sus ítems, compensa esa orden y la deja en revisión;
+mantiene las reservas de las demás. Los reintentos y la recuperación tras reinicio
+conservan las mismas identidades y no duplican compras ni descuentos de stock.
+
+Consultar [ejemplos HTTP, errores, recuperación y configuración](docs/creacion-compras.md).
+
 ## Consultas del comprador (INT2-72)
 
 Order implementa `GET /v1/compras?page=0&size=20`, `GET /v1/compras/{compraId}`
@@ -359,7 +369,7 @@ El contrato objetivo del Sprint 2 está en
 [Compra, pago simulado y retiro (INT2-50)](docs/compra-pago-retiro.md), con
 [OpenAPI importable](docs/compra-pago-retiro.openapi.json) y
 [ejemplos de eventos](docs/compra-pago-retiro.eventos.json). Define rutas, estados,
-idempotencia, permisos y QR. Order implementa las consultas del comprador y el pago
+idempotencia, permisos y QR. Order implementa la creación, las consultas del comprador y el pago
 simulado documentados arriba; estas rutas aún no se incorporan al Swagger de Sprint 1.
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1

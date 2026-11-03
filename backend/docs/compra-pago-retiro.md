@@ -16,8 +16,10 @@ El contrato distingue definición e implementación. INT2-52 completa el modelo
 persistente de compras, órdenes e ítems mediante V4, conservando las migraciones
 y pagos de INT2-53/76. Gateway ya enruta compras/órdenes y admite `Idempotency-Key`
 en CORS (INT2-55/98). Order expone la simulación y consulta de pago; las APIs de
-creación, revisión y retiro y la aplicación integrada del pago siguen
-en sus issues de implementación. INT2-72 incorpora historial y detalle de compras
+revisión y retiro y la aplicación integrada del pago siguen
+en sus issues de implementación. INT2-71 incorpora la creación idempotente con
+reservas y compensación durable; ver [Creación de compras](creacion-compras.md).
+INT2-72 incorpora historial y detalle de compras
 y detalle de órdenes para el CLIENTE propietario; el acceso del CAJERO queda
 para INT2-78. Ejemplos y errores en [Consultas del comprador](consultas-compras.md).
 Swagger de Sprint 1 documenta Auth y Catálogo;

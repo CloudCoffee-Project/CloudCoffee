@@ -19,6 +19,8 @@ import cl.cloudcoffee.catalog_service.messaging.StockEventPublisher;
 import cl.cloudcoffee.catalog_service.model.entity.Offer;
 import cl.cloudcoffee.catalog_service.model.entity.StockReservation;
 import cl.cloudcoffee.catalog_service.model.enums.OfferStatus;
+import cl.cloudcoffee.catalog_service.model.enums.ProductStatus;
+import cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus;
 import cl.cloudcoffee.catalog_service.model.enums.StockReservationStatus;
 import cl.cloudcoffee.catalog_service.repository.OfferRepository;
 import cl.cloudcoffee.catalog_service.repository.StockReservationRepository;
@@ -81,6 +83,21 @@ public class StockReservationService {
             return new ReservationResult(reservation, false);
         }
 
+        // INT2-71: comprobar la cotización bajo el mismo bloqueo que descuenta stock.
+        // Los replays se resuelven antes: un cambio posterior nunca altera una reserva anterior.
+        if (request.expectedPrice() != null && (offer.getPrice().compareTo(request.expectedPrice()) != 0
+                || offer.getProduct().getStatus() != ProductStatus.ACTIVE
+                || offer.getCafeteria().getStatus() != CafeteriaStatus.OPEN)) {
+            throw error(HttpStatus.CONFLICT, "Oferta no disponible",
+                    "La oferta cambió desde la cotización; vuelve a consultar el catálogo.", "OFERTA_NO_DISPONIBLE");
+        }
+        Instant expiration = request.expiresAt();
+        Instant now = clock.instant();
+        if (expiration != null && (!expiration.isAfter(now) || expiration.isAfter(now.plusSeconds(900)))) {
+            throw error(HttpStatus.CONFLICT, "Reserva vencida",
+                    "El vencimiento debe ser futuro y no superar 15 minutos.", "RESERVA_VENCIDA");
+        }
+
         if (reservationRepository.existsByOrderIdAndOfferIdAndStatusIn(request.orderId(), request.offerId(),
                 List.of(StockReservationStatus.RESERVED, StockReservationStatus.CONFIRMED))) {
             throw error(HttpStatus.CONFLICT, "La orden ya tiene una reserva activa o confirmada",
@@ -104,7 +121,8 @@ public class StockReservationService {
         reservation.setQuantity(request.quantity());
         reservation.setStatus(StockReservationStatus.RESERVED);
         reservation.setReservedAt(reservedAt);
-        reservation.setExpiresAt(reservedAt.plus(reservationTtl).truncatedTo(ChronoUnit.MICROS));
+        reservation.setExpiresAt((expiration == null ? reservedAt.plus(reservationTtl) : expiration)
+                .truncatedTo(ChronoUnit.MICROS));
         StockReservation savedReservation = reservationRepository.saveAndFlush(reservation);
         stockEventPublisher.publishStockUpdated(offer);
         return new ReservationResult(savedReservation, true);
