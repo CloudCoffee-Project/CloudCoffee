@@ -9,6 +9,7 @@ import { VerificationPage } from './pages/VerificationPage';
 import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { ProfilePage } from './pages/ProfilePage';
 
 export function App() {
   return (
@@ -27,15 +28,7 @@ export function App() {
 
         {/* Rutas privadas para cualquier usuario con sesión */}
         <Route element={<ProtectedRoute />}>
-          <Route
-            path="/perfil"
-            element={
-              <section style={{ padding: '2rem' }}>
-                <h1>Mi Perfil</h1>
-                <p>Gestión de cuenta y seguridad del usuario autenticado.</p>
-              </section>
-            }
-          />
+          <Route path="/perfil" element={<ProfilePage />} />
         </Route>
 
         {/* Rutas exclusivas de comprador (CLIENTE) */}
