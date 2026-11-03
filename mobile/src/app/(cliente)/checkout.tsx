@@ -43,15 +43,8 @@
 // pantalla funciona sin cambios. Ver docs/contratos-backend.md, fila 6.
 
 import { useCallback, useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -337,21 +330,21 @@ export default function CheckoutScreen() {
           El estado se actualizará en Mis compras cuando termine la revisión.
         </Text>
 
-        <Pressable
-          style={({ pressed }) => [styles.btnPrimario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnPrimario}
           onPress={() => router.replace('/mis-compras')}
           testID="checkout-revision-requerida-ir-compras"
         >
           <Text style={styles.btnPrimarioTexto}>Ver mis compras</Text>
-        </Pressable>
+        </Presionable>
 
-        <Pressable
-          style={({ pressed }) => [styles.btnSecundario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnSecundario}
           onPress={() => router.replace('/')}
           testID="checkout-revision-requerida-volver-catalogo"
         >
           <Text style={styles.btnSecundarioTexto}>Volver al catálogo</Text>
-        </Pressable>
+        </Presionable>
       </ScrollView>
     );
   } else if (vista === 'realizada') {
@@ -392,21 +385,21 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.btnPrimario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnPrimario}
           onPress={() => router.replace('/mis-compras')}
           testID="checkout-realizada-ir-compras"
         >
           <Text style={styles.btnPrimarioTexto}>Ver mis compras</Text>
-        </Pressable>
+        </Presionable>
 
-        <Pressable
-          style={({ pressed }) => [styles.btnSecundario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnSecundario}
           onPress={() => router.replace('/')}
           testID="checkout-realizada-volver-catalogo"
         >
           <Text style={styles.btnSecundarioTexto}>Volver al catálogo</Text>
-        </Pressable>
+        </Presionable>
       </ScrollView>
     );
   } else if (vista === 'fallo') {
@@ -432,8 +425,8 @@ export default function CheckoutScreen() {
           Nada se cobró y tu carrito sigue listo para que lo intentes de nuevo.
         </Text>
 
-        <Pressable
-          style={({ pressed }) => [styles.btnPrimario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnPrimario}
           onPress={() => {
             setMensajeError(undefined);
             setErrores({});
@@ -442,15 +435,15 @@ export default function CheckoutScreen() {
           testID="checkout-fallo-reintentar"
         >
           <Text style={styles.btnPrimarioTexto}>Volver a intentar</Text>
-        </Pressable>
+        </Presionable>
 
-        <Pressable
-          style={({ pressed }) => [styles.btnSecundario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnSecundario}
           onPress={() => router.replace('/carrito')}
           testID="checkout-fallo-volver-carrito"
         >
           <Text style={styles.btnSecundarioTexto}>Volver al carrito</Text>
-        </Pressable>
+        </Presionable>
       </ScrollView>
     );
   } else if (items.length === 0) {
@@ -464,13 +457,13 @@ export default function CheckoutScreen() {
         <Text style={styles.vacioTexto}>
           Tu carrito está vacío. Agrega cafés y snacks desde el catálogo para iniciar una compra.
         </Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnPrimario, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnPrimario}
           onPress={() => router.replace('/(cliente)')}
           testID="checkout-ir-catalogo"
         >
           <Text style={styles.btnPrimarioTexto}>Explorar Catálogo</Text>
-        </Pressable>
+        </Presionable>
       </View>
     );
   } else {
@@ -668,13 +661,8 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.btnPrimario,
-            styles.btnConfirmar,
-            procesando && styles.btnDeshabilitado,
-            pressed && !procesando && styles.btnPresionado,
-          ]}
+        <Presionable
+          style={[styles.btnPrimario, styles.btnConfirmar, procesando && styles.btnDeshabilitado]}
           onPress={confirmar}
           disabled={procesando}
           testID="checkout-confirmar"
@@ -686,7 +674,7 @@ export default function CheckoutScreen() {
               {`Confirmar y Pagar ${formatearPrecio(total)}`}
             </Text>
           )}
-        </Pressable>
+        </Presionable>
 
         <Text style={styles.nota}>
           Al confirmar se validan tus datos, se envía la compra al backend y, si hay pago pendiente,
@@ -700,13 +688,9 @@ export default function CheckoutScreen() {
   return (
     <SafeAreaView style={styles.pantalla} edges={['top', 'bottom']}>
       {vista === 'revision' && (
-        <Pressable
-          style={({ pressed }) => [styles.botonVolver, pressed && styles.btnPresionado]}
-          onPress={volverAlCarrito}
-          testID="checkout-volver"
-        >
+        <Presionable style={styles.botonVolver} onPress={volverAlCarrito} testID="checkout-volver">
           <Text style={styles.botonVolverTexto}>← Volver al carrito</Text>
-        </Pressable>
+        </Presionable>
       )}
 
       {vista === 'revision' && (
@@ -1080,9 +1064,6 @@ const styles = StyleSheet.create({
   },
   btnDeshabilitado: {
     opacity: tokens.estados.deshabilitado,
-  },
-  btnPresionado: {
-    opacity: tokens.estados.presionado,
   },
   nota: {
     color: tokens.colores.textoClaro,
