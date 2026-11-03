@@ -25,11 +25,14 @@ public class PagoService {
     private final CompraRepository compraRepository;
     private final PagoRepository pagoRepository;
     private final PasarelaPago pasarela;
+    private final OperacionCompraGuard operaciones;
 
-    public PagoService(CompraRepository compraRepository, PagoRepository pagoRepository, PasarelaPago pasarela) {
+    public PagoService(CompraRepository compraRepository, PagoRepository pagoRepository, PasarelaPago pasarela,
+            OperacionCompraGuard operaciones) {
         this.compraRepository = compraRepository;
         this.pagoRepository = pagoRepository;
         this.pasarela = pasarela;
+        this.operaciones = operaciones;
     }
 
     /**
@@ -68,6 +71,7 @@ public class PagoService {
                     "PAGO_YA_INICIADO");
         }
 
+        operaciones.verificarInicioPago(compra);
         RegistroPasarela registro = pasarela.registrar(new SolicitudPago(compra.getId(), compra.getMontoTotal()));
         Pago pago = new Pago(compra, pasarela.proveedor(), registro.referencia());
         if (motivo != null) {
