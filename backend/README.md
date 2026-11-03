@@ -367,10 +367,50 @@ y pago actual o `null`; recursos ajenos e inexistentes responden `404`.
 
 La página empieza en cero, admite entre 1 y 100 compras (20 por defecto) y tiene
 orden fijo por fecha e ID descendentes. Las lecturas usan `Cache-Control: no-store`
-y no ejecutan pagos, vencimientos ni cambios de estado. El acceso del cajero queda
-para INT2-78. Las compras mínimas anteriores conservan `ordenes: []`.
+y no ejecutan pagos, vencimientos ni cambios de estado. Las compras mínimas
+anteriores conservan `ordenes: []`.
 
 Consultar [ejemplos HTTP, respuestas y errores](docs/consultas-compras.md).
+
+## Listado y búsqueda de pedidos del cajero (INT2-78)
+
+`GET /v1/orders?page=0&size=20` devuelve `PaginaOrdenes` de la cafetería que Auth
+tiene asignada al `CAJERO`. La asignación se consulta en cada solicitud mediante
+el mecanismo interno autenticado de INT2-65; requiere `INTERNAL_SERVICE_TOKEN`.
+Los parámetros o encabezados del cliente y el claim `cafeteriaId` no autorizan.
+Sin asignación o sin poder comprobarla se responde `403`; `CLIENTE`,
+`ADMIN_CAFETERIA` y `SUPER_ADMIN` también reciben `403`.
+
+Admite `estado` opcional en snake_case y búsqueda exacta por `codigoOrden`
+(1–64 caracteres, quitando espacios exteriores y conservando mayúsculas).
+Ambos filtros se combinan y se aplican también al conteo. Un código ajeno o
+inexistente devuelve una página vacía. Para pedidos listos se usa
+`estado=listo_para_retiro`; omitirlo permite consultar todos los estados.
+
+La paginación empieza en cero, admite `size` de 1 a 100 (20 por defecto) y ordena
+por `creadoAt DESC, id DESC`. Devuelve snapshots de órdenes e ítems con
+`Cache-Control: no-store`, sin ejecutar transiciones ni validar o registrar retiros.
+Esta entrega implementa el listado y su búsqueda; el detalle individual conserva
+el acceso del comprador de INT2-72. Las pantallas de cajero pertenecen a INT2-62.
+
+Ejemplos a través del Gateway:
+
+```http
+GET /v1/orders?page=0&size=20&estado=listo_para_retiro
+Authorization: Bearer <jwt-cajero>
+
+GET /v1/orders?codigoOrden=CC-000001
+Authorization: Bearer <jwt-cajero>
+```
+
+Parámetros inválidos devuelven `400` con Problem Details; errores de dominio:
+`PAGINACION_INVALIDA`, `ESTADO_INVALIDO`, `CODIGO_ORDEN_INVALIDO`,
+`ROL_NO_PERMITIDO`, `USUARIO_INVALIDO` y `ASIGNACION_NO_AUTORIZADA`.
+JWT ausente, vencido o inválido devuelve `401`.
+
+`ConsultaOrdenesControllerTest` verifica comprador, dos cafeterías, claims obsoletos,
+revocación y caída de Auth, búsqueda y paginación con ítems completos. Ejecutar
+desde `backend`: `./auth-service/mvnw -pl order-service -am clean verify`.
 
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 

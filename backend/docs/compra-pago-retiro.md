@@ -23,8 +23,11 @@ INT2-77. Ver [Revisión de compras](revision-compras.md).
 INT2-71 incorpora la creación idempotente con
 reservas y compensación durable; ver [Creación de compras](creacion-compras.md).
 INT2-72 incorpora historial y detalle de compras
-y detalle de órdenes para el CLIENTE propietario; el acceso del CAJERO queda
-para INT2-78. Ejemplos y errores en [Consultas del comprador](consultas-compras.md).
+y detalle de órdenes para el CLIENTE propietario. INT2-78 agrega el listado paginado
+del CAJERO y la búsqueda exacta por `codigoOrden`, limitados a su asignación en Auth.
+El detalle individual conserva por ahora el acceso del comprador.
+Ejemplos y errores en [Consultas del comprador](consultas-compras.md) y
+[Listado y búsqueda del cajero](../README.md#listado-y-búsqueda-de-pedidos-del-cajero-int2-78).
 Swagger de Sprint 1 documenta Auth y Catálogo;
 el JSON adjunto es el contrato objetivo, no evidencia de endpoints ejecutables.
 
@@ -169,6 +172,7 @@ solo consulta. Las respuestas con datos de compra, pago y QR usan `Cache-Control
 | `POST /v1/compras/{compraId}/pago` | Propietario CLIENTE | `201 Pago` con `{escenario: aprobar\|rechazar\|pendiente}`. |
 | `GET /v1/compras/{compraId}/pago` | Propietario CLIENTE | `200 Pago`; `404` si aún no se inició. |
 | `GET /v1/orders?page=0&size=20&estado=listo_para_retiro` | CAJERO asignado | `200 PaginaOrdenes`, solo cafetería asignada; filtro de estado opcional. |
+| `GET /v1/orders?codigoOrden=CC-000001` | CAJERO asignado | `200 PaginaOrdenes`, búsqueda exacta por código legible en su cafetería; código ajeno o inexistente devuelve página vacía. |
 | `GET /v1/orders/{ordenId}` | Propietario CLIENTE o CAJERO asignado | `200 Orden`. |
 | `POST /v1/orders/{ordenId}/listo` | CAJERO asignado | `200 Orden`, habilita retiro. Sin cuerpo. |
 | `GET /v1/orders/{ordenId}/qr` | Propietario CLIENTE o CAJERO asignado | `200 QrRetiro` solo con pago aprobado y orden lista. |
