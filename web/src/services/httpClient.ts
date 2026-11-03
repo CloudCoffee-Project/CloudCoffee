@@ -226,21 +226,35 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
         headers.set('Accept', 'application/json');
       }
       const hasCustomAuthHeader = headers.has('Authorization');
-      const token = localStorage.getItem('accessToken');
       const isAuthRoute = path.startsWith('/v1/auth/login') ||
         path.startsWith('/v1/auth/register') ||
         path.startsWith('/v1/auth/refresh') ||
         path.startsWith('/v1/auth/verificacion');
       const canUseSessionToken = !omitAccessToken && !isAuthRoute && !hasCustomAuthHeader;
 
+      if (canUseSessionToken && refreshInFlight) {
+        await refreshInFlight;
+      }
+
+      const token = localStorage.getItem('accessToken');
       if (token && canUseSessionToken) {
         headers.set('Authorization', `Bearer ${token}`);
       }
 
       let response = await sendFetch(url, fetchOptions, headers);
 
-      if (response.status === 401 && canUseSessionToken && localStorage.getItem('refreshToken')) {
-        const newAccessToken = await refreshAccessToken();
+      if (response.status === 401 && canUseSessionToken) {
+        const currentStoredToken = localStorage.getItem('accessToken');
+        let newAccessToken: string | null = null;
+
+        if (token && currentStoredToken && currentStoredToken !== token) {
+          newAccessToken = currentStoredToken;
+        } else if (localStorage.getItem('refreshToken')) {
+          newAccessToken = await refreshAccessToken();
+        } else {
+          clearSessionTokens();
+        }
+
         if (newAccessToken) {
           const retryHeaders = new Headers(fetchOptions.headers);
           if (!retryHeaders.has('Accept')) {
@@ -248,6 +262,10 @@ export function createHttpClient(baseUrl: string, fetcher: typeof fetch = fetch)
           }
           retryHeaders.set('Authorization', `Bearer ${newAccessToken}`);
           response = await sendFetch(url, fetchOptions, retryHeaders);
+        }
+
+        if (response.status === 401) {
+          clearSessionTokens();
         }
       }
 
