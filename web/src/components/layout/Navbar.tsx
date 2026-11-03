@@ -1,6 +1,15 @@
-import { NavLink, Link } from 'react-router';
+import { NavLink, Link, useNavigate } from 'react-router';
+import { useAuth } from '../../hooks/useAuth';
 
 export function Navbar() {
+  const { isLoggedIn, role, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <nav className="navbar">
       {/* Logo de la aplicación con ícono SVG */}
@@ -20,14 +29,42 @@ export function Navbar() {
         </NavLink>
       </div>
 
-      {/* Botones de acción derecha (según Mockup) */}
+      {/* Botones de acción derecha según sesión y rol */}
       <div className="navbar-actions">
-        <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
-          Registrarse
-        </Link>
-        <Link to="/login" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-          Iniciar Sesión
-        </Link>
+        {isLoggedIn ? (
+          <>
+            {role === 'CAJERO' && (
+              <Link to="/cajero" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+                Panel Cajero
+              </Link>
+            )}
+            {role === 'CLIENTE' && (
+              <Link to="/compras" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+                Mis Compras
+              </Link>
+            )}
+            <Link to="/perfil" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+              Mi Perfil
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="btn-primary"
+              style={{ cursor: 'pointer', border: 'none' }}
+            >
+              Cerrar Sesión
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+              Registrarse
+            </Link>
+            <Link to="/login" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Iniciar Sesión
+            </Link>
+          </>
+        )}
       </div>
     </nav>
   );
