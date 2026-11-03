@@ -14,7 +14,8 @@
 // ruta aún no está ruteada por el gateway).
 
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../../services/ordenes';
@@ -95,13 +96,13 @@ export default function ConfirmacionEntregaScreen() {
           <Text style={styles.cardTexto}>
             El código escaneado no corresponde a un retiro válido.
           </Text>
-          <Pressable
+          <Presionable
             style={styles.botonPrimario}
             onPress={volverAlEscaner}
             testID="cajero-confirmacion-volver-escaner"
           >
             <Text style={styles.botonPrimarioTexto}>Volver a escanear</Text>
-          </Pressable>
+          </Presionable>
         </View>
       </View>
     );
@@ -121,13 +122,13 @@ export default function ConfirmacionEntregaScreen() {
           </View>
           <Text style={styles.cardTitulo}>Entrega registrada</Text>
           <Text style={styles.cardTexto}>La orden #{pedido} fue marcada como entregada.</Text>
-          <Pressable
+          <Presionable
             style={styles.botonPrimario}
             onPress={volverAlEscaner}
             testID="cajero-confirmacion-otro"
           >
             <Text style={styles.botonPrimarioTexto}>Escanear otro pedido</Text>
-          </Pressable>
+          </Presionable>
         </View>
       </View>
     );
@@ -185,7 +186,7 @@ export default function ConfirmacionEntregaScreen() {
           </View>
         ) : null}
 
-        <Pressable
+        <Presionable
           style={[styles.botonPrimario, confirmando && styles.botonDeshabilitado]}
           onPress={() => void confirmarEntrega()}
           disabled={confirmando}
@@ -194,14 +195,14 @@ export default function ConfirmacionEntregaScreen() {
           <Text style={styles.botonPrimarioTexto}>
             {confirmando ? 'Registrando entrega…' : '✓ Confirmar entrega'}
           </Text>
-        </Pressable>
-        <Pressable
+        </Presionable>
+        <Presionable
           style={styles.botonSecundario}
           onPress={volverAlEscaner}
           testID="cajero-confirmacion-volver"
         >
           <Text style={styles.botonSecundarioTexto}>Volver a escanear</Text>
-        </Pressable>
+        </Presionable>
       </View>
     </ScrollView>
   );

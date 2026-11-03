@@ -10,13 +10,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -78,7 +78,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
+        <Presionable
           onPress={() => router.replace('/(auth)/portada')}
           style={styles.backButton}
           hitSlop={tokens.espaciado.md}
@@ -86,7 +86,7 @@ export default function LoginScreen() {
           accessibilityLabel="Volver a la portada"
         >
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
 
         <View style={styles.loginContent}>
           <View style={styles.header}>
@@ -126,19 +126,19 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.forgotRow}>
-              <Pressable
+              <Presionable
                 onPress={() => router.push('/(auth)/olvidaste-contrasena')}
                 style={styles.forgotButton}
                 hitSlop={tokens.espaciado.md}
                 accessibilityRole="link"
               >
                 <Text style={styles.forgotLink}>¿Olvidaste tu contraseña?</Text>
-              </Pressable>
+              </Presionable>
             </View>
 
             {error && <Text style={styles.errorText}>{error}</Text>}
 
-            <Pressable
+            <Presionable
               onPress={() => void handleIngresar()}
               disabled={cargando}
               accessibilityRole="button"
@@ -150,19 +150,19 @@ export default function LoginScreen() {
               ) : (
                 <Text style={styles.primaryButtonText}>Ingresar</Text>
               )}
-            </Pressable>
+            </Presionable>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿No tienes una cuenta?</Text>
-            <Pressable
+            <Presionable
               onPress={() => router.push('/(auth)/registro')}
               style={styles.footerLinkButton}
               hitSlop={tokens.espaciado.sm}
               accessibilityRole="link"
             >
               <Text style={styles.footerLink}>Regístrate gratis</Text>
-            </Pressable>
+            </Presionable>
           </View>
         </View>
       </ScrollView>

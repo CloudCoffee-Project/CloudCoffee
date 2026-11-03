@@ -21,7 +21,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect } from 'expo-router';
 
 import { Esqueleto, EsqueletoPulso } from '../../components/Esqueleto';
@@ -98,14 +98,14 @@ interface PropsChipFiltro {
 
 function ChipFiltro({ activo, etiqueta, onPress, testID }: PropsChipFiltro) {
   return (
-    <Pressable
+    <Presionable
       onPress={onPress}
       style={[styles.chip, activo && styles.chipActivo]}
       hitSlop={6}
       testID={testID}
     >
       <Text style={[styles.chipText, activo && styles.chipTextActivo]}>{etiqueta}</Text>
-    </Pressable>
+    </Presionable>
   );
 }
 
@@ -263,14 +263,14 @@ export default function StockScreen() {
           testID="cajero-stock-buscador"
         />
         {busqueda.length > 0 && (
-          <Pressable
+          <Presionable
             onPress={() => setBusqueda('')}
             style={styles.clearButton}
             hitSlop={6}
             testID="cajero-stock-limpiar"
           >
             <Text style={styles.clearButtonText}>✕</Text>
-          </Pressable>
+          </Presionable>
         )}
       </View>
 
@@ -300,9 +300,9 @@ export default function StockScreen() {
       {error && (
         <View style={styles.errorBanner} testID="cajero-stock-error">
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable onPress={() => void recargar()} testID="cajero-stock-reintentar">
+          <Presionable onPress={() => void recargar()} testID="cajero-stock-reintentar">
             <Text style={styles.errorBotonTexto}>Reintentar</Text>
-          </Pressable>
+          </Presionable>
         </View>
       )}
 

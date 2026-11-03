@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -135,7 +135,7 @@ export default function RegistroScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
+        <Presionable
           onPress={() => router.replace('/(auth)/portada')}
           style={styles.backButton}
           hitSlop={tokens.espaciado.md}
@@ -143,7 +143,7 @@ export default function RegistroScreen() {
           accessibilityLabel="Volver a la portada"
         >
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
 
         <View style={styles.registerContent}>
           <View style={styles.header}>
@@ -238,7 +238,7 @@ export default function RegistroScreen() {
               />
             </View>
 
-            <Pressable
+            <Presionable
               onPress={() => void handleRegistrar()}
               disabled={cargando}
               accessibilityRole="button"
@@ -250,19 +250,19 @@ export default function RegistroScreen() {
               ) : (
                 <Text style={styles.primaryButtonText}>Crear Cuenta</Text>
               )}
-            </Pressable>
+            </Presionable>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿Ya tienes cuenta?</Text>
-            <Pressable
+            <Presionable
               onPress={() => router.replace('/(auth)/login')}
               style={styles.footerLinkButton}
               hitSlop={tokens.espaciado.sm}
               accessibilityRole="link"
             >
               <Text style={styles.footerLink}>Inicia sesión aquí</Text>
-            </Pressable>
+            </Presionable>
           </View>
         </View>
       </ScrollView>
