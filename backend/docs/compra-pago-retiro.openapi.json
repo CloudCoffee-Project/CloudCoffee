@@ -2100,8 +2100,9 @@
           },
           "ordenes": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 0,
             "maxItems": 100,
+            "description": "Snapshots históricos de las órdenes. Vacío únicamente para compras anteriores a V4 o seeds mínimos de pagos; las compras nuevas del flujo completo contienen al menos una orden.",
             "items": {
               "$ref": "#/components/schemas/Orden"
             }

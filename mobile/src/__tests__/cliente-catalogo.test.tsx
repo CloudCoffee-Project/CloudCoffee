@@ -347,6 +347,104 @@ describe('Catálogo del cliente', () => {
     expect(tree.root.findByProps({ testID: 'catalogo-vacio' })).toBeTruthy();
   });
 
+  it('desde la búsqueda vacía ofrece limpiarla y recupera la lista', async () => {
+    const tree = await renderCatalogo();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'catalogo-buscar' }).props.onChangeText('zzzzzzz');
+    });
+
+    const boton = tree.root.findByProps({ testID: 'catalogo-vacio-accion' });
+    expect(textoDe(boton)).toContain('Limpiar búsqueda');
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+
+    expect(() => tree.root.findByProps({ testID: 'catalogo-vacio' })).toThrow();
+    expect(tree.root.findByProps({ testID: 'catalogo-producto-p-1' })).toBeTruthy();
+  });
+
+  it('desde el catálogo vacío ofrece actualizar y vuelve a pedir los productos', async () => {
+    mockListarProductos.mockResolvedValue([]);
+
+    const tree = await renderCatalogo();
+
+    expect(textoDe(tree.root.findByProps({ testID: 'catalogo-vacio' }))).toContain(
+      'Catálogo vacío'
+    );
+    const boton = tree.root.findByProps({ testID: 'catalogo-vacio-accion' });
+    expect(textoDe(boton)).toContain('Actualizar');
+    const llamadasAntes = mockListarProductos.mock.calls.length;
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+
+    expect(mockListarProductos.mock.calls.length).toBe(llamadasAntes + 1);
+  });
+
+  it('desde una categoría vacía ofrece volver a todas', async () => {
+    mockListarProductos.mockResolvedValue([]);
+    const tree = await renderCatalogo();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'catalogo-chip-cat-pasteleria' }).props.onPress();
+    });
+    const llamadas = mockUseFocusEffect.mock.calls;
+    await act(async () => {
+      llamadas[llamadas.length - 1][0]();
+    });
+
+    const boton = tree.root.findByProps({ testID: 'catalogo-vacio-accion' });
+    expect(textoDe(boton)).toContain('Ver todas');
+    mockListarProductos.mockClear();
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+    const llamadasTrasVolver = mockUseFocusEffect.mock.calls;
+    await act(async () => {
+      llamadasTrasVolver[llamadasTrasVolver.length - 1][0]();
+    });
+
+    expect(mockListarProductos).toHaveBeenCalledWith('san-juan-pablo-ii', undefined);
+  });
+
+  it('sin campus seleccionado ofrece elegirlo', async () => {
+    mockLeerCampus.mockResolvedValue(null);
+
+    const tree = await renderCatalogo();
+
+    expect(textoDe(tree.root.findByProps({ testID: 'catalogo-vacio' }))).toContain(
+      'Elige tu campus'
+    );
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'catalogo-vacio-accion' }).props.onPress();
+    });
+
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/campus');
+  });
+
+  it('al volver con campus elegido muestra el esqueleto, no un vacío transitorio', async () => {
+    // Primer arranque sin sede: la lista queda vacía y ofrece elegir campus.
+    mockLeerCampus.mockResolvedValueOnce(null);
+    const tree = await renderCatalogo();
+    expect(tree.root.findByProps({ testID: 'catalogo-vacio' })).toBeTruthy();
+
+    // Al volver de elegir campus, los productos aún no llegan: la pantalla
+    // debe mostrar el esqueleto en vez del estado "Catálogo vacío".
+    mockListarProductos.mockReturnValue(promesaPendiente<Producto[]>());
+    const llamadas = mockUseFocusEffect.mock.calls;
+    await act(async () => {
+      llamadas[llamadas.length - 1][0]();
+    });
+
+    expect(tree.root.findByProps({ testID: 'catalogo-esqueleto' })).toBeTruthy();
+    expect(() => tree.root.findByProps({ testID: 'catalogo-vacio' })).toThrow();
+  });
+
   it('muestra el error normalizado con botón de reintentar', async () => {
     mockListarCategorias.mockRejectedValue(new ApiError('Catálogo no disponible', 500));
 

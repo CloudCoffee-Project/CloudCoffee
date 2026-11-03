@@ -29,6 +29,15 @@ export function Navbar() {
         </NavLink>
       </div>
 
+      <div className="navbar-links">
+        <NavLink
+          to="/catalogo"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+        >
+          Catálogo
+        </NavLink>
+      </div>
+
       {/* Botones de acción derecha según sesión y rol */}
       <div className="navbar-actions">
         {isLoggedIn ? (

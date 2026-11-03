@@ -13,6 +13,9 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -133,6 +136,20 @@ class LoginServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).getStatus().value()).isEqualTo(403));
 
+        verify(tokenAuthRepository, never()).save(any());
+        verify(jwtTokenService, never()).emitir(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"activo", "eliminado"})
+    void rechazaCuentaInhabilitadaSinEmitirCredenciales(String indicador) {
+        Usuario usuario = usuarioVerificado();
+        ReflectionTestUtils.setField(usuario, indicador, indicador.equals("eliminado"));
+        when(usuarioRepository.findByEmail(usuario.getEmail())).thenReturn(Optional.of(usuario));
+
+        assertThatThrownBy(() -> loginService.iniciarSesion(usuario.getEmail(), "password123"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getStatus().value()).isEqualTo(401));
         verify(tokenAuthRepository, never()).save(any());
         verify(jwtTokenService, never()).emitir(any());
     }

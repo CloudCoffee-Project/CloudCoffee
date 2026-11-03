@@ -10,6 +10,12 @@
 // el mockup. Los badges salen del único mapa de estados
 // (src/utils/estadosOrden.ts).
 //
+// Contrato de órdenes (INT4-102): GET /v1/orders responde una PaginaOrdenes
+// (content + paginación), ordenada creadoAt DESC / id DESC. El servicio recorre
+// las páginas y esta pantalla filtra el arreglo completo por estado. Si la ruta
+// no está disponible, se muestra un error normalizado con mensaje claro y botón
+// de reintento; no hay pedidos de ejemplo ni respaldo simulado.
+//
 // Búsqueda manual por código de orden (INT4-10): respaldo para ubicar una
 // orden por su folio corto ante fallas de escaneo. Sigue el mockup (el input
 // "O buscar folio corto (ej: CC-9801)" + botón "Validar" de Cajero_Main): al
@@ -31,7 +37,7 @@ import {
 import { useRouter } from 'expo-router';
 
 import { fetchPedidosEntrantes } from '../../services/ordenes';
-import { getAccessToken, toApiError } from '../../services/httpClient';
+import { ApiError, getAccessToken, toApiError } from '../../services/httpClient';
 import { useOrdenEstado } from '../../hooks/useOrdenEstado';
 import { esEstadoOrdenActivo, esEstadoOrdenNoRetirado } from '../../types/domain';
 import type { EstadoOrden, Orden } from '../../types/domain';
@@ -39,6 +45,26 @@ import { visualEstadoOrden } from '../../utils/estadosOrden';
 
 function formatearMonto(monto: number): string {
   return `$${monto.toLocaleString('es-CL')}`;
+}
+
+// Mensaje claro por tipo de falla (INT4-102). El listado no tiene respaldo
+// simulado: si el contrato de órdenes no responde, la pantalla explica qué pasó
+// y ofrece reintentar. Se exporta para probar el mapeo sin montar la pantalla.
+export function mensajeErrorPedidos(error: ApiError): string {
+  switch (error.status) {
+    case 0:
+      return 'No pudimos conectar con el servicio de pedidos. Revisa tu conexión e inténtalo de nuevo.';
+    case 401:
+      return 'Tu sesión expiró. Vuelve a iniciar sesión para ver los pedidos.';
+    case 403:
+      return 'No tienes permisos para ver los pedidos de esta cafetería.';
+    case 404:
+      return 'El servicio de pedidos aún no está disponible en el backend. Intenta más tarde.';
+    case 503:
+      return 'El servicio de pedidos no está disponible en este momento. Intenta más tarde.';
+    default:
+      return error.message || 'No se pudieron cargar los pedidos.';
+  }
 }
 
 function FilaPedido({ orden }: { orden: Orden }) {
@@ -177,12 +203,16 @@ export default function PedidosEntrantesScreen() {
   const [mensajeManual, setMensajeManual] = useState<string | null>(null);
 
   async function cargarPedidos(): Promise<void> {
+    setCargando(true);
     try {
       const data = await fetchPedidosEntrantes(getAccessToken() ?? '');
       setPedidos(data);
       setError(null);
     } catch (errorApi) {
-      setError(toApiError(errorApi as never).message);
+      // Degradación verificada: se limpia la cola y se muestra el mensaje
+      // normalizado. Nunca se rellena con pedidos de ejemplo.
+      setPedidos([]);
+      setError(mensajeErrorPedidos(toApiError(errorApi as never)));
     } finally {
       setCargando(false);
     }
@@ -381,6 +411,14 @@ export default function PedidosEntrantesScreen() {
       {error && (
         <View style={styles.errorBanner} testID="cajero-error">
           <Text style={styles.errorText}>{error}</Text>
+          <Pressable
+            style={styles.errorBoton}
+            onPress={cargarPedidos}
+            hitSlop={6}
+            testID="cajero-error-reintentar"
+          >
+            <Text style={styles.errorBotonTexto}>Reintentar</Text>
+          </Pressable>
         </View>
       )}
 
@@ -509,11 +547,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
+    gap: 8,
+    alignItems: 'flex-start',
   },
   errorText: {
     color: '#991B1B',
     fontSize: 13,
     fontWeight: '600',
+  },
+  errorBoton: {
+    backgroundColor: '#991B1B',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  errorBotonTexto: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   listaContenido: {
     paddingBottom: 24,

@@ -19,6 +19,8 @@ import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -48,9 +50,9 @@ import cl.cloudcoffee.errors.BusinessException;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:stock-reservations;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
+        "spring.datasource.url=${RESERVATION_TEST_DB_URL:jdbc:h2:mem:stock-reservations;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}",
+        "spring.datasource.username=${RESERVATION_TEST_DB_USER:sa}",
+        "spring.datasource.password=${RESERVATION_TEST_DB_PASSWORD:}",
         "catalog.reservations.expiration-scan-ms=3600000",
         "management.tracing.enabled=false"
 })
@@ -146,7 +148,7 @@ class StockReservationIntegrationTests extends JwtTestSupport {
         assertThat(retried.created()).isFalse();
         assertThat(retried.reservation().getOrderId()).isEqualTo(orderId);
         assertThat(retried.reservation().getExpiresAt())
-                .isEqualTo(reservationRepository.findByOrderIdAndOfferId(orderId, offer.getId())
+                .isEqualTo(reservationRepository.findByOrderIdAndOfferIdAndAttemptId(orderId, offer.getId(), StockReservation.LEGACY_ATTEMPT_ID)
                         .orElseThrow().getExpiresAt());
         assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
     }
@@ -206,7 +208,7 @@ class StockReservationIntegrationTests extends JwtTestSupport {
 
         reservationService.expireForOffer(offer.getId());
 
-        StockReservation expired = reservationRepository.findByOrderIdAndOfferId(orderId, offer.getId())
+        StockReservation expired = reservationRepository.findByOrderIdAndOfferIdAndAttemptId(orderId, offer.getId(), StockReservation.LEGACY_ATTEMPT_ID)
                 .orElseThrow();
         assertThat(expired.getStatus()).isEqualTo(StockReservationStatus.EXPIRED);
         assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(1);
@@ -236,9 +238,9 @@ class StockReservationIntegrationTests extends JwtTestSupport {
         reservationScheduler.releaseExpiredReservations();
         reservationScheduler.releaseExpiredReservations();
 
-        assertThat(reservationRepository.findByOrderIdAndOfferId(expiredOrderId, offer.getId())
+        assertThat(reservationRepository.findByOrderIdAndOfferIdAndAttemptId(expiredOrderId, offer.getId(), StockReservation.LEGACY_ATTEMPT_ID)
                 .orElseThrow().getStatus()).isEqualTo(StockReservationStatus.EXPIRED);
-        assertThat(reservationRepository.findByOrderIdAndOfferId(confirmedOrderId, offer.getId())
+        assertThat(reservationRepository.findByOrderIdAndOfferIdAndAttemptId(confirmedOrderId, offer.getId(), StockReservation.LEGACY_ATTEMPT_ID)
                 .orElseThrow().getStatus()).isEqualTo(StockReservationStatus.CONFIRMED);
         assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(1);
         verify(stockEventPublisher, times(3)).publishStockUpdated(org.mockito.ArgumentMatchers.any());
@@ -346,5 +348,130 @@ class StockReservationIntegrationTests extends JwtTestSupport {
         assertThat(firstReservation.created()).isTrue();
         assertThat(secondReservation.created()).isTrue();
         assertThat(reservationRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void newAttemptAfterCompensationPreservesHistoryAndIgnoresLateLegacyCommands() {
+        UUID orderId = UUID.randomUUID();
+        var old = reservationService.reserve(new ReserveStockRequest(orderId, offer.getId(), 1)).reservation();
+        reservationService.release(old.getId());
+        UUID attemptId = UUID.randomUUID();
+        var request = new ReserveStockRequest(orderId, offer.getId(), 1, attemptId);
+        var next = reservationService.reserve(request);
+        var replay = reservationService.reserve(request);
+
+        assertThat(next.created()).isTrue();
+        assertThat(next.reservation().getId()).isNotEqualTo(old.getId());
+        assertThat(replay.created()).isFalse();
+        assertThat(replay.reservation().getId()).isEqualTo(next.reservation().getId());
+        assertThat(reservationService.release(old.getId()).getStatus()).isEqualTo(StockReservationStatus.RELEASED);
+        assertThat(reservationService.release(orderId, offer.getId()).getId()).isEqualTo(old.getId());
+        assertThatThrownBy(() -> reservationService.confirm(old.getId())).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> reservationService.confirm(orderId, offer.getId()))
+                .isInstanceOf(BusinessException.class);
+        var oldReplay = reservationService.reserve(new ReserveStockRequest(orderId, offer.getId(), 1));
+        assertThat(oldReplay.created()).isFalse();
+        assertThat(oldReplay.reservation().getStatus()).isEqualTo(StockReservationStatus.RELEASED);
+        assertThat(reservationRepository.findById(next.reservation().getId()).orElseThrow().getStatus())
+                .isEqualTo(StockReservationStatus.RESERVED);
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
+        assertThat(reservationRepository.count()).isEqualTo(2);
+        assertThatThrownBy(() -> reservationService.reserve(
+                new ReserveStockRequest(orderId, offer.getId(), 2, attemptId)))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void explicitAttemptCanBeRetriedAfterExpirationWithoutRevivingTheOldOne() {
+        UUID orderId = UUID.randomUUID();
+        var oldRequest = new ReserveStockRequest(orderId, offer.getId(), 1, UUID.randomUUID());
+        var old = reservationService.reserve(oldRequest).reservation();
+        when(clock.instant()).thenReturn(NOW.plusSeconds(301));
+        var next = reservationService.reserve(
+                new ReserveStockRequest(orderId, offer.getId(), 1, UUID.randomUUID())).reservation();
+
+        assertThat(reservationService.reserve(oldRequest).reservation().getStatus())
+                .isEqualTo(StockReservationStatus.EXPIRED);
+        assertThat(reservationService.confirm(old.getId()).getStatus()).isEqualTo(StockReservationStatus.EXPIRED);
+        assertThat(reservationService.release(old.getId()).getStatus()).isEqualTo(StockReservationStatus.EXPIRED);
+        assertThat(reservationRepository.findById(next.getId()).orElseThrow().getStatus())
+                .isEqualTo(StockReservationStatus.RESERVED);
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void activeOrConfirmedReservationRejectsAnotherAttemptEvenWithEnoughStock(boolean confirmed) {
+        offer.setStock(3);
+        offerRepository.saveAndFlush(offer);
+        UUID orderId = UUID.randomUUID();
+        var original = reservationService.reserve(
+                new ReserveStockRequest(orderId, offer.getId(), 1, UUID.randomUUID())).reservation();
+        if (confirmed) {
+            reservationService.confirm(original.getId());
+        }
+        assertThatThrownBy(() -> reservationService.reserve(
+                new ReserveStockRequest(orderId, offer.getId(), 1, UUID.randomUUID())))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getStatus().value()).isEqualTo(409));
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(2);
+        assertThat(reservationRepository.count()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void concurrentAttemptsAfterCompensationAllocateOnce(boolean sameAttempt) throws Exception {
+        offer.setStock(8);
+        offerRepository.saveAndFlush(offer);
+        UUID orderId = UUID.randomUUID();
+        var original = reservationService.reserve(
+                new ReserveStockRequest(orderId, offer.getId(), 1, UUID.randomUUID())).reservation();
+        reservationService.release(original.getId());
+        UUID attemptId = UUID.randomUUID();
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            List<Callable<Boolean>> requests = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                UUID key = sameAttempt ? attemptId : UUID.randomUUID();
+                requests.add(() -> {
+                    try {
+                        return reservationService.reserve(
+                                new ReserveStockRequest(orderId, offer.getId(), 1, key)).created();
+                    } catch (BusinessException e) {
+                        assertThat(e.getStatus().value()).isEqualTo(409);
+                        return false;
+                    }
+                });
+            }
+            int creations = 0;
+            for (var future : executor.invokeAll(requests)) {
+                if (future.get()) {
+                    creations++;
+                }
+            }
+            assertThat(creations).isEqualTo(1);
+        }
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isEqualTo(7);
+        assertThat(reservationRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void explicitAttemptIsReturnedOverHttpAndLegacyPairRoutesCannotTargetIt() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        String body = """
+                {"orderId":"%s","offerId":"%s","quantity":1,"attemptId":"%s"}
+                """.formatted(orderId, offer.getId(), attemptId);
+        mvc.perform(post("/internal/servicios/catalogo/reservas")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.attemptId").value(attemptId.toString()));
+        mvc.perform(post("/internal/servicios/catalogo/reservas")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.attemptId").value(attemptId.toString()));
+        mvc.perform(post("/internal/servicios/catalogo/reservas/{orderId}/{offerId}/liberar", orderId, offer.getId())
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN))
+                .andExpect(status().isNotFound());
+        assertThat(offerRepository.findById(offer.getId()).orElseThrow().getStock()).isZero();
     }
 }

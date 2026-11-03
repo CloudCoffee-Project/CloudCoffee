@@ -105,6 +105,37 @@ describe('pantalla de notificaciones (bandeja)', () => {
     expect(items).toHaveLength(0);
   });
 
+  it('desde la bandeja vacía permite actualizar', async () => {
+    const tree = await renderizarBandeja();
+
+    expect(tree.root.findByProps({ testID: 'bandeja-vacia' })).toBeDefined();
+    const boton = tree.root.findByProps({ testID: 'bandeja-vacia-accion' });
+    expect(textoDe(boton)).toContain('Actualizar');
+    const llamadasAntes = mockListar.mock.calls.length;
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+
+    expect(mockListar.mock.calls.length).toBe(llamadasAntes + 1);
+  });
+
+  it('muestra el error de lectura con reintento', async () => {
+    mockListar
+      .mockRejectedValueOnce(new Error('Almacenamiento no disponible'))
+      .mockResolvedValueOnce([]);
+
+    const tree = await renderizarBandeja();
+
+    expect(tree.root.findByProps({ testID: 'bandeja-error' })).toBeDefined();
+
+    await act(async () => {
+      tree.root.findByProps({ testID: 'bandeja-reintentar' }).props.onPress();
+    });
+
+    expect(tree.root.findByProps({ testID: 'bandeja-vacia' })).toBeDefined();
+  });
+
   it('lista el historial con título, cuerpo y estado de leída', async () => {
     mockListar.mockResolvedValue([
       registro('n-1', { titulo: 'Pedido listo', cuerpo: 'Retira tu café', leida: false }),

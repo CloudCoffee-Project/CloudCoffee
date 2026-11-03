@@ -37,11 +37,11 @@ export interface ProductFilters {
 }
 
 export function getCampus(signal: AbortSignal) {
-  return request<Campus[]>('/v1/catalog/campus', { signal });
+  return request<Campus[]>('/v1/catalog/campus', { signal, omitAccessToken: true });
 }
 
 export function getCategories(signal: AbortSignal) {
-  return request<Category[]>('/v1/catalog/categorias', { signal });
+  return request<Category[]>('/v1/catalog/categorias', { signal, omitAccessToken: true });
 }
 
 export function getProducts(filters: ProductFilters, signal: AbortSignal) {
@@ -55,5 +55,5 @@ export function getProducts(filters: ProductFilters, signal: AbortSignal) {
   // Un desempate por ID mantiene el orden al recorrer las páginas.
   params.append('sort', 'name,asc');
   params.append('sort', 'id,asc');
-  return request<ProductPage>(`/v1/catalog/productos?${params}`, { signal });
+  return request<ProductPage>(`/v1/catalog/productos?${params}`, { signal, omitAccessToken: true });
 }
