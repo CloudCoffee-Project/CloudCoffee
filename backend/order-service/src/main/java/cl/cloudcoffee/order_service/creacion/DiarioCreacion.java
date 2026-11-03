@@ -1,7 +1,7 @@
 package cl.cloudcoffee.order_service.creacion;
 
 import cl.cloudcoffee.order_service.dto.*;
-import java.sql.Timestamp;
+import static cl.cloudcoffee.order_service.persistence.JdbcInstants.utc;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,7 +26,7 @@ public class DiarioCreacion {
                 (rs, n) -> new Registro(rs.getObject("id", UUID.class), rs.getObject("usuario_id", UUID.class),
                         rs.getString("hash_cuerpo"), rs.getString("solicitud"), rs.getString("fase"),
                         rs.getString("plan"), rs.getString("respuesta"), (Integer) rs.getObject("status"),
-                        rs.getString("location"), rs.getString("trace_id"), rs.getTimestamp("created_at").toInstant()), id);
+                        rs.getString("location"), rs.getString("trace_id"), cl.cloudcoffee.order_service.persistence.JdbcInstants.read(rs, "created_at")), id);
         } catch (org.springframework.jdbc.UncategorizedSQLException error) {
             // El traductor SQLState de Spring no clasifica lock_not_available (55P03).
             if (bloquear && "55P03".equals(error.getSQLException().getSQLState()))
@@ -37,12 +37,12 @@ public class DiarioCreacion {
 
     void guardarPlan(UUID id, PlanCompra plan) {
         jdbc.update("UPDATE creacion_compras SET fase='RESERVANDO', plan=?, updated_at=? WHERE id=?",
-                json.writeValueAsString(plan), Timestamp.from(Instant.now()), id);
+                json.writeValueAsString(plan), utc(Instant.now()), id);
     }
 
     void terminar(UUID id, int status, String body, String location) {
         jdbc.update("UPDATE creacion_compras SET fase='TERMINADA', status=?, respuesta=?, location=?, updated_at=? WHERE id=?",
-                status, body, location, Timestamp.from(Instant.now()), id);
+                status, body, location, utc(Instant.now()), id);
     }
 
     CompraResponse materializar(Registro registro, PlanCompra plan) {
@@ -53,7 +53,7 @@ public class DiarioCreacion {
                 INSERT INTO compras (id, usuario_id, monto_total, estado, moneda, reserva_expira_at, updated_at, version, created_at)
                 VALUES (?, ?, ?, ?, 'CLP', ?, ?, 0, ?)
                 """, plan.compraId, registro.usuario(), total, revision ? "REVISION_REQUERIDA" : "PENDIENTE_PAGO",
-                Timestamp.from(plan.venceAt), Timestamp.from(plan.creadoAt), Timestamp.from(plan.creadoAt));
+                utc(plan.venceAt), utc(plan.creadoAt), utc(plan.creadoAt));
         List<OrdenResponse> ordenes = new ArrayList<>();
         for (var grupo : plan.grupos) {
             long monto = grupo.items.stream().mapToLong(i -> i.oferta.precioUnitario().longValueExact() * i.cantidad).sum();
@@ -64,8 +64,8 @@ public class DiarioCreacion {
                         monto_total, moneda, reserva_expira_at, created_at, updated_at, version)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'CLP', ?, ?, ?, 0)
                     """, grupo.ordenId, plan.compraId, codigo, grupo.cafeteriaId, grupo.cafeteriaNombre,
-                    estado.toUpperCase(Locale.ROOT), monto, Timestamp.from(plan.venceAt),
-                    Timestamp.from(plan.creadoAt), Timestamp.from(plan.creadoAt));
+                    estado.toUpperCase(Locale.ROOT), monto, utc(plan.venceAt),
+                    utc(plan.creadoAt), utc(plan.creadoAt));
             List<OrdenItemResponse> items = new ArrayList<>();
             for (var item : grupo.items) {
                 var oferta = item.oferta;
@@ -110,6 +110,6 @@ public class DiarioCreacion {
         var envelope = Map.of("eventId", id, "timestamp", registro.creadoAt(), "traceId", registro.trace(),
                 "eventType", tipo, "payload", payload);
         jdbc.update("INSERT INTO order_outbox (event_id, event_type, cuerpo, created_at) VALUES (?, ?, ?, ?)",
-                id, tipo, json.writeValueAsString(envelope), Timestamp.from(registro.creadoAt()));
+                id, tipo, json.writeValueAsString(envelope), utc(registro.creadoAt()));
     }
 }

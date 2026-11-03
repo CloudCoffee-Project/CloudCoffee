@@ -4,7 +4,7 @@ import cl.cloudcoffee.errors.BusinessException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.sql.Timestamp;
+import static cl.cloudcoffee.order_service.persistence.JdbcInstants.utc;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -47,7 +47,7 @@ public class CreacionCompraService {
                 diario.jdbc().update("""
                         INSERT INTO creacion_compras (id, usuario_id, clave, hash_cuerpo, solicitud, trace_id, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, id, usuario, clave, hash, solicitud, trace, Timestamp.from(ahora), Timestamp.from(ahora));
+                        """, id, usuario, clave, hash, solicitud, trace, utc(ahora), utc(ahora));
             });
         } catch (DuplicateKeyException duplicate) { replay = true; }
         var registro = diario.buscar(id, false);
@@ -118,7 +118,7 @@ public class CreacionCompraService {
                 diario.terminar(id, 201, body, location);
                 return new Respuesta(201, body, location, false);
             } catch (CatalogoCompras.NoDisponible unavailable) {
-                diario.jdbc().update("UPDATE creacion_compras SET updated_at=? WHERE id=?", Timestamp.from(clock.instant()), id);
+                diario.jdbc().update("UPDATE creacion_compras SET updated_at=? WHERE id=?", utc(clock.instant()), id);
                 return problema(503, "OPERACION_PENDIENTE", "No se pudo completar la operación; reintenta con la misma clave.", r);
             } catch (CatalogoCompras.Rechazo rechazo) {
                 // Cotización rechazada antes de tocar stock; conserva el resultado definitivo.

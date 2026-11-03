@@ -1,6 +1,6 @@
 package cl.cloudcoffee.order_service.creacion;
 
-import java.sql.Timestamp;
+import static cl.cloudcoffee.order_service.persistence.JdbcInstants.utc;
 import java.time.Clock;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -26,7 +26,7 @@ public class RecuperacionCreacion {
         var pendientes = diario.jdbc().query("""
                 SELECT id FROM creacion_compras WHERE fase <> 'TERMINADA' AND updated_at <= ?
                 ORDER BY updated_at, id LIMIT 20
-                """, (rs, n) -> rs.getObject(1, UUID.class), Timestamp.from(clock.instant().minusSeconds(2)));
+                """, (rs, n) -> rs.getObject(1, UUID.class), utc(clock.instant().minusSeconds(2)));
         for (UUID id : pendientes) {
             try {
                 // Límite por operación para no monopolizar el worker con una compra grande.

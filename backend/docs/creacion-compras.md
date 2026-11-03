@@ -19,6 +19,10 @@ productos/precios, `pago: null`, versión 1 y vencimiento común a los 15 minuto
 desde el inicio de la operación. El precio incluye impuestos; no se agrega IVA,
 despacho ni recargos.
 
+Los `TIMESTAMP` sin zona se escriben y leen como UTC también desde JDBC, igual que
+los `Instant` de Hibernate. Crear y luego consultar devuelve las mismas fechas y
+el mismo vencimiento, independientemente de la zona horaria de la JVM.
+
 El cuerpo admite únicamente `items`, de 1 a 100 ofertas distintas, y cada ítem
 únicamente `ofertaId` UUID y `cantidad` entera de 1 a 100. Propietario, importes,
 estado, cafetería y `datosEntrega` suministrados por el cliente son rechazados

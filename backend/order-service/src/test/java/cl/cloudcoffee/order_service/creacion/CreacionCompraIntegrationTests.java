@@ -70,7 +70,10 @@ class CreacionCompraIntegrationTests extends JwtTestSupport {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM order_outbox WHERE cuerpo LIKE ?", Integer.class,
                 "%" + compra.path("compraId").asString() + "%")).isEqualTo(3);
         mvc.perform(get("/compras/" + compra.path("compraId").asString()).header("Authorization", bearer(cliente, "CLIENTE")))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.montoTotal").value(4800));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.montoTotal").value(4800))
+                .andExpect(jsonPath("$.creadoAt").value(compra.path("creadoAt").asString()))
+                .andExpect(jsonPath("$.reservaExpiraAt").value(compra.path("reservaExpiraAt").asString()))
+                .andExpect(jsonPath("$.ordenes[0].reservaExpiraAt").value(compra.path("reservaExpiraAt").asString()));
         mvc.perform(get("/compras/" + compra.path("compraId").asString()).header("Authorization", bearer(UUID.randomUUID(), "CLIENTE")))
                 .andExpect(status().isNotFound());
     }
