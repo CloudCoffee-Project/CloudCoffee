@@ -10,6 +10,7 @@ import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { ProfilePage } from './pages/ProfilePage';
+import { PasswordChangePage } from './pages/PasswordChangePage';
 
 export function App() {
   return (
@@ -29,6 +30,7 @@ export function App() {
         {/* Rutas privadas para cualquier usuario con sesión */}
         <Route element={<ProtectedRoute />}>
           <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="/perfil/cambiar-contrasena" element={<PasswordChangePage />} />
         </Route>
 
         {/* Rutas exclusivas de comprador (CLIENTE) */}

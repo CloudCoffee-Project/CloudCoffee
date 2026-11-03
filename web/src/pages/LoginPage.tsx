@@ -87,6 +87,12 @@ export function LoginPage() {
     <div style={{ maxWidth: '400px', margin: '0 auto', paddingTop: '2rem' }}>
       <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Iniciar Sesión</h2>
 
+      {location.state?.passwordChanged === true && (
+        <p className="profile-message profile-message--success" role="status">
+          Tu contraseña fue actualizada. Inicia sesión con tu nueva contraseña.
+        </p>
+      )}
+
       {errorMsg && (
         <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #fecaca' }}>
           {errorMsg}

@@ -141,6 +141,36 @@ validación, envíos duplicados y estados de carga, éxito, token inválido y er
 `PasswordRecoveryControllerTest` en auth-service ya comprueba el cambio de contraseña,
 el login con la nueva clave y el rechazo de tokens consumidos o expirados.
 
+## Cambio de contraseña desde perfil (INT2-95)
+
+Desde **Mi Perfil → Cambiar contraseña** se abre `/perfil/cambiar-contrasena`,
+protegida para cualquier rol autenticado. El formulario independiente pide la
+contraseña actual, una nueva de al menos 6 caracteres (contrato de cambio
+autenticado) y su confirmación. Envía únicamente `{ passwordActual,
+passwordNueva }` mediante `PATCH /v1/auth/users/me/password` con el JWT de sesión;
+las contraseñas conservan sus espacios y no se guardan en almacenamiento local.
+
+El Problem Details `401 /problems/contrasena-actual-incorrecta` se muestra junto
+al campo actual y permite corregir sin renovar ni borrar la sesión. Un `401`
+de autenticación conserva el flujo habitual de refresh y cierre si no se puede
+recuperar la sesión. También se muestran validaciones del backend, errores de
+conexión y del servicio, con bloqueo de envíos duplicados durante el guardado.
+
+Después del `200` sin cuerpo, la web elimina sus tokens, vuelve al login y
+confirma que debe usarse la nueva contraseña. Según la política de INT2-100, el
+backend revoca todos los refresh tokens en la transacción del cambio; los JWT
+de acceso ya emitidos en otros dispositivos siguen vigentes hasta expirar
+(15 minutos por defecto) y luego no pueden renovarse. No se modifica esta
+política desde el cliente.
+
+Para verificar con una cuenta local: iniciar sesión en dos dispositivos, cambiar
+la contraseña desde el perfil y comprobar el retorno al login; la clave anterior
+debe fallar y la nueva permitir entrar. La otra sesión debe perder el acceso al
+vencer su JWT y fallar su siguiente refresh. Un intento con contraseña actual
+incorrecta debe mantener ambas sesiones. `UserControllerTest` en auth-service
+cubre esa revocación, el login nuevo y la vigencia del JWT hasta su expiración;
+las pruebas web cubren el contrato HTTP y los estados del formulario y la sesión.
+
 ## Scripts
 
 ```bash

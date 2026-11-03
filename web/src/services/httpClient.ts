@@ -204,8 +204,9 @@ export function createHttpClient(
   }
 
   async function sendFetch(url: URL, options: RequestInit, headers: Headers): Promise<Response> {
+    let response: Response;
     try {
-      return await fetcher(url, { ...options, headers });
+      response = await fetcher(url, { ...options, headers });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw error;
@@ -216,6 +217,13 @@ export function createHttpClient(
         'No se pudo conectar con el API Gateway.',
       );
     }
+
+    // Este 401 es una validación del formulario, también si llega tras renovar el JWT.
+    if (response.status === 401 && url.pathname === '/v1/auth/users/me/password') {
+      const error = await responseError(response.clone());
+      if (error.type === '/problems/contrasena-actual-incorrecta') throw error;
+    }
+    return response;
   }
 
   return {

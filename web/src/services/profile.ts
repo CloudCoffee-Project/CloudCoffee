@@ -28,3 +28,12 @@ export function updateProfile(changes: ProfileChanges, signal: AbortSignal) {
     signal,
   });
 }
+
+export function changePassword(passwordActual: string, passwordNueva: string, signal: AbortSignal) {
+  return request<void>('/v1/auth/users/me/password', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passwordActual, passwordNueva }),
+    signal,
+  });
+}
