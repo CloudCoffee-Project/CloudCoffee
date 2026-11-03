@@ -78,7 +78,7 @@ export function CatalogPage() {
   const result = products?.filters === filters ? products.result : { status: 'loading' as const };
 
   return (
-    <section className="catalog" aria-labelledby="catalog-title">
+    <section className="catalog" aria-labelledby="catalog-title" aria-busy={options.status === 'loading'}>
       <h1 id="catalog-title">Catálogo</h1>
       <p>Encuentra productos disponibles en tu campus.</p>
 
