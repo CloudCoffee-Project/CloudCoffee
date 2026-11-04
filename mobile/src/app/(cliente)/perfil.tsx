@@ -11,15 +11,8 @@
 // teléfono ^[0-9+ ()-]{6,20}$.
 
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { AxiosError } from 'axios';
 
@@ -178,13 +171,13 @@ export default function PerfilScreen() {
               <View style={styles.card} testID="perfil-error">
                 <Text style={styles.errorTitulo}>No pudimos cargar tu perfil</Text>
                 <Text style={styles.errorMensaje}>{errorCarga}</Text>
-                <TouchableOpacity
+                <Presionable
                   style={styles.btnReintentar}
                   onPress={reintentar}
                   testID="reintentar-perfil"
                 >
                   <Text style={styles.btnReintentarTexto}>Reintentar</Text>
-                </TouchableOpacity>
+                </Presionable>
               </View>
             ) : perfil === null ? null : editando ? (
               <View style={styles.card} testID="perfil-edicion">
@@ -248,15 +241,15 @@ export default function PerfilScreen() {
                 {errorGuardar ? <Text style={styles.errorMensaje}>{errorGuardar}</Text> : null}
 
                 <View style={styles.editButtons}>
-                  <TouchableOpacity
+                  <Presionable
                     style={styles.btnCancelar}
                     onPress={cancelarEdicion}
                     disabled={guardando}
                     testID="cancelar-edicion"
                   >
                     <Text style={styles.btnCancelarTexto}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Presionable>
+                  <Presionable
                     style={[styles.btnGuardar, guardando ? styles.btnGuardarDeshabilitado : null]}
                     onPress={() => void guardarPerfil()}
                     disabled={guardando}
@@ -267,7 +260,7 @@ export default function PerfilScreen() {
                     ) : (
                       <Text style={styles.btnGuardarTexto}>Guardar cambios</Text>
                     )}
-                  </TouchableOpacity>
+                  </Presionable>
                 </View>
               </View>
             ) : (
@@ -297,46 +290,46 @@ export default function PerfilScreen() {
                 </View>
 
                 <View style={styles.actionsStack}>
-                  <TouchableOpacity
+                  <Presionable
                     style={styles.btnEditar}
                     onPress={abrirEdicion}
                     testID="editar-perfil"
                   >
                     <Text style={styles.btnEditarTexto}>✏️ Editar perfil</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Presionable>
+                  <Presionable
                     style={styles.btnContrasena}
                     onPress={() => router.push('/(cliente)/cambiar-contrasena')}
                     testID="cambiar-contrasena"
                   >
                     <Text style={styles.btnContrasenaTexto}>🔒 Cambiar Contraseña</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Presionable>
+                  <Presionable
                     style={styles.btnNotificaciones}
                     onPress={() => router.push('/(cliente)/notificaciones')}
                     testID="ver-notificaciones"
                   >
                     <Text style={styles.btnNotificacionesTexto}>🔔 Notificaciones</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Presionable>
+                  <Presionable
                     style={styles.btnSeguimientos}
                     onPress={() => router.push('/(cliente)/mis-seguimientos')}
                     testID="mis-seguimientos"
                   >
                     <Text style={styles.btnSeguimientosTexto}>⭐ Mis Seguimientos</Text>
-                  </TouchableOpacity>
+                  </Presionable>
                 </View>
               </View>
             )}
 
             <View style={styles.footer}>
-              <TouchableOpacity
+              <Presionable
                 style={styles.btnLogout}
                 onPress={() => void handleCerrarSesion()}
                 testID="cerrar-sesion"
               >
                 <Text style={styles.btnLogoutTexto}>Cerrar Sesión</Text>
-              </TouchableOpacity>
+              </Presionable>
             </View>
           </>
         )}

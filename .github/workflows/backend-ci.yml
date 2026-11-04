@@ -157,6 +157,8 @@ jobs:
           SPRING_DATASOURCE_USERNAME: cloudcoffee
           SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl notification-service -am clean verify
+      - name: Test order creation outbox with RabbitMQ
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl order-service -am clean verify
 
   docker:
     name: Docker image (${{ matrix.service }})

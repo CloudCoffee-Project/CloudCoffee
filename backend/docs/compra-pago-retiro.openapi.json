@@ -434,7 +434,7 @@
           "Compras"
         ],
         "summary": "Confirmar compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reservar todas las órdenes en revisión. Compensa nuevas reservas si alguna falla; PRECIO_CAMBIO incluye compra actualizada y exige nueva confirmación.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reservar todas las órdenes en revisión. Compensa nuevas reservas si alguna falla; PRECIO_CAMBIO incluye compra actualizada y exige nueva confirmación. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -550,7 +550,7 @@
           "Compras"
         ],
         "summary": "Cancelar compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Cancela revisión o pendiente, rechaza pago pendiente y libera reservas. Si aprobación ya ganó, 409. Total cobrable resultante 0.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Cancela revisión o pendiente, rechaza pago pendiente y libera reservas. Si aprobación ya ganó, 409. Total cobrable resultante 0. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -854,7 +854,7 @@
           "Órdenes y retiro"
         ],
         "summary": "Listar pedidos de la cafetería asignada",
-        "description": "Solo CAJERO con asignación persistida a la cafetería. 403 sin asignación y 404 para cafetería ajena. Orden creadoAt DESC e ID DESC como desempate. No admite cafeteriaId del frontend.",
+        "description": "Solo CAJERO con asignación persistida en Auth, consultada en cada solicitud. 403 si no tiene asignación o no se puede verificar. Orden creadoAt DESC e ID DESC como desempate. No admite cafeteriaId del frontend ni autoriza con claims de cafetería. Búsqueda exacta por codigoOrden, combinable con estado; un código ajeno o inexistente devuelve una página vacía. Lectura sin cambios de estado ni validación de retiro.",
         "x-roles": [
           "CAJERO"
         ],
@@ -952,6 +952,18 @@
             "schema": {
               "$ref": "#/components/schemas/EstadoOrden"
             }
+          },
+          {
+            "name": "codigoOrden",
+            "in": "query",
+            "required": false,
+            "description": "Código legible de la orden, no el token QR. Coincidencia exacta y sensible a mayúsculas tras quitar espacios exteriores. Un valor vacío o de más de 64 caracteres devuelve 400.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "example": "CC-000001"
           }
         ]
       }
@@ -1057,7 +1069,7 @@
           "Órdenes y retiro"
         ],
         "summary": "Confirmar orden de una compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reserva de orden en revisión. Revalida cotización. Solo antes de iniciar pago. Actualiza también estado y versión de compra.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Reintenta reserva de orden en revisión. Revalida cotización. Solo antes de iniciar pago. Actualiza también estado y versión de compra. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -1159,7 +1171,7 @@
           "Órdenes y retiro"
         ],
         "summary": "Cancelar orden de una compra",
-        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Libera reserva y actualiza total cobrable de compra; última orden activa cancela compra. Solo antes de iniciar pago. Actualiza también estado y versión de compra.",
+        "description": "Solo CLIENTE propietario. 404 para compra/orden ajena. Libera reserva y actualiza total cobrable de compra; última orden activa cancela compra. Solo antes de iniciar pago. Actualiza también estado y versión de compra. Implementación actual INT2-73: solo compras sin pago iniciado; la cancelación con pago pendiente queda para INT2-77.",
         "x-roles": [
           "CLIENTE"
         ],
@@ -2100,8 +2112,9 @@
           },
           "ordenes": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 0,
             "maxItems": 100,
+            "description": "Snapshots históricos de las órdenes. Vacío únicamente para compras anteriores a V4 o seeds mínimos de pagos; las compras nuevas del flujo completo contienen al menos una orden.",
             "items": {
               "$ref": "#/components/schemas/Orden"
             }

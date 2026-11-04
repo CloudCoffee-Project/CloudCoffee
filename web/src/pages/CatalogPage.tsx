@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useInRouterContext } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import {
@@ -18,6 +19,7 @@ function errorMessage(error: unknown): string {
 }
 
 export function CatalogPage() {
+  const inRouter = useInRouterContext();
   const [options, setOptions] = useState<LoadState<{ campus: Campus[]; categories: Category[] }>>({ status: 'loading' });
   const [filters, setFilters] = useState<ProductFilters>({ campusId: '', categoriaId: '', q: '', page: 0 });
   const [searchText, setSearchText] = useState('');
@@ -78,7 +80,7 @@ export function CatalogPage() {
   const result = products?.filters === filters ? products.result : { status: 'loading' as const };
 
   return (
-    <section className="catalog" aria-labelledby="catalog-title">
+    <section className="catalog" aria-labelledby="catalog-title" aria-busy={options.status === 'loading'}>
       <h1 id="catalog-title">Catálogo</h1>
       <p>Encuentra productos disponibles en tu campus.</p>
 
@@ -137,13 +139,22 @@ export function CatalogPage() {
                       `${result.data.totalElements} ${result.data.totalElements === 1 ? 'producto' : 'productos'} · Página ${result.data.number + 1} de ${result.data.totalPages}`}
                   </p>
                   <ul className="catalog-products">
-                    {result.data.content.map((product) => (
-                      <li className="catalog-product" key={product.id}>
-                        {product.imagenUrl && <img src={product.imagenUrl} alt="" loading="lazy" />}
-                        <h2>{product.nombre}</h2>
-                        {product.descripcion && <p>{product.descripcion}</p>}
-                      </li>
-                    ))}
+                    {result.data.content.map((product) => {
+                      const detailUrl = `/catalogo/productos/${product.id}?campusId=${encodeURIComponent(filters.campusId)}`;
+                      return (
+                        <li className="catalog-product" key={product.id}>
+                          {product.imagenUrl && <img src={product.imagenUrl} alt="" loading="lazy" />}
+                          <h2>
+                            {inRouter ? (
+                              <Link to={detailUrl} className="catalog-product-link">{product.nombre}</Link>
+                            ) : (
+                              <a href={detailUrl} className="catalog-product-link">{product.nombre}</a>
+                            )}
+                          </h2>
+                          {product.descripcion && <p>{product.descripcion}</p>}
+                        </li>
+                      );
+                    })}
                   </ul>
                   {result.data.totalPages > 1 && (
                     <nav className="catalog-pagination" aria-label="Paginación del catálogo">

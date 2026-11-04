@@ -67,7 +67,8 @@ class PagoSimuladoControllerTest extends JwtTestSupport {
                 .andExpect(jsonPath("$.proveedor").value("simulado"))
                 .andExpect(jsonPath("$.creadoAt").isNotEmpty())
                 .andExpect(jsonPath("$.actualizadoAt").isNotEmpty())
-                .andExpect(jsonPath("$.version").isNumber())
+                // Un solo INSERT, también al aprobar o rechazar de inmediato.
+                .andExpect(jsonPath("$.version").value(1))
                 // Sin proveedor externo: nada de redirecciones ni campos de tarjeta.
                 .andExpect(jsonPath("$.initPoint").doesNotExist())
                 .andExpect(jsonPath("$.length()").value(11));

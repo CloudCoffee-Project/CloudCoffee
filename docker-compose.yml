@@ -111,6 +111,10 @@ services:
             DB_PASSWORD: ${CATALOG_DB_PASSWORD}
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_PORT: 5672
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
         secrets:
             - jwt_public_key
         ports:
@@ -124,6 +128,8 @@ services:
         depends_on:
             catalog-db:
                 condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
         networks:
             - backend
 
@@ -134,6 +140,11 @@ services:
             args:
                 SERVICE_NAME: order-service
         environment:
+            CATALOG_SERVICE_URL: http://catalog-service:8082
+            INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
@@ -168,6 +179,9 @@ services:
             args:
                 SERVICE_NAME: notification-service
         environment:
+            # INT2-107: validar la asignación vigente del cajero en Auth.
+            AUTH_SERVICE_URL: http://auth-service:8081
+            INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
@@ -188,7 +202,15 @@ services:
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
             SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
-            MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
+            SMTP_HOST: mailpit
+            SMTP_PORT: 1025
+            SMTP_AUTH: "false"
+            SMTP_STARTTLS: "false"
+            SMTP_FROM: ${SMTP_FROM:-noreply@cloudcoffee.local}
+            FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+            RESET_PASSWORD_URL: ${RESET_PASSWORD_URL:-http://localhost:3000/restablecer-contrasena}
+            WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+            MANAGEMENT_HEALTH_MAIL_ENABLED: "true"
         secrets:
             - jwt_public_key
         ports:
@@ -200,9 +222,13 @@ services:
             retries: 5
             start_period: 30s
         depends_on:
+            auth-service:
+                condition: service_healthy
             notification-db:
                 condition: service_healthy
             rabbitmq:
+                condition: service_healthy
+            mailpit:
                 condition: service_healthy
         networks:
             - backend
@@ -272,6 +298,26 @@ services:
             timeout: 5s
             retries: 5
             start_period: 20s
+
+    mailpit:
+        image: axllent/mailpit:v1.32.0
+        environment:
+            MP_DATABASE: /data/mailpit.db
+            MP_MAX_MESSAGES: 500
+        ports:
+            - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+            - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+        volumes:
+            - mailpit_data:/data
+        healthcheck:
+            test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8025/readyz"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+        networks:
+            - backend
+
     auth-db:
         image: postgres:16-alpine
         environment:
@@ -354,6 +400,7 @@ networks:
 
 volumes:
   web_node_modules:
+  mailpit_data:
   rabbitmq_data:
   auth_db_data:
   catalog_db_data:

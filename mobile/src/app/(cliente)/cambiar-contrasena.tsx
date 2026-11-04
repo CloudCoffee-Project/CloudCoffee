@@ -13,13 +13,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -110,9 +110,9 @@ export default function CambiarContrasenaScreen() {
     >
       <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+          <Presionable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
             <Text style={styles.backText}>← Volver</Text>
-          </Pressable>
+          </Presionable>
           <Text style={styles.headerTitle}>Cambiar Contraseña</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -125,13 +125,13 @@ export default function CambiarContrasenaScreen() {
               <Text style={styles.successText}>
                 Tu contraseña fue actualizada con éxito. Úsala la próxima vez que inicies sesión.
               </Text>
-              <Pressable
+              <Presionable
                 onPress={() => router.back()}
                 style={styles.primaryButton}
                 testID="volver-de-exito"
               >
                 <Text style={styles.primaryButtonText}>Listo</Text>
-              </Pressable>
+              </Presionable>
             </View>
           ) : (
             <>
@@ -201,7 +201,7 @@ export default function CambiarContrasenaScreen() {
                   />
                 </View>
 
-                <Pressable
+                <Presionable
                   onPress={() => void handleCambiar()}
                   disabled={cargando}
                   style={[styles.primaryButton, cargando && styles.primaryButtonDisabled]}
@@ -212,7 +212,7 @@ export default function CambiarContrasenaScreen() {
                   ) : (
                     <Text style={styles.primaryButtonText}>Cambiar Contraseña</Text>
                   )}
-                </Pressable>
+                </Presionable>
               </View>
             </>
           )}

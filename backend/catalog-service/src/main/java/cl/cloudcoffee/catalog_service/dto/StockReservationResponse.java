@@ -7,8 +7,10 @@ import cl.cloudcoffee.catalog_service.model.entity.StockReservation;
 import cl.cloudcoffee.catalog_service.model.enums.StockReservationStatus;
 
 public record StockReservationResponse(
+        UUID reservationId,
         UUID orderId,
         UUID offerId,
+        UUID attemptId,
         int quantity,
         StockReservationStatus status,
         Instant reservedAt,
@@ -16,8 +18,10 @@ public record StockReservationResponse(
 
     public static StockReservationResponse from(StockReservation reservation) {
         return new StockReservationResponse(
+                reservation.getId(),
                 reservation.getOrderId(),
                 reservation.getOffer().getId(),
+                reservation.getAttemptId(),
                 reservation.getQuantity(),
                 reservation.getStatus(),
                 reservation.getReservedAt(),

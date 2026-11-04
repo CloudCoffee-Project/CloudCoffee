@@ -10,13 +10,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -88,12 +88,12 @@ export default function RestaurarContrasenaScreen() {
             </Text>
 
             <View style={styles.actionsColumn}>
-              <Pressable
+              <Presionable
                 onPress={() => router.replace('/(auth)/login')}
                 style={styles.primaryButton}
               >
                 <Text style={styles.primaryButtonText}>Iniciar Sesión</Text>
-              </Pressable>
+              </Presionable>
             </View>
           </View>
         </ScrollView>
@@ -111,13 +111,13 @@ export default function RestaurarContrasenaScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
+        <Presionable
           onPress={() => router.replace('/(auth)/portada')}
           style={styles.backButton}
           hitSlop={8}
         >
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
 
         <View style={styles.resetContent}>
           <View style={styles.header}>
@@ -188,7 +188,7 @@ export default function RestaurarContrasenaScreen() {
               />
             </View>
 
-            <Pressable
+            <Presionable
               onPress={() => void handleCambiar()}
               disabled={cargando}
               style={[styles.primaryButton, cargando && styles.primaryButtonDisabled]}
@@ -198,7 +198,7 @@ export default function RestaurarContrasenaScreen() {
               ) : (
                 <Text style={styles.primaryButtonText}>Cambiar Contraseña</Text>
               )}
-            </Pressable>
+            </Presionable>
           </View>
         </View>
       </ScrollView>

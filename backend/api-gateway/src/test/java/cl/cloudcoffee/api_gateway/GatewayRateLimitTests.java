@@ -88,6 +88,8 @@ class GatewayRateLimitTests extends cl.cloudcoffee.security.testing.JwtTestSuppo
                     .andExpect(status().isTooManyRequests())
                     .andExpect(header().string(HttpHeaders.RETRY_AFTER, org.hamcrest.Matchers.matchesPattern("[1-9][0-9]*")))
                     .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.example.com"))
+                    .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                            "Location, Idempotency-Replayed, Retry-After"))
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.type").value("about:blank"))
                     .andExpect(jsonPath("$.status").value(429))
