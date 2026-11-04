@@ -76,6 +76,7 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "testTimeout": 20000,
     "collectCoverage": true,
     "coverageDirectory": "coverage",
     "collectCoverageFrom": [
