@@ -13,6 +13,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration(proxyBeanMethods = false)
 public class GatewayCorsConfig {
 
+    static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    static final String IDEMPOTENCY_REPLAYED = "Idempotency-Replayed";
+
     @Bean
     public UrlBasedCorsConfigurationSource corsConfigurationSource(
             @Value("${cloudcoffee.cors.allowed-origins}") String allowedOrigins) {
@@ -26,7 +29,15 @@ public class GatewayCorsConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT));
+        configuration.setAllowedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION,
+                HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                IDEMPOTENCY_KEY));
+        configuration.setExposedHeaders(List.of(
+                HttpHeaders.LOCATION,
+                IDEMPOTENCY_REPLAYED,
+                HttpHeaders.RETRY_AFTER));
         // La API utiliza Bearer tokens; no requiere cookies entre origenes.
         configuration.setAllowCredentials(false);
 

@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -126,9 +126,9 @@ export default function VerificarCorreoScreen() {
           ) : null}
 
           {verificado ? (
-            <Pressable onPress={() => void handleContinuar()} style={styles.confirmButton}>
+            <Presionable onPress={() => void handleContinuar()} style={styles.confirmButton}>
               <Text style={styles.confirmButtonText}>Continuar</Text>
-            </Pressable>
+            </Presionable>
           ) : (
             <View style={styles.actionsGroup}>
               {(error || mensaje) && (
@@ -155,7 +155,7 @@ export default function VerificarCorreoScreen() {
                 />
               </View>
 
-              <Pressable
+              <Presionable
                 onPress={() => void handleConfirmar()}
                 disabled={cargando || reenviando}
                 style={[styles.confirmButton, cargando && styles.confirmButtonDisabled]}
@@ -165,13 +165,13 @@ export default function VerificarCorreoScreen() {
                 ) : (
                   <Text style={styles.confirmButtonText}>Confirmar Correo</Text>
                 )}
-              </Pressable>
+              </Presionable>
 
-              <Pressable onPress={() => void handleReenviar()} disabled={cargando || reenviando}>
+              <Presionable onPress={() => void handleReenviar()} disabled={cargando || reenviando}>
                 <Text style={styles.resendLink}>
                   {reenviando ? 'Reenviando…' : '¿No llegó el token? Reenviar código'}
                 </Text>
-              </Pressable>
+              </Presionable>
             </View>
           )}
         </View>

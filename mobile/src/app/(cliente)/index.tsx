@@ -31,7 +31,8 @@
 // colores y medidas salen de src/theme/tokens.ts (INT4-107).
 
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -47,6 +48,7 @@ import {
 } from '../../services/catalog';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import { useCarrito } from '../../context/CarritoContext';
+import { EstadoLista } from '../../components/EstadoLista';
 import { Esqueleto, EsqueletoPulso } from '../../components/Esqueleto';
 import { tokens } from '../../theme/tokens';
 import type { Campus, Categoria, Oferta, Producto } from '../../types/domain';
@@ -145,6 +147,13 @@ export default function CatalogoProductosScreen() {
       const campusSeleccionado = await leerCampusSeleccionado();
       setCampus(campusSeleccionado);
 
+      // INT4-110: al elegir campus por primera vez la lista venía vacía (el
+      // estado "Elige tu campus"). Mientras llegan los productos mostramos el
+      // esqueleto, no un "Catálogo vacío" transitorio.
+      if (campusSeleccionado) {
+        setProductos((previos) => (previos !== null && previos.length === 0 ? null : previos));
+      }
+
       const listaCategorias = await listarCategorias();
       setCategorias(listaCategorias);
       setErrorCarga(null);
@@ -196,22 +205,76 @@ export default function CatalogoProductosScreen() {
     }));
   }, [productosVisibles]);
 
+  // INT4-110: la lista vacía siempre ofrece una salida. Si la búsqueda no
+  // encontró nada, se limpia; si falta campus, se elige; si la categoría está
+  // vacía, se vuelve a TODOS; y si el campus no tiene productos, se recarga.
+  const vacio = (() => {
+    if (busqueda.trim().length > 0) {
+      return {
+        icono: '🔍',
+        titulo: 'Sin resultados',
+        mensaje: 'No encontramos productos que coincidan con tu búsqueda.',
+        accion: {
+          etiqueta: 'Limpiar búsqueda',
+          onPress: () => setBusqueda(''),
+          testID: 'catalogo-vacio-accion',
+        },
+      };
+    }
+    if (campus === null) {
+      return {
+        icono: '📍',
+        titulo: 'Elige tu campus',
+        mensaje: 'Necesitas elegir un campus para ver los productos disponibles.',
+        accion: {
+          etiqueta: 'Elegir campus',
+          onPress: () => router.push('/(cliente)/campus'),
+          testID: 'catalogo-vacio-accion',
+        },
+      };
+    }
+    if (categoriaId !== TODAS_CATEGORIAS) {
+      return {
+        icono: '☕',
+        titulo: 'Sin productos en esta categoría',
+        mensaje: 'Prueba con otra categoría o vuelve a ver todo el catálogo.',
+        accion: {
+          etiqueta: 'Ver todas',
+          onPress: () => setCategoriaId(TODAS_CATEGORIAS),
+          testID: 'catalogo-vacio-accion',
+        },
+      };
+    }
+    return {
+      icono: '☕',
+      titulo: 'Catálogo vacío',
+      mensaje:
+        'Todavía no hay productos disponibles en este campus. Inténtalo de nuevo en un momento.',
+      accion: {
+        etiqueta: 'Actualizar',
+        onPress: () => void cargar(),
+        testID: 'catalogo-vacio-accion',
+      },
+    };
+  })();
+
   let contenido;
 
   if (errorCarga !== null) {
     contenido = (
-      <View style={styles.tarjetaError} testID="catalogo-error">
-        <Text style={styles.errorIcono}>☕</Text>
-        <Text style={styles.errorTitulo}>No pudimos cargar el catálogo</Text>
-        <Text style={styles.errorMensaje}>{errorCarga}</Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnReintentar, pressed && styles.btnPresionado]}
-          onPress={() => void cargar()}
-          testID="catalogo-reintentar"
-        >
-          <Text style={styles.btnReintentarTexto}>Reintentar</Text>
-        </Pressable>
-      </View>
+      <EstadoLista
+        variante="error"
+        icono="☕"
+        titulo="No pudimos cargar el catálogo"
+        mensaje={errorCarga}
+        accion={{
+          etiqueta: 'Reintentar',
+          onPress: () => void cargar(),
+          testID: 'catalogo-reintentar',
+        }}
+        testID="catalogo-error"
+        style={styles.tarjetaEstado}
+      />
     );
   } else if (productos === null) {
     contenido = (
@@ -286,22 +349,20 @@ export default function CatalogoProductosScreen() {
         showsVerticalScrollIndicator={false}
         testID="catalogo-lista"
         ListEmptyComponent={
-          <View style={styles.tarjetaVacio} testID="catalogo-vacio">
-            <Text style={styles.vacioIcono}>🔍</Text>
-            <Text style={styles.vacioTitulo}>Sin resultados</Text>
-            <Text style={styles.vacioTexto}>
-              {busqueda.trim().length > 0
-                ? 'No encontramos productos que coincidan con tu búsqueda.'
-                : 'No hay productos disponibles en esta categoría.'}
-            </Text>
-          </View>
+          <EstadoLista
+            icono={vacio.icono}
+            titulo={vacio.titulo}
+            mensaje={vacio.mensaje}
+            accion={vacio.accion}
+            testID="catalogo-vacio"
+          />
         }
         renderItem={({ item }) => {
           const ofertas = item.offers ?? [];
 
           return (
-            <Pressable
-              style={({ pressed }) => [styles.productCard, pressed && styles.btnPresionado]}
+            <Presionable
+              style={styles.productCard}
               onPress={() =>
                 router.push({ pathname: '/(cliente)/producto/[id]', params: { id: item.id } })
               }
@@ -347,7 +408,7 @@ export default function CatalogoProductosScreen() {
                   </Text>
                 )}
               </View>
-            </Pressable>
+            </Presionable>
           );
         }}
       />
@@ -367,13 +428,12 @@ export default function CatalogoProductosScreen() {
             <Text style={styles.campusName} numberOfLines={1}>
               {campus?.nombre ?? 'Sin campus seleccionado'}
             </Text>
-            <Pressable
-              style={({ pressed }) => pressed && styles.btnPresionado}
+            <Presionable
               onPress={() => router.push('/(cliente)/campus')}
               testID="catalogo-cambiar-campus"
             >
               <Text style={styles.campusLink}>Cambiar</Text>
-            </Pressable>
+            </Presionable>
           </View>
         </View>
       </View>
@@ -390,13 +450,13 @@ export default function CatalogoProductosScreen() {
           testID="catalogo-buscar"
         />
         {busqueda.length > 0 && (
-          <Pressable
+          <Presionable
             style={styles.clearButton}
             onPress={() => setBusqueda('')}
             testID="catalogo-limpiar-busqueda"
           >
             <Text style={styles.clearButtonText}>✕</Text>
-          </Pressable>
+          </Presionable>
         )}
       </View>
 
@@ -426,12 +486,8 @@ export default function CatalogoProductosScreen() {
       ) : categorias !== null && categorias.length > 0 ? (
         <View style={styles.categoriesContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.chip,
-                categoriaId === TODAS_CATEGORIAS && styles.chipActivo,
-                pressed && styles.btnPresionado,
-              ]}
+            <Presionable
+              style={[styles.chip, categoriaId === TODAS_CATEGORIAS && styles.chipActivo]}
               onPress={() => setCategoriaId(TODAS_CATEGORIAS)}
               testID="catalogo-chip-todos"
             >
@@ -440,23 +496,19 @@ export default function CatalogoProductosScreen() {
               >
                 TODOS
               </Text>
-            </Pressable>
+            </Presionable>
 
             {categorias.map((cat) => (
-              <Pressable
+              <Presionable
                 key={cat.id}
-                style={({ pressed }) => [
-                  styles.chip,
-                  categoriaId === cat.id && styles.chipActivo,
-                  pressed && styles.btnPresionado,
-                ]}
+                style={[styles.chip, categoriaId === cat.id && styles.chipActivo]}
                 onPress={() => setCategoriaId(cat.id)}
                 testID={`catalogo-chip-${cat.id}`}
               >
                 <Text style={[styles.chipText, categoriaId === cat.id && styles.chipTextActivo]}>
                   {cat.nombre}
                 </Text>
-              </Pressable>
+              </Presionable>
             ))}
           </ScrollView>
         </View>
@@ -680,66 +732,9 @@ const styles = StyleSheet.create({
     color: tokens.colores.textoNeutro,
     textAlign: 'center',
   },
-  tarjetaError: {
+  // El estado de error vive fuera de la lista, así que conserva el margen
+  // lateral de la pantalla. El vacío ya va dentro del contenido del FlatList.
+  tarjetaEstado: {
     marginHorizontal: tokens.espaciado.xxxl,
-    backgroundColor: tokens.colores.superficie,
-    borderWidth: tokens.grosores.fino,
-    borderColor: tokens.colores.bordeCalido,
-    borderRadius: tokens.radios.xxxl,
-    padding: tokens.espaciado['22'],
-    alignItems: 'center',
-    gap: tokens.espaciado.md,
-  },
-  errorIcono: {
-    fontSize: tokens.tipografia.tamano.iconoMedio,
-  },
-  errorTitulo: {
-    fontSize: tokens.tipografia.tamano.boton,
-    fontWeight: tokens.tipografia.peso.extranegrita,
-    color: tokens.colores.tintaCliente,
-  },
-  errorMensaje: {
-    fontSize: tokens.tipografia.tamano.cuerpo,
-    color: tokens.colores.textoNeutro,
-    textAlign: 'center',
-  },
-  btnReintentar: {
-    marginTop: tokens.espaciado.md,
-    backgroundColor: tokens.colores.azul,
-    paddingVertical: tokens.espaciado.xl,
-    paddingHorizontal: tokens.espaciado['3xl'],
-    borderRadius: tokens.radios.lg,
-  },
-  btnReintentarTexto: {
-    color: tokens.colores.superficie,
-    fontSize: tokens.tipografia.tamano.cuerpoMedio,
-    fontWeight: tokens.tipografia.peso.negrita,
-  },
-  btnPresionado: {
-    opacity: tokens.estados.presionado,
-  },
-  tarjetaVacio: {
-    backgroundColor: tokens.colores.superficie,
-    borderWidth: tokens.grosores.fino,
-    borderStyle: 'dashed',
-    borderColor: tokens.colores.bordeCalido,
-    borderRadius: tokens.radios.xxl,
-    padding: tokens.espaciado['5xl'],
-    alignItems: 'center',
-    gap: tokens.espaciado.md,
-  },
-  vacioIcono: {
-    fontSize: tokens.tipografia.tamano.iconoMedio,
-  },
-  vacioTitulo: {
-    fontSize: tokens.tipografia.tamano.boton,
-    fontWeight: tokens.tipografia.peso.extranegrita,
-    color: tokens.colores.tintaCliente,
-  },
-  vacioTexto: {
-    fontSize: tokens.tipografia.tamano.cuerpo,
-    color: tokens.colores.textoNeutro,
-    textAlign: 'center',
-    lineHeight: tokens.tipografia.interlineado.holgado,
   },
 });

@@ -9,22 +9,55 @@
 // llegan normalizados como ApiError (toApiError).
 
 import { httpClient } from './httpClient';
-import type { AccionNoRetirado, Orden } from '../types/domain';
+import type { AccionNoRetirado, Orden, PaginaOrdenes } from '../types/domain';
 
 // Ruta del dominio de órdenes dentro del gateway.
-// TODO: el gateway todavía no rutea /orders (application.properties solo
-// expone /v1/auth, /v1/catalog y /v1/notifications). Cuando se negocie el
-// contrato con el backend, ajustar esta ruta en un solo lugar.
+// El gateway sí rutea /v1/orders/** hacia order-service (StripPrefix=1), pero
+// order-service todavía no expone el listado GET /orders: la petición responde
+// 404 (o 401 sin token) y la pantalla muestra la degradación verificada, sin
+// datos simulados. Cuando exista el controlador, esta ruta ya es la correcta.
 export const ORDENES_ENDPOINT = '/v1/orders';
 
-export async function fetchPedidosEntrantes(accessToken: string): Promise<Orden[]> {
-  const response = await httpClient.get<Orden[]>(ORDENES_ENDPOINT, {
+// El contrato limita `size` a 100 (y usa 20 por defecto). El cajero necesita la
+// cola completa para filtrar por estado en pantalla, así que pide la página más
+// grande y recorre las siguientes hasta `last`.
+export const ORDENES_TAMANO_PAGINA = 100;
+
+// Tope defensivo: si el backend devolviera una paginación inconsistente (por
+// ejemplo `last` siempre en false), no dejamos la pantalla pidiendo páginas sin
+// fin. Con 100 órdenes por página cubre 5.000 órdenes, muy por encima de la
+// cola real de una cafetería.
+const MAX_PAGINAS = 50;
+
+async function fetchPaginaOrdenes(page: number, accessToken: string): Promise<PaginaOrdenes> {
+  const response = await httpClient.get<PaginaOrdenes>(ORDENES_ENDPOINT, {
+    params: { page, size: ORDENES_TAMANO_PAGINA },
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
 
   return response.data;
+}
+
+// Listado de pedidos entrantes del cajero. Consume el contrato real
+// (PaginaOrdenes): arma la cola completa recorriendo las páginas y devuelve solo
+// el `content`. Los filtros de la pantalla trabajan sobre ese arreglo, con los
+// estados del union EstadoOrden; si la ruta no responde, el error normalizado
+// sube tal cual (la pantalla lo traduce a un mensaje claro).
+export async function fetchPedidosEntrantes(accessToken: string): Promise<Orden[]> {
+  const ordenes: Orden[] = [];
+
+  for (let page = 0; page < MAX_PAGINAS; page += 1) {
+    const pagina = await fetchPaginaOrdenes(page, accessToken);
+    ordenes.push(...pagina.content);
+
+    if (pagina.last || pagina.content.length === 0) {
+      break;
+    }
+  }
+
+  return ordenes;
 }
 
 // Marca una orden como entregada tras validar el QR de retiro (INT4-8).
@@ -60,9 +93,9 @@ export interface ResolverNoRetiradoRequest {
 
 // Envía la resolución de una orden no retirada pendiente de revisión (INT4-12)
 // con la decisión ítem por ítem. Mismo contrato TODO que el resto de /orders:
-// el endpoint no existe aún en el backend (el gateway no rutea /orders), pero
-// el cajero ya consume el contrato real y muestra el error normalizado si el
-// gateway responde con problem+json.
+// el gateway ya rutea /v1/orders/**, pero order-service aún no expone este
+// endpoint; la pantalla consume el contrato real y muestra el error normalizado
+// si el gateway responde con problem+json.
 export async function resolverOrdenNoRetirada(
   ordenId: string,
   decisiones: DecisionItemNoRetirado[],

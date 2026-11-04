@@ -104,9 +104,13 @@ USING (VALUES
     ('55555555-5555-4555-8555-555555555514', '44444444-4444-4444-8444-444444444448', '33333333-3333-4333-8333-333333333339', 900.00, 40, 'AVAILABLE')
 ) AS s (id, cafeteria_id, product_id, price, stock, status)
 ON t.id = CAST(s.id AS UUID)
+-- Stock y estado de una oferta existente son operativos (INT2-51/74/75): las reservas
+-- activas ya los descontaron y pisarlos descuadraría el inventario al liberarlas.
+-- Solo se cargan al insertar; para restaurarlos, recrear la base (docker compose down -v).
+-- Se incrementa version porque la fila cambia (bloqueo optimista y eventos de stock).
 WHEN MATCHED THEN
     UPDATE SET cafeteria_id = CAST(s.cafeteria_id AS UUID), product_id = CAST(s.product_id AS UUID),
-               price = s.price, stock = s.stock, status = s.status
+               price = s.price, version = t.version + 1
 WHEN NOT MATCHED THEN
     INSERT (id, cafeteria_id, product_id, price, stock, status)
     VALUES (CAST(s.id AS UUID), CAST(s.cafeteria_id AS UUID), CAST(s.product_id AS UUID),

@@ -84,7 +84,10 @@ class GatewayOpenApiTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         mvc.perform(get("/openapi/auth/extra")).andExpect(status().isNotFound());
         mvc.perform(get("/openapi/auth").header("Authorization", "Bearer malformed"))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(get("/v1/catalog/productos")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/v1/catalog/productos")
+                        .param("campusId", "11111111-1111-4111-8111-111111111111")
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
         mvc.perform(get("/v1/auth/users/me")).andExpect(status().isUnauthorized());
         assertThat(AUTH.requests).isEmpty();
         assertThat(CATALOG.requests).isEmpty();

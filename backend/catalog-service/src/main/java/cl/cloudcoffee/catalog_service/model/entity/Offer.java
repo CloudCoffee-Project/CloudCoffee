@@ -29,6 +29,10 @@ public class Offer {
     @Column(nullable = false)
     private Integer stock;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OfferStatus status;

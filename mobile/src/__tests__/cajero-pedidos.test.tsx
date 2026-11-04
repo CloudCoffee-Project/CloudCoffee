@@ -3,9 +3,12 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { FlatList } from 'react-native';
 
-import PedidosEntrantesScreen, { buscarOrdenPorCodigo } from '../app/(cajero)/index';
+import PedidosEntrantesScreen, {
+  buscarOrdenPorCodigo,
+  mensajeErrorPedidos,
+} from '../app/(cajero)/index';
 import { fetchPedidosEntrantes } from '../services/ordenes';
-import { getAccessToken } from '../services/httpClient';
+import { ApiError, getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
 import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
@@ -206,14 +209,51 @@ describe('Pantalla de pedidos del cajero', () => {
     act(() => tree.unmount());
   }, 20000);
 
-  it('muestra el error de la API con toApiError', async () => {
+  it('muestra un mensaje claro ante 503 y no inventa pedidos', async () => {
     mockGetAccessToken.mockReturnValue('token-real');
-    mockFetchPedidos.mockRejectedValue(new Error('Request failed with status code 503'));
+    mockFetchPedidos.mockRejectedValue(new ApiError('Servicio no disponible', 503));
 
     const tree = await renderizarPedidos();
 
     const banner = tree.root.findByProps({ testID: 'cajero-error' });
-    expect(textoDe(banner)).toContain('503');
+    expect(textoDe(banner)).toContain('no está disponible en este momento');
+    expect(dataDe(tree)).toEqual([]);
+    expect(tree.root.findAllByProps({ testID: 'cajero-vacio' })).toHaveLength(0);
+
+    act(() => tree.unmount());
+  });
+
+  it('degrada con mensaje claro si la ruta de órdenes no existe (404)', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockRejectedValue(new ApiError('Not Found', 404));
+
+    const tree = await renderizarPedidos();
+
+    const banner = tree.root.findByProps({ testID: 'cajero-error' });
+    expect(textoDe(banner)).toContain('aún no está disponible en el backend');
+    expect(dataDe(tree)).toEqual([]);
+    expect(tree.root.findAllByProps({ testID: 'cajero-vacio' })).toHaveLength(0);
+
+    act(() => tree.unmount());
+  });
+
+  it('reintenta la carga desde el banner de error', async () => {
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockRejectedValueOnce(new ApiError('Servicio no disponible', 503));
+    mockFetchPedidos.mockResolvedValueOnce(ordenesMock);
+
+    const tree = await renderizarPedidos();
+    expect(tree.root.findByProps({ testID: 'cajero-error' })).toBeTruthy();
+
+    const reintentar = tree.root.findByProps({ testID: 'cajero-error-reintentar' });
+    await act(async () => {
+      reintentar.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(mockFetchPedidos).toHaveBeenCalledTimes(2);
+    expect(tree.root.findAllByProps({ testID: 'cajero-error' })).toHaveLength(0);
+    expect(dataDe(tree)).toEqual([ordenesMock[0]]);
 
     act(() => tree.unmount());
   });
@@ -230,15 +270,15 @@ describe('Pantalla de pedidos del cajero', () => {
     act(() => tree.unmount());
   });
 
-  it('no rompe sin token: delega el error a la API', async () => {
+  it('no rompe sin token: delega el error normalizado a la API', async () => {
     mockGetAccessToken.mockReturnValue(null);
-    mockFetchPedidos.mockRejectedValue(new Error('Request failed with status code 401'));
+    mockFetchPedidos.mockRejectedValue(new ApiError('No autorizado', 401));
 
     const tree = await renderizarPedidos();
 
     expect(mockFetchPedidos).toHaveBeenCalledWith('');
     const banner = tree.root.findByProps({ testID: 'cajero-error' });
-    expect(textoDe(banner)).toContain('401');
+    expect(textoDe(banner)).toContain('Tu sesión expiró');
 
     act(() => tree.unmount());
   });
@@ -321,6 +361,22 @@ describe('Pantalla de pedidos del cajero', () => {
     expect(textoDe(vacio)).toContain('No hay pedidos activos');
 
     act(() => tree.unmount());
+  });
+});
+
+describe('mensajeErrorPedidos', () => {
+  it('traduce cada tipo de falla a un mensaje claro', () => {
+    expect(mensajeErrorPedidos(new ApiError('', 0))).toContain('conectar');
+    expect(mensajeErrorPedidos(new ApiError('', 401))).toContain('sesión expiró');
+    expect(mensajeErrorPedidos(new ApiError('', 403))).toContain('permisos');
+    expect(mensajeErrorPedidos(new ApiError('', 404))).toContain('aún no está disponible');
+    expect(mensajeErrorPedidos(new ApiError('', 503))).toContain(
+      'no está disponible en este momento'
+    );
+  });
+
+  it('usa el detalle del backend para otros errores', () => {
+    expect(mensajeErrorPedidos(new ApiError('Falla interna', 500))).toBe('Falla interna');
   });
 });
 

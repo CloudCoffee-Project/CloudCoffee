@@ -10,13 +10,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -78,13 +78,15 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
+        <Presionable
           onPress={() => router.replace('/(auth)/portada')}
           style={styles.backButton}
           hitSlop={tokens.espaciado.md}
+          accessibilityRole="button"
+          accessibilityLabel="Volver a la portada"
         >
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
 
         <View style={styles.loginContent}>
           <View style={styles.header}>
@@ -118,25 +120,29 @@ export default function LoginScreen() {
                 placeholderTextColor={tokens.colores.placeholder}
                 secureTextEntry
                 autoCapitalize="none"
-                autoComplete="password"
+                autoComplete="current-password"
                 style={styles.input}
               />
             </View>
 
             <View style={styles.forgotRow}>
-              <Pressable
+              <Presionable
                 onPress={() => router.push('/(auth)/olvidaste-contrasena')}
+                style={styles.forgotButton}
                 hitSlop={tokens.espaciado.md}
+                accessibilityRole="link"
               >
                 <Text style={styles.forgotLink}>¿Olvidaste tu contraseña?</Text>
-              </Pressable>
+              </Presionable>
             </View>
 
             {error && <Text style={styles.errorText}>{error}</Text>}
 
-            <Pressable
+            <Presionable
               onPress={() => void handleIngresar()}
               disabled={cargando}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: cargando, busy: cargando }}
               style={[styles.primaryButton, cargando && styles.primaryButtonDisabled]}
             >
               {cargando ? (
@@ -144,19 +150,19 @@ export default function LoginScreen() {
               ) : (
                 <Text style={styles.primaryButtonText}>Ingresar</Text>
               )}
-            </Pressable>
+            </Presionable>
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              ¿No tienes una cuenta?{' '}
-              <Pressable
-                onPress={() => router.push('/(auth)/registro')}
-                hitSlop={tokens.espaciado.md}
-              >
-                <Text style={styles.footerLink}>Regístrate gratis</Text>
-              </Pressable>
-            </Text>
+            <Text style={styles.footerText}>¿No tienes una cuenta?</Text>
+            <Presionable
+              onPress={() => router.push('/(auth)/registro')}
+              style={styles.footerLinkButton}
+              hitSlop={tokens.espaciado.sm}
+              accessibilityRole="link"
+            >
+              <Text style={styles.footerLink}>Regístrate gratis</Text>
+            </Presionable>
           </View>
         </View>
       </ScrollView>
@@ -179,6 +185,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignSelf: 'flex-start',
+    justifyContent: 'center',
+    minHeight: tokens.tamanos.areaTactil,
     marginBottom: tokens.espaciado.xxl,
   },
   backText: {
@@ -223,9 +231,10 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
+    minHeight: tokens.tamanos.areaTactil,
     backgroundColor: tokens.colores.superficie,
     borderWidth: tokens.grosores.medio,
-    borderColor: tokens.colores.bordeAuth,
+    borderColor: tokens.colores.bordeControl,
     borderRadius: tokens.radios.lg,
     paddingHorizontal: tokens.espaciado.xxl,
     paddingVertical: tokens.espaciado.xl,
@@ -234,6 +243,11 @@ const styles = StyleSheet.create({
   },
   forgotRow: {
     alignItems: 'flex-end',
+  },
+  forgotButton: {
+    justifyContent: 'center',
+    minHeight: tokens.tamanos.areaTactil,
+    paddingHorizontal: tokens.espaciado.sm,
   },
   forgotLink: {
     color: tokens.colores.textoSecundario,
@@ -246,10 +260,12 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     width: '100%',
+    minHeight: tokens.tamanos.areaTactil,
     backgroundColor: tokens.colores.tinta,
     borderRadius: tokens.radios.xl,
     paddingVertical: tokens.espaciado.xxl,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: tokens.espaciado.sm,
   },
   primaryButtonDisabled: {
@@ -260,15 +276,24 @@ const styles = StyleSheet.create({
     color: tokens.colores.crema,
   },
   footer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: tokens.espaciado.xs,
   },
   footerText: {
     color: tokens.colores.textoSecundario,
     fontSize: tokens.tipografia.tamano.cuerpo,
     fontWeight: tokens.tipografia.peso.medio,
   },
+  footerLinkButton: {
+    justifyContent: 'center',
+    minHeight: tokens.tamanos.areaTactil,
+    paddingHorizontal: tokens.espaciado.xs,
+  },
   footerLink: {
-    color: tokens.colores.marca,
+    color: tokens.colores.marcaEnlace,
     fontWeight: tokens.tipografia.peso.negrita,
     fontSize: tokens.tipografia.tamano.cuerpo,
   },

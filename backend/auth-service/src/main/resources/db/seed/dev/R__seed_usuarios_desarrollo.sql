@@ -15,7 +15,8 @@ USING (VALUES
     ('66666666-6666-4666-8666-666666666603', 'admin.central@cloudcoffee.dev',     'ADMIN_CAFETERIA', 'Andrea', 'Central'),
     ('66666666-6666-4666-8666-666666666604', 'cajero.patio@cloudcoffee.dev',      'CAJERO',          'Pedro',  'Patio Norte'),
     ('66666666-6666-4666-8666-666666666605', 'admin.patio@cloudcoffee.dev',       'ADMIN_CAFETERIA', 'Paula',  'Patio Norte'),
-    ('66666666-6666-4666-8666-666666666606', 'cajero.sinasignar@cloudcoffee.dev', 'CAJERO',          'Simón',  'Sin Asignar')
+    ('66666666-6666-4666-8666-666666666606', 'cajero.sinasignar@cloudcoffee.dev', 'CAJERO',          'Simón',  'Sin Asignar'),
+    ('66666666-6666-4666-8666-666666666607', 'superadmin@cloudcoffee.dev',        'SUPER_ADMIN',     'Sofía',  'Plataforma')
 ) AS s (id, email, rol, nombre, apellido)
 ON t.id = CAST(s.id AS UUID)
 WHEN MATCHED THEN
@@ -42,4 +43,6 @@ WHEN NOT MATCHED THEN
     VALUES (CAST(s.usuario_id AS UUID), CAST(s.cafeteria_id AS UUID), CURRENT_TIMESTAMP);
 
 -- El cajero sin asignación existe para probar que no opera ninguna cafetería.
-DELETE FROM asignaciones_cafeteria WHERE usuario_id = '66666666-6666-4666-8666-666666666606';
+-- SUPER_ADMIN (historial de notificaciones, INT2-67) tampoco hereda permisos de personal.
+DELETE FROM asignaciones_cafeteria
+WHERE usuario_id IN ('66666666-6666-4666-8666-666666666606', '66666666-6666-4666-8666-666666666607');

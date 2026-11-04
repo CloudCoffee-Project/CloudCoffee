@@ -56,8 +56,10 @@ class PagoServiceIntegrationTests extends JwtTestSupport {
     @Test
     void compraInexistenteResponde404() {
         assertThatThrownBy(() -> pagoService.iniciarPago(UUID.randomUUID()))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(error.getCode()).isEqualTo("COMPRA_NO_ENCONTRADA");
+                });
     }
 
     @ParameterizedTest
@@ -72,7 +74,8 @@ class PagoServiceIntegrationTests extends JwtTestSupport {
         assertThatThrownBy(() -> pagoService.iniciarPago(compra.getId()))
                 .isInstanceOfSatisfying(BusinessException.class, error -> {
                     assertThat(error.getStatus()).isEqualTo(HttpStatus.CONFLICT);
-                    assertThat(error.getType().toString()).isEqualTo("/problems/pago-existente");
+                    assertThat(error.getType().toString()).isEqualTo("/problems/pago-ya-iniciado");
+                    assertThat(error.getCode()).isEqualTo("PAGO_YA_INICIADO");
                 });
         assertThat(pagos.findByCompraId(compra.getId())).get().extracting(Pago::getId, Pago::getEstado)
                 .containsExactly(primero.getId(), estado);
@@ -115,14 +118,32 @@ class PagoServiceIntegrationTests extends JwtTestSupport {
 
         assertConflicto(() -> pagoService.registrarResultado(pago.getId(), EstadoPago.RECHAZADO, "tarde"));
         assertConflicto(() -> pagoService.registrarResultado(pago.getId(), EstadoPago.PENDIENTE, null));
+        assertThatThrownBy(() -> pagoService.registrarResultado(pago.getId(), EstadoPago.RECHAZADO, "tarde"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("ESTADO_INVALIDO"));
         assertThat(pagos.findById(pago.getId()).orElseThrow().getEstado()).isEqualTo(EstadoPago.APROBADO);
+    }
+
+    @ParameterizedTest
+    @EnumSource(EstadoPago.class)
+    void unResultadoInmediatoSeGuardaConUnSoloInsert(EstadoPago resultado) {
+        Compra compra = compra("2000.00");
+
+        Pago pago = pagoService.iniciarPago(compra.getId(), null, resultado);
+
+        Pago guardado = pagos.findById(pago.getId()).orElseThrow();
+        assertThat(guardado.getEstado()).isEqualTo(resultado);
+        // Sin UPDATE posterior: @Version queda en 0 (versión 1 del contrato).
+        assertThat(guardado.getVersion()).isZero();
     }
 
     @Test
     void pagoInexistenteResponde404() {
         assertThatThrownBy(() -> pagoService.registrarResultado(UUID.randomUUID(), EstadoPago.APROBADO, null))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(error.getCode()).isEqualTo("PAGO_NO_ENCONTRADO");
+                });
     }
 
     @Test

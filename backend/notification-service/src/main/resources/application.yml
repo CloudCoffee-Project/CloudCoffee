@@ -47,6 +47,8 @@ spring:
 app:
   mail:
     from: ${SMTP_FROM:noreply@cloudcoffee.cl}
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
   password-reset:
     url: ${RESET_PASSWORD_URL:mobile://restaurar-contrasena}
   frontend:

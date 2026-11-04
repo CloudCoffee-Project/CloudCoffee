@@ -1,8 +1,10 @@
 package cl.cloudcoffee.catalog_service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,6 +12,8 @@ import javax.sql.DataSource;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -17,9 +21,13 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import cl.cloudcoffee.catalog_service.dto.ReserveStockRequest;
+import cl.cloudcoffee.catalog_service.messaging.StockEventPublisher;
+import cl.cloudcoffee.catalog_service.service.StockReservationService;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
 /**
@@ -47,9 +55,17 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
     static final String LATTE_VAINILLA = "33333333-3333-4333-8333-333333333335";
     static final String AGUA_MINERAL = "33333333-3333-4333-8333-333333333339";
     static final String BROWNIE = "33333333-3333-4333-8333-33333333333c";
+    static final String AMERICANO_CENTRAL = "55555555-5555-4555-8555-555555555501";
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    StockReservationService reservas;
+
+    // Las reservas publican eventos de stock; aquí no hay broker.
+    @MockitoBean
+    StockEventPublisher stockEventPublisher;
 
     @Autowired
     DataSource dataSource;
@@ -122,6 +138,30 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
         } finally {
             jdbcTemplate.update("UPDATE product SET status = 'ACTIVE' WHERE id = ?", productId);
         }
+    }
+
+    @Test
+    void consultasPublicasAdmitenHeadSinJwt() throws Exception {
+        mvc.perform(head("/catalog/productos/{id}", CAFE_AMERICANO))
+                .andExpect(status().isOk());
+        mvc.perform(head("/catalog/productos").param("campusId", CAMPUS_SAN_FRANCISCO))
+                .andExpect(status().isOk());
+        mvc.perform(head("/catalog/productos/{id}/ofertas", CAFE_AMERICANO)
+                        .param("campusId", CAMPUS_SAN_FRANCISCO))
+                .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "productos",
+            "productos/33333333-3333-4333-8333-333333333333",
+            "productos/33333333-3333-4333-8333-333333333333/ofertas"
+    })
+    void jwtInvalidoSeRechazaEnConsultasPublicas(String endpoint) throws Exception {
+        mvc.perform(get("/catalog/" + endpoint)
+                        .param("campusId", CAMPUS_SAN_FRANCISCO)
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -228,9 +268,35 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
         ofertas(CAFE_AMERICANO, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$", hasSize(2)));
     }
 
+    @Test
+    void reEjecutarElSeedConservaElStockDeLasReservasActivas() {
+        UUID orden = UUID.randomUUID();
+        UUID oferta = UUID.fromString(AMERICANO_CENTRAL);
+        reservas.reserve(new ReserveStockRequest(orden, oferta, 5));
+        try {
+            long version = version(oferta);
+
+            new ResourceDatabasePopulator(new ClassPathResource(SEED)).execute(dataSource);
+
+            // El seed no devuelve las 5 unidades reservadas, pero sí marca la fila como cambiada.
+            assertThat(stock(oferta)).isEqualTo(35);
+            assertThat(version(oferta)).isGreaterThan(version);
+        } finally {
+            reservas.release(orden, oferta);
+        }
+        assertThat(stock(oferta)).isEqualTo(40);
+    }
+
+    private int stock(UUID oferta) {
+        return jdbcTemplate.queryForObject("SELECT stock FROM offer WHERE id = ?", Integer.class, oferta);
+    }
+
+    private long version(UUID oferta) {
+        return jdbcTemplate.queryForObject("SELECT version FROM offer WHERE id = ?", Long.class, oferta);
+    }
+
     private ResultActions productos(String campusId, String categoriaId, String q) throws Exception {
         var request = get("/catalog/productos")
-                .header("Authorization", "Bearer " + token())
                 .param("campusId", campusId)
                 .param("sort", "name,asc");
         if (categoriaId != null) {
@@ -244,7 +310,6 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
 
     private ResultActions ofertas(String productId, String campusId) throws Exception {
         return mvc.perform(get("/catalog/productos/{id}/ofertas", productId)
-                        .header("Authorization", "Bearer " + token())
                         .param("campusId", campusId))
                 .andExpect(status().isOk());
     }
