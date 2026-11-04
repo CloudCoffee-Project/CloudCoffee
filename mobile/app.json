@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "CloudCoffee",
+    "slug": "cloudcoffee",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,10 +15,9 @@
       "package": "cl.cloudcoffee.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -48,7 +47,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "CloudCoffee usa la c\u00e1mara para escanear el c\u00f3digo QR de retiro de tu pedido.",
+          "cameraPermission": "CloudCoffee usa la cámara para escanear el código QR de retiro de tu pedido.",
           "barcodeScannerEnabled": true
         }
       ],

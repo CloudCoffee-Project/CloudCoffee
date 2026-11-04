@@ -12,6 +12,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { AxiosError } from 'axios';
@@ -149,7 +150,7 @@ export default function PerfilScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {cargando ? (
           <ActivityIndicator size="large" color="#0052CC" testID="cargando-perfil" />
@@ -334,7 +335,7 @@ export default function PerfilScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -33,6 +33,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 
@@ -300,14 +301,14 @@ export default function PedidosEntrantesScreen() {
 
   if (cargando && pedidos.length === 0) {
     return (
-      <View style={styles.centrado} testID="cajero-cargando">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-cargando">
         <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.contenedor}>
+    <SafeAreaView style={styles.contenedor} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <Text style={styles.rolePill}>POS Cajero</Text>
@@ -426,6 +427,7 @@ export default function PedidosEntrantesScreen() {
         data={pedidosFiltrados}
         keyExtractor={(item) => item.ordenId}
         renderItem={({ item }) => <FilaPedido orden={item} />}
+        style={styles.lista}
         contentContainerStyle={styles.listaContenido}
         refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargarPedidos} />}
         ListEmptyComponent={
@@ -436,7 +438,7 @@ export default function PedidosEntrantesScreen() {
           )
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -513,6 +515,7 @@ const styles = StyleSheet.create({
   },
   chipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 12,
   },
   chips: {
@@ -732,5 +735,9 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     fontSize: 12,
     fontWeight: '600',
+  },
+  lista: {
+    flex: 1,
+    minHeight: 0,
   },
 });

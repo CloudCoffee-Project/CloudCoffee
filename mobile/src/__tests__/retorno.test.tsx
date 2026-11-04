@@ -1,11 +1,11 @@
-// src/app/(cliente)/pago/retorno.test.tsx
+// src/__tests__/retorno.test.tsx
 import { act, create } from 'react-test-renderer';
 
-import RetornoPagoScreen from './retorno';
-import { routerMock, limpiarRouter } from '../../../test-utils';
+import RetornoPagoScreen from '../app/(cliente)/pago/retorno';
+import { routerMock, limpiarRouter } from '../test-utils';
 import { useLocalSearchParams } from 'expo-router';
 
-jest.mock('expo-router', () => jest.requireActual('../../../test-utils').expoRouterMock);
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 const mockUseLocalSearchParams = useLocalSearchParams as jest.Mock;
 

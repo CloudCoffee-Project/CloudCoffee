@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
@@ -113,16 +114,16 @@ export default function EscanerQRScreen() {
   // --- 1. Los permisos de cámara todavía se están leyendo. ---
   if (!permission) {
     return (
-      <View style={styles.centrado} testID="cajero-escaner-cargando">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-escaner-cargando">
         <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   // --- 2. Sin permiso de cámara. ---
   if (!permission.granted) {
     return (
-      <View style={styles.contenedor} testID="cajero-escaner-permiso">
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-escaner-permiso">
         <View style={styles.header}>
           <Text style={styles.headerTitulo}>Escanear QR de Retiro</Text>
           <Text style={styles.headerSubtitulo}>Valida el retiro en el punto de entrega</Text>
@@ -150,19 +151,21 @@ export default function EscanerQRScreen() {
             <Text style={styles.botonSecundarioTexto}>Abrir ajustes del teléfono</Text>
           </Presionable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // --- 3. La pestaña no está enfocada: la cámara no debe estar activa. ---
   if (!estaFocada) {
-    return <View style={styles.contenedor} testID="cajero-escaner-inactivo" />;
+    return (
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-escaner-inactivo" />
+    );
   }
 
   // --- 4. QR procesado con error. ---
   if (resultado?.tipo === 'error') {
     return (
-      <View style={styles.contenedor} testID="cajero-escaner-error">
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-escaner-error">
         <View style={styles.header}>
           <Text style={styles.headerTitulo}>Escanear QR de Retiro</Text>
           <Text style={styles.headerSubtitulo}>Valida el retiro en el punto de entrega</Text>
@@ -179,7 +182,7 @@ export default function EscanerQRScreen() {
             <Text style={styles.botonPrimarioTexto}>Volver a escanear</Text>
           </Presionable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 

@@ -28,6 +28,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 import { useFocusEffect } from 'expo-router';
 
@@ -219,17 +220,17 @@ export default function StockScreen() {
 
   if (!cafeteriaId) {
     return (
-      <View style={styles.centrado} testID="cajero-stock-sin-cafeteria">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-stock-sin-cafeteria">
         <Text style={styles.emptyText}>
           Tu cuenta no tiene una cafetería asignada, así que no hay stock para mostrar.
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (cargando && inventario.length === 0) {
     return (
-      <View style={styles.contenedor}>
+      <SafeAreaView style={styles.contenedor} edges={['top']}>
         <CabeceraStock cafeteriaNombre={cafeteriaNombre} />
         <EsqueletoPulso testID="cajero-stock-esqueleto" style={styles.listaContenido}>
           {[0, 1, 2, 3, 4].map((indice) => (
@@ -242,12 +243,12 @@ export default function StockScreen() {
             </View>
           ))}
         </EsqueletoPulso>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.contenedor}>
+    <SafeAreaView style={styles.contenedor} edges={['top']}>
       <CabeceraStock cafeteriaNombre={cafeteriaNombre} />
 
       <View style={styles.searchWrapper}>
@@ -310,6 +311,7 @@ export default function StockScreen() {
         data={itemsFiltrados}
         keyExtractor={(item) => item.ofertaId}
         renderItem={({ item }) => <FilaStock item={item} />}
+        style={styles.lista}
         contentContainerStyle={styles.listaContenido}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -327,7 +329,7 @@ export default function StockScreen() {
           )
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -434,6 +436,7 @@ const styles = StyleSheet.create({
   },
   chipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     marginBottom: tokens.espaciado.xl,
   },
   chips: {
@@ -488,6 +491,10 @@ const styles = StyleSheet.create({
   listaContenido: {
     paddingBottom: tokens.espaciado['3xl'],
     gap: tokens.espaciado.xl,
+  },
+  lista: {
+    flex: 1,
+    minHeight: 0,
   },
   card: {
     backgroundColor: tokens.colores.superficie,

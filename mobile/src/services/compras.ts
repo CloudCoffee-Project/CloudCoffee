@@ -5,29 +5,34 @@
 // cada compra (cada orden pagada tiene su boleta, INT4-48).
 //
 // Contrato (doc del equipo, app móvil, JWT de cliente):
-//   - GET /v1/compras → Compra[] (historial del cliente, más recientes primero).
+//   - GET /v1/compras → PaginaComprasResponse (historial del cliente).
 //
 // El httpClient inyecta el JWT del cliente en cada petición (interceptor), así
 // que esta función no recibe el token explícitamente (patrón de seguimientos.ts
 // y auth.ts).
 
 import { httpClient } from './httpClient';
-import type { Compra } from '../types/domain';
+import type { Compra, PaginaCompras } from '../types/domain';
 
 // Ruta del dominio de compras dentro del gateway. Es la misma raíz que usa el
 // POST de crearCompra (services/pagos.ts, INT4-35); acá queda como endpoint
 // único de referencia para el dominio.
-// TODO: el gateway no rutea /v1/compras (application.properties solo expone
-// /v1/auth, /v1/catalog y /v1/notifications; order-service aún es un stub).
-// La pantalla consume el contrato real y muestra el error normalizado
-// (toApiError) si el gateway responde con problem+json.
 export const COMPRAS_ENDPOINT = '/v1/compras';
+
+// Genera un UUID v4 para Idempotency-Key (exigido por el backend).
+function generarIdempotencyKey(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 /** Llama a GET /v1/compras y devuelve el historial de compras del cliente. */
 export async function listarCompras(): Promise<Compra[]> {
-  const response = await httpClient.get<Compra[]>(COMPRAS_ENDPOINT);
+  const response = await httpClient.get<PaginaCompras>(COMPRAS_ENDPOINT);
 
-  return response.data;
+  return response.data.content;
 }
 
 // INT4-37: confirmar o cancelar la compra COMPLETA (todas sus órdenes) desde
@@ -36,16 +41,32 @@ export async function listarCompras(): Promise<Compra[]> {
 // acción y se recarga el historial para mostrar el estado que devuelva.
 //   - POST /v1/compras/{compraId}/confirmar → Compra
 //   - POST /v1/compras/{compraId}/cancelar  → Compra
-// Sin body: la acción se define por la ruta. Los errores llegan normalizados
+// Requieren Idempotency-Key (UUID). Los errores llegan normalizados
 // (toApiError) para que la pantalla muestre el mensaje del backend.
 export async function confirmarCompra(compraId: string): Promise<Compra> {
-  const response = await httpClient.post<Compra>(`${COMPRAS_ENDPOINT}/${compraId}/confirmar`);
+  const response = await httpClient.post<Compra>(
+    `${COMPRAS_ENDPOINT}/${compraId}/confirmar`,
+    undefined,
+    {
+      headers: {
+        'Idempotency-Key': generarIdempotencyKey(),
+      },
+    }
+  );
 
   return response.data;
 }
 
 export async function cancelarCompra(compraId: string): Promise<Compra> {
-  const response = await httpClient.post<Compra>(`${COMPRAS_ENDPOINT}/${compraId}/cancelar`);
+  const response = await httpClient.post<Compra>(
+    `${COMPRAS_ENDPOINT}/${compraId}/cancelar`,
+    undefined,
+    {
+      headers: {
+        'Idempotency-Key': generarIdempotencyKey(),
+      },
+    }
+  );
 
   return response.data;
 }
