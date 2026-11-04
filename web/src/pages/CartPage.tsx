@@ -171,10 +171,13 @@ export function CartPage() {
               );
             })}
           </div>
-          <aside className="cart-total" aria-label="Total del carrito">
-            <span>Total</span>
+          <aside className="cart-total" aria-label="Estimación del carrito">
+            <span>Estimación</span>
             <strong>{formatPrice(total)}</strong>
           </aside>
+          <Link className="btn-primary cart-checkout-link" to="/checkout">
+            Continuar al checkout
+          </Link>
         </>
       )}
     </section>

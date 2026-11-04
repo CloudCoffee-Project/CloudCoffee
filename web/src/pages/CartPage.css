@@ -137,6 +137,12 @@
   font-size: 1.2rem;
 }
 
+.cart-checkout-link {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
 .cart-error {
   margin-bottom: 1rem;
   color: #b91c1c;
