@@ -78,6 +78,15 @@ Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/produc
 
 INT2-48 cubre la exploración pública del catálogo; INT2-96 añade búsqueda y paginación. La comparación de ofertas y el carrito quedan en sus respectivos issues.
 
+## Carrito web (INT2-60)
+
+Desde el detalle de producto se agregan ofertas al carrito, que persiste en el
+navegador. La ruta `/carrito` muestra los productos agrupados por cafetería,
+permite ajustar cantidades hasta el stock registrado y quitar productos. El
+enlace de navegación muestra las unidades actuales; al vaciar el carrito se
+ofrece volver al catálogo. La validación actual de stock durante el checkout se
+implementa en INT2-88.
+
 ## Verificación de correo
 
 El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado.
