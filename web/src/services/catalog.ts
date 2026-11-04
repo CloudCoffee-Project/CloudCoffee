@@ -141,10 +141,35 @@ export function addOfferToCart(product: ProductDetail, offer: ProductOffer, quan
     ? items.map((item, idx) => (idx === index ? updatedItem : item))
     : [...items, updatedItem];
 
-  localStorage.setItem?.(CART_STORAGE_KEY, JSON.stringify(nextItems));
-  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-    window.dispatchEvent(new Event(CART_UPDATED_EVENT));
-  }
+  writeCartItems(nextItems);
 
   return updatedItem;
+}
+
+export function updateCartItemQuantity(offerId: string, quantity: number): CartItem | null {
+  const items = readCartItems();
+  const item = items.find((cartItem) => cartItem.offerId === offerId);
+  if (!item) return null;
+
+  const parsedQuantity = Math.floor(quantity);
+  if (!Number.isFinite(parsedQuantity) || parsedQuantity < 1) return null;
+
+  const updatedItem = { ...item, quantity: Math.min(parsedQuantity, item.stock) };
+  writeCartItems(items.map((cartItem) => (
+    cartItem.offerId === offerId ? updatedItem : cartItem
+  )));
+  return updatedItem;
+}
+
+export function removeCartItem(offerId: string): void {
+  const items = readCartItems();
+  const nextItems = items.filter((item) => item.offerId !== offerId);
+  if (nextItems.length !== items.length) writeCartItems(nextItems);
+}
+
+function writeCartItems(items: CartItem[]): void {
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(CART_UPDATED_EVENT));
+  }
 }
