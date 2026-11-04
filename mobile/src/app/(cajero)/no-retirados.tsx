@@ -30,6 +30,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 
 import { fetchPedidosEntrantes, resolverOrdenNoRetirada } from '../../services/ordenes';
@@ -356,14 +357,14 @@ export default function NoRetiradosScreen() {
 
   if (cargando && pedidos.length === 0) {
     return (
-      <View style={styles.centrado} testID="cajero-nr-cargando">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-nr-cargando">
         <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.contenedor}>
+    <SafeAreaView style={styles.contenedor} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <Text style={styles.rolePill}>POS Cajero</Text>
@@ -415,6 +416,7 @@ export default function NoRetiradosScreen() {
 
       <FlatList
         data={pedidosFiltrados}
+        style={styles.lista}
         keyExtractor={(item) => item.ordenId}
         renderItem={({ item }) => (
           <FilaNoRetirado
@@ -436,7 +438,7 @@ export default function NoRetiradosScreen() {
           )
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -489,6 +491,7 @@ const styles = StyleSheet.create({
   },
   chipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 12,
   },
   chips: {
@@ -556,6 +559,10 @@ const styles = StyleSheet.create({
   listaContenido: {
     paddingBottom: 24,
     gap: 12,
+  },
+  lista: {
+    flex: 1,
+    minHeight: 0,
   },
   card: {
     backgroundColor: '#FFFFFF',

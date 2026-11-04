@@ -1,12 +1,12 @@
-// src/app/(cliente)/resultado-pago.test.tsx
+// src/__tests__/resultado-pago.test.tsx
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
-import ResultadoPagoScreen from './resultado-pago';
-import { limpiarRouter } from '../../test-utils';
+import ResultadoPagoScreen from '../app/(cliente)/resultado-pago';
+import { limpiarRouter } from '../test-utils';
 import { useLocalSearchParams } from 'expo-router';
 
-jest.mock('expo-router', () => jest.requireActual('../../test-utils').expoRouterMock);
+jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
 const mockUseLocalSearchParams = useLocalSearchParams as jest.Mock;
 

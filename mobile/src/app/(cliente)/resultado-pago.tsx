@@ -1,5 +1,6 @@
 // src/app/(cliente)/resultado-pago.tsx
 import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { EstadoPagoVisual } from '../../services/pagos';
@@ -53,7 +54,7 @@ export default function ResultadoPagoScreen() {
   const contenido = CONTENIDO_POR_ESTADO[estado] ?? CONTENIDO_POR_ESTADO.desconocido;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.emoji}>{contenido.emoji}</Text>
 
       <Text style={[styles.titulo, { color: contenido.color }]}>{contenido.titulo}</Text>
@@ -102,7 +103,7 @@ export default function ResultadoPagoScreen() {
           </>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

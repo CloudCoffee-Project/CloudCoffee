@@ -10,6 +10,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,6 @@ import {
 import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { mensajeDeErrorApi } from '../../services/httpClient';
 import { registrar } from '../../services/auth';
 import { tokens } from '../../theme/tokens';
@@ -81,6 +81,8 @@ export default function RegistroScreen() {
 
   const [form, setForm] = useState<FormularioRegistro>(FORMULARIO_INICIAL);
   const [cargando, setCargando] = useState(false);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [mostrarConfirmPassword, setMostrarConfirmPassword] = useState(false);
   const [error, setError] = useState<ErrorCampo>(null);
   const [errorApi, setErrorApi] = useState<string | null>(null);
 
@@ -212,30 +214,70 @@ export default function RegistroScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Contraseña</Text>
-              <TextInput
-                value={form.password}
-                onChangeText={(v) => setCampo('password', v)}
-                placeholder="Mínimo 8 caracteres"
-                placeholderTextColor={tokens.colores.placeholder}
-                secureTextEntry
-                autoCapitalize="none"
-                autoComplete="new-password"
-                style={styles.input}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  value={form.password}
+                  onChangeText={(v) => setCampo('password', v)}
+                  placeholder="Mínimo 8 caracteres"
+                  placeholderTextColor={tokens.colores.placeholder}
+                  secureTextEntry={!mostrarPassword}
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  style={styles.passwordInput}
+                />
+                <Presionable
+                  style={styles.passwordToggle}
+                  onPress={() => setMostrarPassword((prev) => !prev)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <Image
+                    source={
+                      mostrarPassword
+                        ? require('../../../assets/ojo-cerrado.png')
+                        : require('../../../assets/ojo-abierto.png')
+                    }
+                    style={styles.passwordToggleIcono}
+                    resizeMode="contain"
+                  />
+                </Presionable>
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Confirmar Contraseña</Text>
-              <TextInput
-                value={form.confirmPassword}
-                onChangeText={(v) => setCampo('confirmPassword', v)}
-                placeholder="Repite tu contraseña"
-                placeholderTextColor={tokens.colores.placeholder}
-                secureTextEntry
-                autoCapitalize="none"
-                autoComplete="new-password"
-                style={styles.input}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  value={form.confirmPassword}
+                  onChangeText={(v) => setCampo('confirmPassword', v)}
+                  placeholder="Repite tu contraseña"
+                  placeholderTextColor={tokens.colores.placeholder}
+                  secureTextEntry={!mostrarConfirmPassword}
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  style={styles.passwordInput}
+                />
+                <Presionable
+                  style={styles.passwordToggle}
+                  onPress={() => setMostrarConfirmPassword((prev) => !prev)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    mostrarConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
+                  }
+                >
+                  <Image
+                    source={
+                      mostrarConfirmPassword
+                        ? require('../../../assets/ojo-cerrado.png')
+                        : require('../../../assets/ojo-abierto.png')
+                    }
+                    style={styles.passwordToggleIcono}
+                    resizeMode="contain"
+                  />
+                </Presionable>
+              </View>
             </View>
 
             <Presionable
@@ -351,6 +393,33 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.espaciado.xl,
     color: tokens.colores.tintaSuave,
     fontSize: tokens.tipografia.tamano.cuerpoMedio,
+  },
+  passwordInput: {
+    flex: 1,
+    minHeight: tokens.tamanos.areaTactil,
+    paddingHorizontal: tokens.espaciado.xxl,
+    paddingVertical: tokens.espaciado.xl,
+    color: tokens.colores.tintaSuave,
+    fontSize: tokens.tipografia.tamano.cuerpoMedio,
+    borderWidth: 0,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.medio,
+    borderColor: tokens.colores.bordeControl,
+    borderRadius: tokens.radios.lg,
+  },
+  passwordToggle: {
+    paddingHorizontal: tokens.espaciado.lg,
+    paddingVertical: tokens.espaciado.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passwordToggleIcono: {
+    width: 22,
+    height: 22,
   },
   primaryButton: {
     width: '100%',

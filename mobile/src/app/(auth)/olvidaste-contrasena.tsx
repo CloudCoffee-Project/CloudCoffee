@@ -122,7 +122,7 @@ export default function OlvidasteContrasenaScreen() {
 
             <View style={styles.actionsColumn}>
               <Presionable onPress={handleRestaurar} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Volver a Iniciar Sesión</Text>
+                <Text style={styles.primaryButtonText}>Recuperar Acceso con Token</Text>
               </Presionable>
 
               <Presionable onPress={() => void handleReenviar()} disabled={reenviando}>

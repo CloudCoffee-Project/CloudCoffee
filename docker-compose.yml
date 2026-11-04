@@ -140,6 +140,7 @@ services:
             args:
                 SERVICE_NAME: order-service
         environment:
+            AUTH_SERVICE_URL: http://auth-service:8081
             CATALOG_SERVICE_URL: http://catalog-service:8082
             INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
             SPRING_RABBITMQ_HOST: rabbitmq
