@@ -116,6 +116,8 @@ describe('cliente HTTP del API Gateway', () => {
         status: 400,
         detail: 'Revisa el formulario.',
         instance: '/v1/auth/login',
+        code: 'PRECIO_CAMBIO',
+        compra: { compraId: 'purchase-1', montoTotal: 5200 },
         errors: [{ field: 'email', message: 'Debe ser válido.' }],
       }), {
         status: 400,
@@ -132,6 +134,8 @@ describe('cliente HTTP del API Gateway', () => {
         title: 'Datos inválidos',
         detail: 'Revisa el formulario.',
         instance: '/v1/auth/login',
+        code: 'PRECIO_CAMBIO',
+        extensions: { compra: { compraId: 'purchase-1', montoTotal: 5200 } },
         errors: [{ field: 'email', message: 'Debe ser válido.' }],
       });
   });

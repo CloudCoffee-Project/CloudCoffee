@@ -24,6 +24,8 @@ export class ApiRequestError extends Error {
     readonly type: string | null = null,
     readonly instance: string | null = null,
     readonly errors: ValidationError[] = [],
+    readonly code: string | null = null,
+    readonly extensions: Record<string, unknown> = {},
   ) {
     super(detail);
     this.name = 'ApiRequestError';
@@ -93,6 +95,10 @@ async function responseError(response: Response): Promise<ApiRequestError> {
   const errors = Array.isArray(problem.errors)
     ? problem.errors.filter(isValidationError)
     : [];
+  const extensions: Record<string, unknown> = {};
+  if ('compra' in problem) {
+    extensions.compra = problem.compra;
+  }
 
   return new ApiRequestError(
     response.status,
@@ -101,6 +107,8 @@ async function responseError(response: Response): Promise<ApiRequestError> {
     stringOrNull(problem.type),
     stringOrNull(problem.instance),
     errors,
+    stringOrNull(problem.code),
+    extensions,
   );
 }
 
