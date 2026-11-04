@@ -87,6 +87,13 @@ enlace de navegación muestra las unidades actuales; al vaciar el carrito se
 ofrece volver al catálogo. La validación actual de stock durante el checkout se
 implementa en INT2-88.
 
+El checkout protegido para clientes crea compras con `POST /v1/compras` mediante
+el API Gateway; solo envía ofertas y cantidades, y presenta el total calculado
+por el servidor. Las compras con stock pendiente pueden confirmarse o cancelarse
+desde `/checkout`. Las claves de idempotencia y el contenido de una creación
+pendiente se conservan en la sesión del navegador para que un reintento no duplique
+la compra.
+
 ## Verificación de correo
 
 El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado.

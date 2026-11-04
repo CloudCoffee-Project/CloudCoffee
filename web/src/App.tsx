@@ -12,6 +12,7 @@ import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { ProfilePage } from './pages/ProfilePage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
+import { CheckoutPage } from './pages/CheckoutPage';
 import { CashierOrdersPage } from './pages/CashierOrdersPage';
 
 
@@ -39,6 +40,7 @@ export function App() {
 
         {/* Rutas exclusivas de comprador (CLIENTE) */}
         <Route element={<ProtectedRoute allowedRoles={['CLIENTE']} />}>
+          <Route path="/checkout" element={<CheckoutPage />} />
           <Route
             path="/compras"
             element={
