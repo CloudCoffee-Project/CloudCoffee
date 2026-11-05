@@ -45,7 +45,7 @@ async function login(email: string, password: string) {
 }
 ```
 
-La respuesta JSON se entrega como el tipo solicitado. Una respuesta sin contenido devuelve `undefined`. Los errores HTTP y de conexión se entregan como `ApiRequestError`: `status` es el código HTTP o `null` cuando falla la conexión; `title` y `detail` son mensajes seguros para la UI. Si el Gateway responde con Problem Details, también quedan disponibles `type`, `instance` y `errors` de validación. Las cancelaciones con `AbortError` se propagan para que quien hizo la petición pueda ignorarlas.
+La respuesta JSON se entrega como el tipo solicitado. Una respuesta sin contenido devuelve `undefined`. Los errores HTTP y de conexión se entregan como `ApiRequestError`: `status` es el código HTTP o `null` cuando falla la conexión; `title` y `detail` son mensajes seguros para la UI. Si el Gateway responde con Problem Details, también quedan disponibles `type`, `instance` y `errors` de validación. Las cancelaciones con `AbortError` se propagan para que quien hizo la petición pueda ignorarlas. Las consultas públicas que deban ignorar una sesión local pueden usar `omitAccessToken: true`.
 
 ### Verificación local con el Gateway
 
@@ -74,16 +74,95 @@ En `/catalogo`, seleccionar un campus carga sus productos mediante el Gateway. E
 
 La paginación solicita 12 productos por página con índices desde cero y orden estable por `name,id`. El listado y los botones **Anterior/Siguiente** usan `content`, `number`, `totalElements`, `totalPages`, `first` y `last` de la respuesta Spring Data Page. Se conservan campus, categoría y búsqueda al navegar. Cambiar búsqueda o categoría vuelve a la primera página; cambiar campus también limpia categoría y texto. Las consultas anteriores se cancelan y sus respuestas se descartan.
 
-Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos`. La configuración actual del backend exige sesión para el listado de productos, pendiente de INT2-66; el cliente HTTP adjunta el token existente. El catálogo contempla resultados vacíos, carga y errores con reintento.
+Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos` a través del Gateway. Como son consultas públicas, no se adjunta el token almacenado: explorar el catálogo no requiere iniciar sesión ni depende de que una sesión previa siga vigente. El catálogo contempla resultados vacíos, carga y errores con reintento.
 
-INT2-96 incorpora el listado mínimo porque la base de INT2-48 aún estaba pendiente. La comparación de ofertas, el carrito y los cambios de seguridad del backend quedan en sus respectivos issues.
+INT2-48 cubre la exploración pública del catálogo; INT2-96 añade búsqueda y paginación. La comparación de ofertas y el carrito quedan en sus respectivos issues.
+
+## Carrito web (INT2-60)
+
+Desde el detalle de producto se agregan ofertas al carrito, que persiste en el
+navegador. La ruta `/carrito` muestra los productos agrupados por cafetería,
+permite ajustar cantidades hasta el stock registrado y quitar productos. El
+enlace de navegación muestra las unidades actuales; al vaciar el carrito se
+ofrece volver al catálogo. La validación actual de stock durante el checkout se
+implementa en INT2-88.
+
+El checkout protegido para clientes crea compras con `POST /v1/compras` mediante
+el API Gateway; solo envía ofertas y cantidades, y presenta el total calculado
+por el servidor. Las compras con stock pendiente pueden confirmarse o cancelarse
+desde `/checkout`. Las claves de idempotencia y el contenido de una creación
+pendiente se conservan en la sesión del navegador para que un reintento no duplique
+la compra.
+
+## Verificación de correo
+
+El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado.
+
+En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. Para probar el flujo en otro origen, configura `FRONTEND_URL` antes de iniciar los servicios y asegúrate de que apunte al sitio web accesible desde el navegador.
+
+## Perfil propio (INT2-47)
+
+Con una sesión válida, abrir **Mi Perfil** en la navegación o ir a `/perfil`.
+La página consulta `GET /v1/auth/users/me` y permite guardar nombre, apellido y
+teléfono mediante `PATCH /v1/auth/users/me`, usando el access token del cliente
+HTTP. Correo y rol se muestran como solo lectura y nunca se envían en la edición.
+
+Las validaciones siguen el contrato actual: nombre y apellido de hasta 100
+caracteres; teléfono de 6 a 20 caracteres con números, `+`, espacios, paréntesis
+o guiones. Los valores se recortan antes del envío; los campos vacíos se omiten
+para conservar el dato guardado. Se muestran también los errores por campo
+devueltos por el backend.
+
+Después de guardar, el formulario muestra el perfil devuelto por el servidor;
+al recargar la página, vuelve a consultar los datos persistidos. Un fallo de
+guardado conserva el borrador para reintentar. Si el servidor responde `401`,
+se limpia la sesión y la ruta protegida redirige al login.
+
+## Recuperación de contraseña (INT2-68)
+
+Desde **¿Olvidaste tu contraseña?** en `/login` se abre `/recuperar-contrasena`
+con el correo ingresado. El formulario solicita el enlace mediante
+`POST /v1/auth/password/recovery` y muestra carga, aceptación y errores, incluido
+el límite de solicitudes. La confirmación es la misma exista o no la cuenta.
+
+El correo abre `/restablecer-contrasena?token=...`. La página pide una nueva
+contraseña de al menos 8 caracteres y su confirmación; envía `{ token,
+nuevaPassword }` a `POST /v1/auth/password/reset`. Con la respuesta `204` muestra
+el éxito y el acceso al login. Los tokens inválidos, expirados o consumidos ofrecen
+solicitar otro enlace; los errores de conexión o del servicio permiten reintentar.
+Sin token no se envía ninguna petición de reset. Ambas operaciones son públicas
+y omiten el JWT local para permitir recuperar el acceso con una sesión vencida.
+
+La URL del correo se configura **en notification-service**, mediante
+`RESET_PASSWORD_URL`. Docker Compose y `.env.example` ya usan
+`http://localhost:3000/restablecer-contrasena`; para otro despliegue, usar el origen
+web público seguido de `/restablecer-contrasena` y reiniciar notification-service.
+La variable no es `VITE_*`. Se conserva el respaldo `mobile://restaurar-contrasena`
+del servicio cuando se ejecuta fuera de Compose sin configurar la variable.
+
+Para comprobar el flujo con Mailpit y una cuenta verificada:
+
+1. Iniciar Docker Compose y abrir `/login`; solicitar la recuperación.
+2. Abrir el mensaje en `http://localhost:8025` y seguir el enlace en el navegador.
+3. Guardar una contraseña nueva y comprobar que permite iniciar sesión; la anterior
+   debe ser rechazada.
+4. Volver a abrir el enlace utilizado e intentar otro reset: debe mostrar que ya
+   no es válido y ofrecer solicitar uno nuevo.
+5. Para comprobar expiración, usar un enlace de más de una hora o uno reemplazado
+   por una solicitud posterior. Abrir `/restablecer-contrasena` sin parámetros
+   también debe ofrecer un enlace nuevo.
+
+Las pruebas web cubren navegación, cuerpos y headers reales de las peticiones,
+validación, envíos duplicados y estados de carga, éxito, token inválido y errores.
+`PasswordRecoveryControllerTest` en auth-service ya comprueba el cambio de contraseña,
+el login con la nueva clave y el rechazo de tokens consumidos o expirados.
 
 ## Scripts
 
 ```bash
 npm run dev        # servidor de desarrollo
 npm run typecheck  # revisión de tipos
-npm test           # pruebas del cliente HTTP y del catálogo
+npm test           # pruebas web: HTTP, catálogo, autenticación, perfil y recuperación
 npm run build      # revisión de tipos y compilación de producción en dist/
 npm run preview    # vista local de la compilación
 ```
@@ -115,7 +194,7 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 ## Estructura
 
-- `src/pages/`: páginas asociadas a rutas; inicialmente `/` y `/catalogo`.
+- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena` y `/restablecer-contrasena`.
 - `src/components/`: componentes reutilizables.
 - `src/services/`: cliente HTTP común para acceder al API Gateway.
 - `src/hooks/`: hooks reutilizables.
@@ -123,4 +202,4 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 - `src/config/`: lectura centralizada de configuración pública.
 - `src/App.tsx`: definición de rutas. El layout y la navegación visual corresponden a INT2-42.
 
-Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`.
+Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.

@@ -2,6 +2,7 @@ package cl.cloudcoffee.notification_service.messaging;
 
 import cl.cloudcoffee.notification_service.email.EmailService;
 import cl.cloudcoffee.notification_service.history.NotificationHistoryService;
+import cl.cloudcoffee.notification_service.websocket.NotificationWebSocketPublisher;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ public class NotificationEventConsumer {
 
     private final NotificationHistoryService historyService;
     private final EmailService emailService;
+    private final NotificationWebSocketPublisher webSocketPublisher;
 
     @Value("${app.frontend.url:http://localhost:8081}")
     private String frontendUrl;
@@ -28,10 +30,12 @@ public class NotificationEventConsumer {
 
     public NotificationEventConsumer(
             NotificationHistoryService historyService,
-            EmailService emailService
+            EmailService emailService,
+            NotificationWebSocketPublisher webSocketPublisher
     ) {
         this.historyService = historyService;
         this.emailService = emailService;
+        this.webSocketPublisher = webSocketPublisher;
     }
 
     @Transactional
@@ -56,6 +60,15 @@ public class NotificationEventConsumer {
                     break;
                 case "auth.recuperacion.solicitud-password.v1":
                     procesarRecuperacionPassword(event);
+                    historyService.registerSuccess(event);
+                    break;
+                case "order.compra.creada.v1":
+                case "order.compra.estado-cambiado.v1":
+                case "order.pago.resultado.v1":
+                case "order.orden.estado-cambiado.v1":
+                case "order.orden.entregada.v1":
+                case "catalog.stock.actualizado.v1":
+                    webSocketPublisher.publish(event);
                     historyService.registerSuccess(event);
                     break;
                 default:

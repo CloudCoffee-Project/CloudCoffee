@@ -62,8 +62,7 @@ export function esEstadoOrdenNoRetirado(estado: EstadoOrden): boolean {
 }
 
 // Mismo enum EstadoCompra del contrato: toda compra nace en
-// 'revision_requerida' o 'pendiente_pago' (no existe 'reservando' como estado
-// de negocio estable).
+// 'revision_requerida' o 'pendiente_pago' (ver backend/order-service/model/EstadoCompra).
 export type EstadoCompra = 'revision_requerida' | 'pendiente_pago' | 'pagado' | 'cancelado';
 
 // Estados en los que el cliente todavía puede actuar sobre su compra (INT4-37):
@@ -235,6 +234,30 @@ export interface Producto {
   offers?: Oferta[];
 }
 
+// Estado de una oferta en el inventario de la cafetería (OfferStatus del
+// catalog-service). Es el enum que devuelve GET
+// /v1/catalog/cafeterias/{cafeteriaId}/ofertas; la app no inventa otros.
+export type EstadoOferta = 'AVAILABLE' | 'OUT_OF_STOCK';
+
+// Ítem del inventario del cajero (INT4-100). El endpoint de personal devuelve
+// todas las ofertas de su cafetería, incluidas las agotadas, ordenadas por
+// nombre de producto. No trae categoría (vive en el producto, no en la oferta)
+// ni el nombre de la cafetería: la pantalla no los inventa.
+export interface InventarioItem {
+  ofertaId: string;
+  productoId: string;
+  productoNombre: string;
+  precio: number;
+  stock: number;
+  estado: EstadoOferta;
+}
+
+// Una oferta está agotada si el backend la marcó así o si no quedan unidades.
+// Las dos condiciones importan: el seed tiene ofertas AVAILABLE con stock 0.
+export function esOfertaAgotada(item: Pick<InventarioItem, 'estado' | 'stock'>): boolean {
+  return item.estado === 'OUT_OF_STOCK' || item.stock <= 0;
+}
+
 export interface OrdenItem {
   ordenItemId: string;
   productoNombre: string;
@@ -247,10 +270,39 @@ export interface Orden {
   codigoOrden: string;
   cafeteriaId: string;
   cafeteriaNombre: string;
+  // El contrato de órdenes (GET /v1/orders) NO trae el nombre del cliente, así
+  // que es opcional y la pantalla lo oculta cuando falta: no se inventa.
   clienteNombre?: string;
   estado: EstadoOrden;
   montoTotal: number;
   items: OrdenItem[];
+}
+
+// Envoltura paginada del contrato de órdenes (PaginaOrdenes de
+// backend/docs/compra-pago-retiro.openapi.json). GET /v1/orders devuelve esta
+// página, no un arreglo plano, ordenada por creadoAt DESC e id DESC.
+export interface PaginaOrdenes {
+  content: Orden[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
+// Envoltura paginada del contrato de compras (PaginaComprasResponse de
+// order-service). GET /v1/compras devuelve esta página, no un arreglo plano.
+export interface PaginaCompras {
+  content: Compra[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
 }
 
 // Eventos STOMP de tiempo real (contrato a fijar con el backend cuando

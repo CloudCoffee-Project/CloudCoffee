@@ -85,15 +85,11 @@ export async function leerSesion(): Promise<SesionGuardada | null> {
 /** Elimina el par de tokens de SecureStore (nunca lanza: la limpieza no debe
  *  romper el arranque ni el cierre de sesión). */
 export async function eliminarSesion(): Promise<void> {
-  const claves = [
-    ACCESS_TOKEN_KEY,
-    REFRESH_TOKEN_KEY,
-    ACCESS_TOKEN_KEY_VIEJO,
-    REFRESH_TOKEN_KEY_VIEJO,
-  ];
+  const claves = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY];
+  const clavesViejas = [ACCESS_TOKEN_KEY_VIEJO, REFRESH_TOKEN_KEY_VIEJO];
 
   if (Platform.OS === 'web') {
-    claves.forEach((clave) => eliminarEnWeb(clave));
+    [...claves, ...clavesViejas].forEach((clave) => eliminarEnWeb(clave));
     return;
   }
 
@@ -107,4 +103,14 @@ export async function eliminarSesion(): Promise<void> {
       }
     })
   );
+
+  // Las claves viejas con "@" no son válidas para SecureStore en nativo;
+  // solo intentar limpiarlas en web o ignorarlas silenciosamente.
+  clavesViejas.forEach((clave) => {
+    try {
+      void SecureStore.deleteItemAsync(clave).catch(() => undefined);
+    } catch {
+      // Ignorar: claves con "@" no son válidas para SecureStore
+    }
+  });
 }

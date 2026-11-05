@@ -6,9 +6,10 @@ import {
   fetchPedidosEntrantes,
   marcarOrdenEntregada,
   ORDENES_ENDPOINT,
+  ORDENES_TAMANO_PAGINA,
   resolverOrdenNoRetirada,
 } from './ordenes';
-import type { Orden } from '../types/domain';
+import type { Orden, PaginaOrdenes } from '../types/domain';
 
 jest.mock('./httpClient', () => ({
   httpClient: { get: jest.fn(), post: jest.fn() },
@@ -37,30 +38,90 @@ const ordenesMock: Orden[] = [
   },
 ];
 
+// Arma una PaginaOrdenes como la del contrato. Permite probar la navegación
+// entre páginas sin repetir todos los campos de la envoltura.
+function pagina(content: Orden[], overrides: Partial<PaginaOrdenes> = {}): PaginaOrdenes {
+  return {
+    content,
+    number: 0,
+    size: ORDENES_TAMANO_PAGINA,
+    totalElements: content.length,
+    totalPages: 1,
+    first: true,
+    last: true,
+    empty: content.length === 0,
+    ...overrides,
+  };
+}
+
 describe('fetchPedidosEntrantes', () => {
   afterEach(() => {
     mockedGet.mockReset();
   });
 
-  it('consulta el endpoint de órdenes del gateway con el token real', async () => {
-    mockedGet.mockResolvedValue({ data: ordenesMock });
+  it('consulta la primera página del contrato con el token real y devuelve el content', async () => {
+    mockedGet.mockResolvedValue({ data: pagina(ordenesMock) });
 
     const resultado = await fetchPedidosEntrantes('token-real');
 
     expect(mockedGet).toHaveBeenCalledWith(ORDENES_ENDPOINT, {
+      params: { page: 0, size: ORDENES_TAMANO_PAGINA },
       headers: { Authorization: 'Bearer token-real' },
     });
     expect(resultado).toEqual(ordenesMock);
   });
 
+  it('recorre todas las páginas hasta `last` y concatena sus órdenes', async () => {
+    const segunda = { ...ordenesMock[0], ordenId: 'o-2', codigoOrden: 'CC-9802' };
+    mockedGet
+      .mockResolvedValueOnce({
+        data: pagina([ordenesMock[0]], { totalPages: 2, last: false }),
+      })
+      .mockResolvedValueOnce({
+        data: pagina([segunda], {
+          number: 1,
+          totalPages: 2,
+          totalElements: 2,
+          first: false,
+        }),
+      });
+
+    const resultado = await fetchPedidosEntrantes('token-real');
+
+    expect(resultado).toEqual([ordenesMock[0], segunda]);
+    expect(mockedGet).toHaveBeenNthCalledWith(1, ORDENES_ENDPOINT, {
+      params: { page: 0, size: ORDENES_TAMANO_PAGINA },
+      headers: { Authorization: 'Bearer token-real' },
+    });
+    expect(mockedGet).toHaveBeenNthCalledWith(2, ORDENES_ENDPOINT, {
+      params: { page: 1, size: ORDENES_TAMANO_PAGINA },
+      headers: { Authorization: 'Bearer token-real' },
+    });
+  });
+
+  it('se detiene en una página vacía aunque `last` no venga marcado', async () => {
+    mockedGet.mockResolvedValue({ data: pagina([], { last: false }) });
+
+    const resultado = await fetchPedidosEntrantes('token-real');
+
+    expect(resultado).toEqual([]);
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
+
   it('no inventa estados: la lista tipada usa el union EstadoOrden', async () => {
-    mockedGet.mockResolvedValue({ data: ordenesMock });
+    mockedGet.mockResolvedValue({ data: pagina(ordenesMock) });
 
     const resultado = await fetchPedidosEntrantes('token-real');
 
     expect(resultado[0].estado).toMatch(
-      /^(reservando|pagado|listo_para_retiro|no_retirado_pendiente_revision|entregado|no_retirado_final|cancelado)$/
+      /^(revision_requerida|pendiente_pago|pagado|listo_para_retiro|entregado|no_retirado_pendiente_revision|no_retirado_final|cancelado)$/
     );
+  });
+
+  it('propaga el error si la ruta de órdenes no está disponible', async () => {
+    mockedGet.mockRejectedValue(new Error('Request failed with status code 404'));
+
+    await expect(fetchPedidosEntrantes('token-real')).rejects.toThrow('404');
   });
 });
 
@@ -93,7 +154,13 @@ describe('confirmarOrden y cancelarOrden', () => {
 
     const resultado = await confirmarOrden('o-1');
 
-    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/confirmar`);
+    expect(mockedPost).toHaveBeenCalledWith(
+      `${ORDENES_ENDPOINT}/o-1/confirmar`,
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual(confirmada);
   });
 
@@ -103,7 +170,13 @@ describe('confirmarOrden y cancelarOrden', () => {
 
     const resultado = await cancelarOrden('o-1');
 
-    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/cancelar`);
+    expect(mockedPost).toHaveBeenCalledWith(
+      `${ORDENES_ENDPOINT}/o-1/cancelar`,
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual(cancelada);
   });
 

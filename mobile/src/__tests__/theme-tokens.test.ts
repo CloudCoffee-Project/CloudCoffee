@@ -37,6 +37,43 @@ describe('colores (INT4-104)', () => {
   });
 });
 
+// INT4-109 — Contraste del flujo de ingreso. Calcula la razón WCAG 2.x entre
+// dos colores #RRGGBB para que los ajustes de accesibilidad no se pierdan en
+// futuros cambios de la paleta.
+function luminancia(color: string): number {
+  const canales = (color.replace('#', '').match(/.{2}/g) ?? [])
+    .map((canal) => parseInt(canal, 16) / 255)
+    .map((canal) => (canal <= 0.03928 ? canal / 12.92 : Math.pow((canal + 0.055) / 1.055, 2.4)));
+  return 0.2126 * canales[0] + 0.7152 * canales[1] + 0.0722 * canales[2];
+}
+
+function contraste(a: string, b: string): number {
+  const [claro, oscuro] = [luminancia(a), luminancia(b)].sort((x, y) => y - x);
+  return (claro + 0.05) / (oscuro + 0.05);
+}
+
+describe('contraste del flujo de ingreso (INT4-109)', () => {
+  it.each([
+    ['texto secundario sobre fondo de acceso', colores.textoSecundario, colores.fondoAuth],
+    ['placeholder sobre la superficie del input', colores.placeholder, colores.superficie],
+    ['enlace de acceso sobre fondo de acceso', colores.marcaEnlace, colores.fondoAuth],
+    ['error de acceso sobre fondo de acceso', colores.errorAcceso, colores.fondoAuth],
+    ['texto de error sobre su caja', colores.errorTexto, colores.errorFondo],
+    ['tinta sobre fondo de acceso', colores.tinta, colores.fondoAuth],
+    ['crema sobre tinta', colores.crema, colores.tinta],
+  ])('%s cumple 4.5:1', (_nombre, frente, fondo) => {
+    expect(contraste(frente, fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    ['borde de control sobre fondo de acceso', colores.bordeControl, colores.fondoAuth],
+    ['borde de control sobre superficie', colores.bordeControl, colores.superficie],
+    ['marca sobre fondo de acceso (títulos grandes)', colores.marca, colores.fondoAuth],
+  ])('%s cumple 3:1', (_nombre, frente, fondo) => {
+    expect(contraste(frente, fondo)).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('espaciado (INT4-104)', () => {
   it('todos los pasos son enteros positivos', () => {
     for (const [nombre, valor] of Object.entries(espaciado)) {
@@ -73,6 +110,10 @@ describe('tamanos (INT4-107)', () => {
       expect(valor).toBeGreaterThan(0);
     }
     expect(new Set(valores).size).toBe(valores.length);
+  });
+
+  it('el área táctil mínima alcanza los 44 px de WCAG 2.5.5 (INT4-109)', () => {
+    expect(tamanos.areaTactil).toBeGreaterThanOrEqual(44);
   });
 });
 
@@ -150,13 +191,29 @@ describe('grosores (INT4-106)', () => {
 
 describe('estados (INT4-106)', () => {
   it('todas las opacidades están estrictamente entre 0 y 1 y no se repiten', () => {
-    const valores = Object.values(estados);
+    const valores = Object.entries(estados)
+      .filter(([nombre]) => nombre !== 'escalaPresionado')
+      .map(([, valor]) => valor);
 
     for (const valor of valores) {
       expect(valor).toBeGreaterThan(0);
       expect(valor).toBeLessThan(1);
     }
     expect(new Set(valores).size).toBe(valores.length);
+  });
+});
+
+describe('feedback de pulsado (INT4-111)', () => {
+  it('define una opacidad y una escala de pulsado válidas', () => {
+    expect(estados.presionado).toBeGreaterThan(0);
+    expect(estados.presionado).toBeLessThan(1);
+    expect(estados.escalaPresionado).toBeGreaterThan(0);
+    expect(estados.escalaPresionado).toBeLessThan(1);
+  });
+
+  it('la escala es sutil: reduce el tamaño sin hacer desaparecer el control', () => {
+    expect(estados.escalaPresionado).toBeGreaterThanOrEqual(0.95);
+    expect(estados.escalaPresionado).toBeLessThanOrEqual(0.99);
   });
 });
 

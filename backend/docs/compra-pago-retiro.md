@@ -12,12 +12,24 @@ retiro. `catalog-service` es dueño de ofertas, precios y reservas de stock.
 Auth determina identidad, rol y asignación del personal a cafeterías; Notification
 consume eventos para correo y WebSocket. Cada servicio conserva su propia base.
 
-Esta entrega define el contrato; **no publica endpoints nuevos**. En `main`,
-Order solo tiene infraestructura y la migración inicial. Gateway todavía no
-enruta compras/órdenes ni admite `Idempotency-Key` en CORS. Las implementaciones
-corresponden a INT2-51/52/53/54/55/64/65/71–81/98. Swagger de Sprint 1 sigue
-documentando únicamente Auth y Catálogo; el JSON adjunto puede importarse en un
-visor OpenAPI sin iniciar servicios.
+El contrato distingue definición e implementación. INT2-52 completa el modelo
+persistente de compras, órdenes e ítems mediante V4, conservando las migraciones
+y pagos de INT2-53/76. Gateway ya enruta compras/órdenes y admite `Idempotency-Key`
+en CORS (INT2-55/98). Order expone la simulación y consulta de pago; las APIs de
+retiro y la aplicación integrada del pago siguen
+en sus issues de implementación. INT2-73 incorpora confirmación/cancelación solo
+para compras sin pago iniciado; la cancelación con pago pendiente queda para
+INT2-77. Ver [Revisión de compras](revision-compras.md).
+INT2-71 incorpora la creación idempotente con
+reservas y compensación durable; ver [Creación de compras](creacion-compras.md).
+INT2-72 incorpora historial y detalle de compras
+y detalle de órdenes para el CLIENTE propietario. INT2-78 agrega el listado paginado
+del CAJERO y la búsqueda exacta por `codigoOrden`, limitados a su asignación en Auth.
+El detalle individual conserva por ahora el acceso del comprador.
+Ejemplos y errores en [Consultas del comprador](consultas-compras.md) y
+[Listado y búsqueda del cajero](../README.md#listado-y-búsqueda-de-pedidos-del-cajero-int2-78).
+Swagger de Sprint 1 documenta Auth y Catálogo;
+el JSON adjunto es el contrato objetivo, no evidencia de endpoints ejecutables.
 
 El único método de entrega es retiro en cafetería. El pago es una simulación
 interna a Order: no pide tarjeta, no crea un `payment-service`, no devuelve
@@ -160,6 +172,7 @@ solo consulta. Las respuestas con datos de compra, pago y QR usan `Cache-Control
 | `POST /v1/compras/{compraId}/pago` | Propietario CLIENTE | `201 Pago` con `{escenario: aprobar\|rechazar\|pendiente}`. |
 | `GET /v1/compras/{compraId}/pago` | Propietario CLIENTE | `200 Pago`; `404` si aún no se inició. |
 | `GET /v1/orders?page=0&size=20&estado=listo_para_retiro` | CAJERO asignado | `200 PaginaOrdenes`, solo cafetería asignada; filtro de estado opcional. |
+| `GET /v1/orders?codigoOrden=CC-000001` | CAJERO asignado | `200 PaginaOrdenes`, búsqueda exacta por código legible en su cafetería; código ajeno o inexistente devuelve página vacía. |
 | `GET /v1/orders/{ordenId}` | Propietario CLIENTE o CAJERO asignado | `200 Orden`. |
 | `POST /v1/orders/{ordenId}/listo` | CAJERO asignado | `200 Orden`, habilita retiro. Sin cuerpo. |
 | `GET /v1/orders/{ordenId}/qr` | Propietario CLIENTE o CAJERO asignado | `200 QrRetiro` solo con pago aprobado y orden lista. |
@@ -171,6 +184,11 @@ Páginas: `page >= 0`, `1 <= size <= 100`, predeterminado 20. Forma:
 rango devuelve contenido vacío; sin resultados `totalPages: 0`, `first/last: true`.
 Compras y órdenes se ordenan por `creadoAt DESC, id DESC`.
 No hay parámetro público `clienteId` ni `cafeteriaId` para ampliar acceso.
+
+Compatibilidad de lectura: las compras anteriores a V4 y los seeds mínimos de
+pagos no guardaron órdenes ni ítems. Se devuelven con `ordenes: []`, conservando
+importe y pago históricos; no se reconstruyen snapshots desde el catálogo actual.
+Las compras nuevas del flujo completo mantienen al menos una orden.
 
 Order valida propiedad y asignación en servidor, además del rol JWT. No confía en
 claims de cafetería ni campos de UI: la asignación persistida de INT2-65 se obtiene

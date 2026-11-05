@@ -13,7 +13,8 @@
 // responde con problem+json.
 
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable, estiloPresionado } from '../../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -66,14 +67,14 @@ export default function DetalleOrdenScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
-        <Pressable
+        <Presionable
           onPress={() => router.back()}
           hitSlop={12}
           style={styles.backButton}
           testID="volver-boleta"
         >
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
         <Text style={styles.headerTitle}>Boleta de la Orden</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -125,11 +126,8 @@ export default function DetalleOrdenScreen() {
               </View>
             ) : null}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.downloadButton,
-                (pressed || descargando) && styles.buttonPressed,
-              ]}
+            <Presionable
+              style={[styles.downloadButton, descargando && estiloPresionado]}
               onPress={() => void descargarBoletaPdf()}
               disabled={descargando}
               testID="descargar-boleta"
@@ -142,7 +140,7 @@ export default function DetalleOrdenScreen() {
               ) : (
                 <Text style={styles.downloadButtonText}>⬇ Descargar Boleta (PDF)</Text>
               )}
-            </Pressable>
+            </Presionable>
           </>
         )}
       </ScrollView>
@@ -299,10 +297,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
   },
   downloadButtonText: {
     color: '#FFFFFF',

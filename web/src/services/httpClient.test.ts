@@ -59,6 +59,39 @@ describe('cliente HTTP del API Gateway', () => {
     expect(headers.get('Authorization')).toBe('Bearer token-de-sesion');
   });
 
+  it('omite el access token almacenado cuando la consulta es pública', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue('token-de-sesion'),
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
+    await createHttpClient('http://localhost:18080', fetcher)
+      .request('/v1/catalog/productos', { omitAccessToken: true });
+
+    const headers = new Headers(fetcher.mock.calls[0][1]?.headers);
+    expect(headers.has('Authorization')).toBe(false);
+  });
+
+  it.each(['/v1/auth/verificacion', '/v1/auth/verificacion/reenviar'])(
+    'no adjunta la sesión a la ruta pública %s',
+    async (path) => {
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn().mockReturnValue('token-de-sesion'),
+      });
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(null, { status: 202 }),
+      );
+
+      await createHttpClient('http://localhost:18080', fetcher)
+        .request(path, { method: 'POST', body: '{}' });
+
+      const headers = new Headers(fetcher.mock.calls[0][1]?.headers);
+      expect(headers.has('Authorization')).toBe(false);
+    },
+  );
+
   it.each(['', '/v1', '/auth/login', 'https://otro.example/v1/auth/login',
     '//otro.example/v1/auth/login', '/v1/../internal', '/v1/%2e%2e/internal',
     '/v1/auth/login#fragmento'])('rechaza la ruta %s antes de enviar', async (path) => {
@@ -83,6 +116,8 @@ describe('cliente HTTP del API Gateway', () => {
         status: 400,
         detail: 'Revisa el formulario.',
         instance: '/v1/auth/login',
+        code: 'PRECIO_CAMBIO',
+        compra: { compraId: 'purchase-1', montoTotal: 5200 },
         errors: [{ field: 'email', message: 'Debe ser válido.' }],
       }), {
         status: 400,
@@ -99,6 +134,8 @@ describe('cliente HTTP del API Gateway', () => {
         title: 'Datos inválidos',
         detail: 'Revisa el formulario.',
         instance: '/v1/auth/login',
+        code: 'PRECIO_CAMBIO',
+        extensions: { compra: { compraId: 'purchase-1', montoTotal: 5200 } },
         errors: [{ field: 'email', message: 'Debe ser válido.' }],
       });
   });
@@ -143,5 +180,159 @@ describe('cliente HTTP del API Gateway', () => {
 
     await expect(createHttpClient('http://localhost:18080', fetcher)
       .request('/v1/auth/login')).resolves.toBeUndefined();
+  });
+  it('rota el refresh token al recibir 401 y reintenta la solicitud con el nuevo access token', async () => {
+    const storage = new Map<string, string>([
+      ['accessToken', 'jwt-vencido'],
+      ['refreshToken', 'refresh-inicial'],
+    ]);
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key);
+      }),
+    });
+
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            accessToken: 'jwt-nuevo',
+            refreshToken: 'refresh-rotado',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+    const client = createHttpClient('http://localhost:18080', fetcher);
+    const result = await client.request<{ ok: boolean }>('/v1/orders/mis-compras');
+
+    expect(result).toEqual({ ok: true });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls[1][0].toString()).toBe('http://localhost:18080/v1/auth/refresh');
+    expect(fetcher.mock.calls[1][1]?.body).toBe(JSON.stringify({ refreshToken: 'refresh-inicial' }));
+
+    const retryHeaders = new Headers(fetcher.mock.calls[2][1]?.headers);
+    expect(retryHeaders.get('Authorization')).toBe('Bearer jwt-nuevo');
+    expect(storage.get('accessToken')).toBe('jwt-nuevo');
+    expect(storage.get('refreshToken')).toBe('refresh-rotado');
+  });
+
+  it('evita refresh paralelo y no reutiliza el refresh token rotado en peticiones concurrentes', async () => {
+    const storage = new Map<string, string>([
+      ['accessToken', 'jwt-vencido'],
+      ['refreshToken', 'refresh-unico'],
+    ]);
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key);
+      }),
+    });
+
+    const fetcher = vi.fn<typeof fetch>((input, init) => {
+      const url = input.toString();
+      const auth = new Headers(init?.headers).get('Authorization');
+
+      if (url.endsWith('/v1/auth/refresh')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              accessToken: 'jwt-renovado',
+              refreshToken: 'refresh-nuevo',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
+
+      if (auth === 'Bearer jwt-vencido') {
+        return Promise.resolve(new Response(null, { status: 401 }));
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ url, auth }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+
+    const client = createHttpClient('http://localhost:18080', fetcher);
+    const [res1, res2] = await Promise.all([
+      client.request<{ auth: string }>('/v1/orders/mis-compras'),
+      client.request<{ auth: string }>('/v1/users/me'),
+    ]);
+
+    expect(res1.auth).toBe('Bearer jwt-renovado');
+    expect(res2.auth).toBe('Bearer jwt-renovado');
+
+    const refreshCalls = fetcher.mock.calls.filter(([url]) =>
+      url.toString().endsWith('/v1/auth/refresh'),
+    );
+    expect(refreshCalls).toHaveLength(1);
+    expect(storage.get('refreshToken')).toBe('refresh-nuevo');
+  });
+
+  it('limpia la sesión cuando el refresh token es inválido o expiró', async () => {
+    const storage = new Map<string, string>([
+      ['accessToken', 'jwt-vencido'],
+      ['refreshToken', 'refresh-invalido'],
+    ]);
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key);
+      }),
+    });
+
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: '/problems/jwt-invalido',
+            title: 'No autorizado',
+            status: 401,
+            detail: 'El token expiró.',
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: '/problems/refresh-token-invalido',
+            title: 'Refresh token inválido',
+            status: 401,
+            detail: 'El refresh token es inválido, expiró o ya fue utilizado.',
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      );
+
+    const client = createHttpClient('http://localhost:18080', fetcher);
+
+    await expect(client.request('/v1/orders/mis-compras')).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(storage.has('accessToken')).toBe(false);
+    expect(storage.has('refreshToken')).toBe(false);
   });
 });

@@ -28,7 +28,8 @@
 // medidas salen de src/theme/tokens.ts (INT4-107).
 
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCarrito } from '../../context/CarritoContext';
@@ -64,13 +65,13 @@ export default function CarritoScreen() {
         showsVerticalScrollIndicator={false}
         testID="carrito-scroll"
       >
-        <Pressable
-          style={({ pressed }) => [styles.botonVolver, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.botonVolver}
           onPress={() => router.back()}
           testID="carrito-volver"
         >
           <Text style={styles.botonVolverTexto}>← Volver al menú</Text>
-        </Pressable>
+        </Presionable>
 
         <View style={styles.header}>
           <Text style={styles.badge}>MI PEDIDO</Text>
@@ -87,13 +88,13 @@ export default function CarritoScreen() {
             <Text style={styles.vacioTexto}>
               Agrega cafés y snacks desde el catálogo para iniciar tu compra.
             </Text>
-            <Pressable
-              style={({ pressed }) => [styles.btnExplorar, pressed && styles.btnPresionado]}
+            <Presionable
+              style={styles.btnExplorar}
               onPress={() => router.push('/(cliente)')}
               testID="carrito-ir-catalogo"
             >
               <Text style={styles.btnExplorarTexto}>Explorar Catálogo</Text>
-            </Pressable>
+            </Presionable>
           </View>
         ) : (
           <>
@@ -151,29 +152,22 @@ export default function CarritoScreen() {
 
                           <View style={styles.itemControles}>
                             <View style={styles.stepper}>
-                              <Pressable
-                                style={({ pressed }) => [
-                                  styles.stepperBoton,
-                                  pressed && styles.btnPresionado,
-                                ]}
+                              <Presionable
+                                style={styles.stepperBoton}
                                 onPress={() => cambiarCantidad(linea.ofertaId, linea.cantidad - 1)}
                                 testID={`carrito-item-menos-${linea.ofertaId}`}
                               >
                                 <Text style={styles.stepperBotonTexto}>−</Text>
-                              </Pressable>
+                              </Presionable>
                               <Text style={styles.stepperValor}>{linea.cantidad}</Text>
-                              <Pressable
-                                style={({ pressed }) => [
-                                  styles.stepperBoton,
-                                  alTope && styles.stepperBotonApagado,
-                                  pressed && !alTope && styles.btnPresionado,
-                                ]}
+                              <Presionable
+                                style={[styles.stepperBoton, alTope && styles.stepperBotonApagado]}
                                 onPress={() => cambiarCantidad(linea.ofertaId, linea.cantidad + 1)}
                                 disabled={alTope}
                                 testID={`carrito-item-mas-${linea.ofertaId}`}
                               >
                                 <Text style={styles.stepperBotonTexto}>+</Text>
-                              </Pressable>
+                              </Presionable>
                             </View>
 
                             <Text
@@ -183,16 +177,13 @@ export default function CarritoScreen() {
                               {formatearPrecio(linea.precioUnitario * linea.cantidad)}
                             </Text>
 
-                            <Pressable
-                              style={({ pressed }) => [
-                                styles.btnQuitar,
-                                pressed && styles.btnPresionado,
-                              ]}
+                            <Presionable
+                              style={styles.btnQuitar}
                               onPress={() => quitar(linea.ofertaId)}
                               testID={`carrito-item-quitar-${linea.ofertaId}`}
                             >
                               <Text style={styles.btnQuitarTexto}>🗑️</Text>
-                            </Pressable>
+                            </Presionable>
                           </View>
                         </View>
                       );
@@ -249,15 +240,11 @@ export default function CarritoScreen() {
                 </Text>
               </View>
 
-              <Pressable
-                style={({ pressed }) => [styles.btnPagar, pressed && styles.btnPresionado]}
-                onPress={handlePagar}
-                testID="carrito-pagar"
-              >
+              <Presionable style={styles.btnPagar} onPress={handlePagar} testID="carrito-pagar">
                 <Text style={styles.btnPagarTexto}>
                   {`Pagar con Mercado Pago ${formatearPrecio(total)}`}
                 </Text>
-              </Pressable>
+              </Presionable>
             </View>
           </>
         )}
@@ -603,8 +590,5 @@ const styles = StyleSheet.create({
     color: tokens.colores.superficie,
     fontSize: tokens.tipografia.tamano.boton,
     fontWeight: tokens.tipografia.peso.extranegrita,
-  },
-  btnPresionado: {
-    opacity: tokens.estados.presionado,
   },
 });

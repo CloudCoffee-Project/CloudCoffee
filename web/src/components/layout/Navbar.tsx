@@ -1,6 +1,32 @@
-import { NavLink, Link } from 'react-router';
+import { useEffect, useState } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router';
+import { useAuth } from '../../hooks/useAuth';
+import { CART_UPDATED_EVENT, readCartItems } from '../../services/catalog';
 
 export function Navbar() {
+  const { isLoggedIn, role, logout } = useAuth();
+  const navigate = useNavigate();
+  const [cartQuantity, setCartQuantity] = useState(() => (
+    readCartItems().reduce((total, item) => total + item.quantity, 0)
+  ));
+
+  useEffect(() => {
+    const refreshCartQuantity = () => {
+      setCartQuantity(readCartItems().reduce((total, item) => total + item.quantity, 0));
+    };
+    window.addEventListener(CART_UPDATED_EVENT, refreshCartQuantity);
+    window.addEventListener('storage', refreshCartQuantity);
+    return () => {
+      window.removeEventListener(CART_UPDATED_EVENT, refreshCartQuantity);
+      window.removeEventListener('storage', refreshCartQuantity);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <nav className="navbar">
       {/* Logo de la aplicación con ícono SVG */}
@@ -20,14 +46,58 @@ export function Navbar() {
         </NavLink>
       </div>
 
-      {/* Botones de acción derecha (según Mockup) */}
+      <div className="navbar-links">
+        <NavLink
+          to="/catalogo"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+        >
+          Catálogo
+        </NavLink>
+        <NavLink
+          to="/carrito"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+          aria-label={`Carrito, ${cartQuantity} ${cartQuantity === 1 ? 'producto' : 'productos'}`}
+        >
+          Carrito ({cartQuantity})
+        </NavLink>
+      </div>
+
+      {/* Botones de acción derecha según sesión y rol */}
       <div className="navbar-actions">
-        <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
-          Registrarse
-        </Link>
-        <Link to="/login" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-          Iniciar Sesión
-        </Link>
+        {isLoggedIn ? (
+          <>
+            {role === 'CAJERO' && (
+              <Link to="/cajero" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+                Panel Cajero
+              </Link>
+            )}
+            {role === 'CLIENTE' && (
+              <Link to="/compras" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+                Mis Compras
+              </Link>
+            )}
+            <Link to="/perfil" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+              Mi Perfil
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="btn-primary"
+              style={{ cursor: 'pointer', border: 'none' }}
+            >
+              Cerrar Sesión
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+              Registrarse
+            </Link>
+            <Link to="/login" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Iniciar Sesión
+            </Link>
+          </>
+        )}
       </div>
     </nav>
   );

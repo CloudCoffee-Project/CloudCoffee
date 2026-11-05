@@ -1,0 +1,124 @@
+.verification-page {
+  width: min(100%, 440px);
+  margin: 0 auto;
+  padding: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(42 31 29 / 7%);
+}
+
+.verification-page h1,
+.verification-page h2 {
+  text-align: center;
+}
+
+.verification-page h1 {
+  margin-bottom: 0.5rem;
+}
+
+.verification-intro,
+.verification-hint {
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.verification-intro {
+  margin-bottom: 1.5rem;
+}
+
+.verification-message {
+  text-align: center;
+}
+
+.verification-message h2 {
+  margin-bottom: 0.5rem;
+}
+
+.verification-message p {
+  color: var(--color-text-muted);
+}
+
+.verification-message--success {
+  padding: 1rem 0;
+}
+
+.verification-action {
+  display: inline-block;
+  margin-top: 1.5rem;
+}
+
+.verification-alert,
+.verification-feedback {
+  margin: 1rem 0;
+  padding: 0.875rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.verification-alert,
+.verification-feedback--error {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.verification-resend {
+  margin-top: 1.5rem;
+}
+
+.verification-hint {
+  margin-bottom: 1rem;
+}
+
+.verification-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.verification-form label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.verification-form input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-main);
+  font: inherit;
+}
+
+.verification-form input:focus-visible,
+.verification-form button:focus-visible,
+.verification-action:focus-visible {
+  outline: 3px solid rgb(209 141 88 / 45%);
+  outline-offset: 2px;
+}
+
+.verification-form button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.verification-feedback {
+  line-height: 1.5;
+}
+
+.verification-feedback--success {
+  border-color: #bbf7d0;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.verification-feedback--error {
+  margin-bottom: 0;
+}
+
+@media (max-width: 480px) {
+  .verification-page {
+    padding: 1.5rem 1.25rem;
+  }
+}

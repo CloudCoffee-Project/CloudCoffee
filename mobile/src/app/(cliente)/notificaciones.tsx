@@ -14,11 +14,13 @@
 // FCM, INT4-41), útil durante el desarrollo.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EstadoLista } from '../../components/EstadoLista';
 import {
   listarNotificaciones,
   marcarLeida,
@@ -45,14 +47,24 @@ export default function NotificacionesScreen() {
   const router = useRouter();
   // null = aún cargando (el historial se lee del almacén local)
   const [historial, setHistorial] = useState<NotificacionHistorial[] | null>(null);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [permiso, setPermiso] = useState<string>(
     Notifications ? 'Comprobando…' : 'No disponible (Expo Go)'
   );
 
   const recargar = useCallback(async (): Promise<void> => {
-    const lista = await listarNotificaciones();
-    setHistorial(lista);
+    try {
+      const lista = await listarNotificaciones();
+      setHistorial(lista);
+      setErrorCarga(null);
+    } catch {
+      // El servicio tolera un almacén vacío o corrupto, pero si aun así falla
+      // (por ejemplo, sin acceso al almacenamiento) la lista no queda en blanco:
+      // muestra el estado de error con reintento.
+      setHistorial(null);
+      setErrorCarga('No pudimos leer tus notificaciones. Inténtalo de nuevo.');
+    }
   }, []);
 
   // Se recarga al ganar foco: los avisos recibidos en segundo plano o desde
@@ -127,35 +139,52 @@ export default function NotificacionesScreen() {
           disponibles). Quedan guardados aquí aunque la app esté en segundo plano o cerrada.
         </Text>
 
-        {historial === null ? (
+        {errorCarga !== null ? (
+          <EstadoLista
+            variante="error"
+            icono="🔔"
+            titulo="No pudimos cargar tus notificaciones"
+            mensaje={errorCarga}
+            accion={{
+              etiqueta: 'Reintentar',
+              onPress: () => void recargar(),
+              testID: 'bandeja-reintentar',
+            }}
+            testID="bandeja-error"
+          />
+        ) : historial === null ? (
           <View style={styles.tarjetaCentrada} testID="bandeja-cargando">
             <Text style={styles.ayuda}>Cargando notificaciones…</Text>
           </View>
         ) : historial.length === 0 ? (
-          <View style={styles.tarjetaCentrada} testID="bandeja-vacia">
-            <Text style={styles.vacioTitulo}>Aún no hay notificaciones</Text>
-            <Text style={styles.ayuda}>
-              Cuando llegue un aviso de un pedido, un pago, un retiro o del estado de un producto
-              (agotado/disponible), aparecerá aquí.
-            </Text>
-          </View>
+          <EstadoLista
+            icono="🔔"
+            titulo="Aún no hay notificaciones"
+            mensaje="Cuando llegue un aviso de un pedido, un pago, un retiro o del estado de un producto (agotado/disponible), aparecerá aquí."
+            accion={{
+              etiqueta: 'Actualizar',
+              onPress: () => void recargar(),
+              testID: 'bandeja-vacia-accion',
+            }}
+            testID="bandeja-vacia"
+          />
         ) : (
           <View style={styles.lista} testID="lista-notificaciones">
             <View style={styles.acciones}>
-              <TouchableOpacity
+              <Presionable
                 style={styles.botonAccion}
                 onPress={marcarTodas}
                 testID="marcar-todas-leidas"
               >
                 <Text style={styles.botonAccionTexto}>✓ Marcar todas leídas</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.botonAccion} onPress={vaciar} testID="vaciar-bandeja">
+              </Presionable>
+              <Presionable style={styles.botonAccion} onPress={vaciar} testID="vaciar-bandeja">
                 <Text style={styles.botonAccionTexto}>Vaciar</Text>
-              </TouchableOpacity>
+              </Presionable>
             </View>
 
             {historial.map((notificacion) => (
-              <Pressable
+              <Presionable
                 key={notificacion.id}
                 onPress={() => abrirNotificacion(notificacion)}
                 style={[styles.item, notificacion.leida ? styles.itemLeida : null]}
@@ -177,7 +206,7 @@ export default function NotificacionesScreen() {
                     {formatearTiempoRelativo(notificacion.fechaIso)}
                   </Text>
                 </View>
-              </Pressable>
+              </Presionable>
             ))}
           </View>
         )}
@@ -227,7 +256,6 @@ const styles = StyleSheet.create({
     borderColor: '#E2E9F4',
     gap: 6,
   },
-  vacioTitulo: { fontSize: 15, fontWeight: '700', color: '#0B2545' },
   ayuda: { fontSize: 13, color: '#5A6985', lineHeight: 18 },
   lista: { gap: 10 },
   acciones: { flexDirection: 'row', gap: 8 },

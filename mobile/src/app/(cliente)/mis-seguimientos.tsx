@@ -12,15 +12,8 @@
 // problem+json, con botón de reintento ante fallos del listado.
 
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -106,13 +99,13 @@ export default function MisSeguimientosScreen() {
           <View style={styles.tarjetaEstado} testID="seguimientos-error">
             <Text style={styles.estadoTitulo}>No se pudieron cargar tus seguimientos</Text>
             <Text style={styles.ayuda}>{errorCarga}</Text>
-            <TouchableOpacity
+            <Presionable
               style={styles.botonReintentar}
               onPress={reintentar}
               testID="reintentar-seguimientos"
             >
               <Text style={styles.botonReintentarTexto}>Reintentar</Text>
-            </TouchableOpacity>
+            </Presionable>
           </View>
         ) : seguimientos === null ? (
           <View style={styles.tarjetaEstado} testID="seguimientos-cargando">
@@ -146,7 +139,7 @@ export default function MisSeguimientosScreen() {
                   </Text>
                   <Text style={styles.itemTipo}>{distintivoSeguimiento(seguimiento)}</Text>
                 </View>
-                <TouchableOpacity
+                <Presionable
                   style={[
                     styles.botonEliminar,
                     eliminandoId === seguimiento.id ? styles.botonDeshabilitado : null,
@@ -158,7 +151,7 @@ export default function MisSeguimientosScreen() {
                   <Text style={styles.botonEliminarTexto}>
                     {eliminandoId === seguimiento.id ? 'Eliminando…' : 'Dejar de seguir'}
                   </Text>
-                </TouchableOpacity>
+                </Presionable>
               </View>
             ))}
           </View>
