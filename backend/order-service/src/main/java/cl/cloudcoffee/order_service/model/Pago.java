@@ -40,6 +40,10 @@ public class Pago {
     @Column(length = 30)
     private MotivoPago motivo;
 
+    // Traza de la operación original: un reintento la conserva en sus eventos.
+    @Column(name = "trace_id", length = 32)
+    private String traceId;
+
     // Bloqueo optimista: dos resultados concurrentes no pueden sobrescribirse.
     @Version
     @Column(nullable = false)
@@ -91,6 +95,11 @@ public class Pago {
         this.motivo = Objects.requireNonNull(motivo, "El motivo del pago es obligatorio");
     }
 
+    public void registrarTrace(String traceId) {
+        this.traceId = traceId;
+    }
+
+    public String getTraceId() { return traceId; }
     public UUID getId() { return id; }
     public MotivoPago getMotivo() { return motivo; }
     public Compra getCompra() { return compra; }

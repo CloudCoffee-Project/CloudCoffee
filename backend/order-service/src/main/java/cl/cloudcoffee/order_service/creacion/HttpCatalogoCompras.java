@@ -54,6 +54,20 @@ public class HttpCatalogoCompras implements CatalogoCompras {
         if (respuesta == null || !reserva.equals(respuesta.reservationId())
                 || respuesta.status() == null || !Set.of("RELEASED", "EXPIRED").contains(respuesta.status())) throw new NoDisponible();
     }
+    public boolean confirmar(UUID reserva) {
+        Reserva respuesta;
+        try { respuesta = post("/internal/servicios/catalogo/reservas/" + reserva + "/confirmar", null, Reserva.class); }
+        catch (Rechazo rechazo) {
+            if (rechazo.code.equals("TRANSICION_RESERVA_INVALIDA")) return false;
+            throw new NoDisponible();
+        }
+        if (respuesta == null || !reserva.equals(respuesta.reservationId()) || respuesta.status() == null) throw new NoDisponible();
+        return switch (respuesta.status()) {
+            case "CONFIRMED" -> true;
+            case "EXPIRED" -> false;
+            default -> throw new NoDisponible();
+        };
+    }
     private <T> T post(String ruta, Object body, Class<T> tipo) {
         if (token == null || token.length() < 32) throw new NoDisponible();
         try {
@@ -66,7 +80,7 @@ public class HttpCatalogoCompras implements CatalogoCompras {
             if (error.getStatusCode().value() == 409) {
                 try {
                     String code = json.readTree(error.getResponseBodyAsString()).path("code").asString();
-                    if (code != null && Set.of("STOCK_NO_DISPONIBLE", "OFERTA_NO_DISPONIBLE", "RESERVA_VENCIDA").contains(code)) {
+                    if (code != null && Set.of("STOCK_NO_DISPONIBLE", "OFERTA_NO_DISPONIBLE", "RESERVA_VENCIDA", "TRANSICION_RESERVA_INVALIDA").contains(code)) {
                         throw new Rechazo(code);
                     }
                 } catch (tools.jackson.core.JacksonException ignored) { /* respuesta no confiable */ }

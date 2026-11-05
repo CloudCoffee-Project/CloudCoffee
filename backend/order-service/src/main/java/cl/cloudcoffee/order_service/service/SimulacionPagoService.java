@@ -4,18 +4,24 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import cl.cloudcoffee.errors.BusinessException;
 import cl.cloudcoffee.order_service.dto.PagoResponse;
 import cl.cloudcoffee.order_service.model.Compra;
 import cl.cloudcoffee.order_service.model.EscenarioPago;
+import cl.cloudcoffee.order_service.model.EstadoPago;
+import cl.cloudcoffee.order_service.model.MotivoPago;
 import cl.cloudcoffee.order_service.model.Pago;
 import cl.cloudcoffee.order_service.model.RegistroIdempotencia;
 import cl.cloudcoffee.order_service.repository.CompraRepository;
@@ -30,6 +36,10 @@ import tools.jackson.databind.json.JsonMapper;
  * Idempotencia por (usuario, método, ruta, clave): la misma clave con el mismo cuerpo
  * reproduce el código y el cuerpo originales; con otro cuerpo responde
  * IDEMPOTENCY_CONFLICT. Otra clave nunca crea ni resuelve un pago: PAGO_YA_INICIADO.
+ *
+ * INT2-77: el resultado se aplica sobre compra, órdenes y reservas. Aprobar compras con
+ * reservas persiste primero la decisión (pendiente, procesando_stock) y luego llama a
+ * Catalog fuera de la transacción, para no perderla si el proceso cae a mitad de camino.
  */
 @Service
 public class SimulacionPagoService {
@@ -41,22 +51,49 @@ public class SimulacionPagoService {
     private final RegistroIdempotenciaRepository idempotencia;
     private final PagoService pagoService;
     private final JsonMapper jsonMapper;
+    private final ResultadoPagoService resultados;
+    private final JdbcTemplate jdbc;
+    private final Clock clock;
+    private final TransactionTemplate tx;
 
     public SimulacionPagoService(CompraRepository compraRepository, PagoRepository pagoRepository,
-            RegistroIdempotenciaRepository idempotencia, PagoService pagoService, JsonMapper jsonMapper) {
+            RegistroIdempotenciaRepository idempotencia, PagoService pagoService, JsonMapper jsonMapper,
+            ResultadoPagoService resultados, JdbcTemplate jdbc, Clock clock, PlatformTransactionManager manager) {
         this.compraRepository = compraRepository;
         this.pagoRepository = pagoRepository;
         this.idempotencia = idempotencia;
         this.pagoService = pagoService;
         this.jsonMapper = jsonMapper;
+        this.resultados = resultados;
+        this.jdbc = jdbc;
+        this.clock = clock;
+        this.tx = new TransactionTemplate(manager);
     }
 
     /** Respuesta HTTP terminada; {@code replay} indica que reproduce la primera. */
     public record Respuesta(int status, String cuerpo, String location, boolean replay) {
     }
 
-    @Transactional
+    private record Inicio(Respuesta respuesta, UUID pagoPorResolver) {}
+
     public Respuesta simular(UUID usuarioId, UUID compraId, UUID clave, EscenarioPago escenario) {
+        Inicio inicio = tx.execute(status -> iniciar(usuarioId, compraId, clave, escenario));
+        if (escenario == EscenarioPago.RECHAZAR && !inicio.respuesta().replay()) {
+            resultados.liberarPendientes(compraId);
+        }
+        if (inicio.pagoPorResolver() == null || !resultados.resolverAprobacion(inicio.pagoPorResolver())) {
+            return inicio.respuesta();
+        }
+        // El cliente aún no recibe respuesta: la primera, y sus repeticiones, muestran el resultado final.
+        return tx.execute(status -> {
+            String cuerpo = jsonMapper.writeValueAsString(PagoResponse.from(pagoRepository.findById(inicio.pagoPorResolver()).orElseThrow()));
+            jdbc.update("UPDATE idempotencia SET cuerpo=? WHERE usuario_id=? AND metodo=? AND ruta=? AND clave=?",
+                    cuerpo, usuarioId, METODO, ruta(compraId), clave);
+            return new Respuesta(HttpStatus.CREATED.value(), cuerpo, inicio.respuesta().location(), false);
+        });
+    }
+
+    private Inicio iniciar(UUID usuarioId, UUID compraId, UUID clave, EscenarioPago escenario) {
         // El bloqueo de la compra serializa comandos concurrentes, con o sin la misma clave.
         // Se valida el acceso antes de revelar cualquier resultado previo.
         Compra compra = compraDelPropietario(compraRepository.findForUpdate(compraId), usuarioId);
@@ -72,7 +109,7 @@ public class SimulacionPagoService {
                         "La clave ya se usó para esta compra con otro contenido.", "IDEMPOTENCY_CONFLICT");
             }
             RegistroIdempotencia registro = previo.get();
-            return new Respuesta(registro.getStatus(), registro.getCuerpo(), registro.getLocation(), true);
+            return new Inicio(new Respuesta(registro.getStatus(), registro.getCuerpo(), registro.getLocation(), true), null);
         }
 
         // Un pago por compra: otra clave no crea un segundo pago ni resuelve uno pendiente.
@@ -83,16 +120,33 @@ public class SimulacionPagoService {
                     "PAGO_YA_INICIADO");
         }
 
-        // El escenario se resuelve antes de insertar: un solo INSERT, versión 1.
-        Pago pago = pagoService.iniciarPago(compra.getId(), escenario.motivo(), escenario.estado());
+        boolean tieneReservas = resultados.tieneReservas(compra.getId());
+        if (tieneReservas && !clock.instant().isBefore(compra.getReservaExpiraAt())) {
+            throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/reserva-vencida"),
+                    "Reserva vencida", "El plazo de la compra terminó; crea una compra nueva.", "RESERVA_VENCIDA");
+        }
+
+        // Aprobar con reservas exige confirmarlas antes de declarar el pago aprobado.
+        boolean porConfirmar = escenario == EscenarioPago.APROBAR && tieneReservas;
+        String trace = ResultadoPagoService.trace();
+        // Un resultado inmediato se resuelve antes de insertar: un solo INSERT, versión 1.
+        Pago pago = pagoService.iniciarPago(compra.getId(),
+                porConfirmar ? MotivoPago.PROCESANDO_STOCK : escenario.motivo(),
+                porConfirmar ? EstadoPago.PENDIENTE : escenario.estado(), trace);
         // Fija versión y fechas antes de tomar la instantánea de la respuesta.
         pagoRepository.flush();
+        if (pago.getEstado() == EstadoPago.PENDIENTE) {
+            resultados.publicarPago(pago, usuarioId, trace);
+        } else {
+            resultados.aplicarResultado(pago, usuarioId, trace);
+        }
 
         String cuerpo = jsonMapper.writeValueAsString(PagoResponse.from(pago));
         String location = "/v1" + ruta;
         idempotencia.save(new RegistroIdempotencia(usuarioId, METODO, ruta, clave, hash,
                 HttpStatus.CREATED.value(), cuerpo, location));
-        return new Respuesta(HttpStatus.CREATED.value(), cuerpo, location, false);
+        return new Inicio(new Respuesta(HttpStatus.CREATED.value(), cuerpo, location, false),
+                porConfirmar ? pago.getId() : null);
     }
 
     /** Estado actual del pago; sin efectos ni cobros. */

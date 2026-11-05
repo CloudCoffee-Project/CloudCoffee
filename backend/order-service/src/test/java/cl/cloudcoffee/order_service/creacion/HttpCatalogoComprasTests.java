@@ -58,6 +58,22 @@ class HttpCatalogoComprasTests {
         assertThat(tokens).containsOnly(TOKEN);
     }
 
+    @Test void confirmarDistingueReservaConfirmadaVencidaYFalloDeInfraestructura() {
+        response = json.writeValueAsString(new CatalogoCompras.Reserva(reserva, orden, oferta, intento, 2, "CONFIRMED", Instant.now(), vence));
+        assertThat(client.confirmar(reserva)).isTrue();
+        assertThat(paths).contains("/internal/servicios/catalogo/reservas/" + reserva + "/confirmar");
+        response = json.writeValueAsString(new CatalogoCompras.Reserva(reserva, orden, oferta, intento, 2, "EXPIRED", Instant.now(), vence));
+        assertThat(client.confirmar(reserva)).isFalse();
+        response = json.writeValueAsString(new CatalogoCompras.Reserva(reserva, orden, oferta, intento, 2, "RESERVED", Instant.now(), vence));
+        assertThatThrownBy(() -> client.confirmar(reserva)).isInstanceOf(CatalogoCompras.NoDisponible.class);
+        status.set(409); response = "{\"code\":\"TRANSICION_RESERVA_INVALIDA\"}";
+        assertThat(client.confirmar(reserva)).isFalse();
+        response = "{\"code\":\"STOCK_NO_DISPONIBLE\"}";
+        assertThatThrownBy(() -> client.confirmar(reserva)).isInstanceOf(CatalogoCompras.NoDisponible.class);
+        status.set(503);
+        assertThatThrownBy(() -> client.confirmar(reserva)).isInstanceOf(CatalogoCompras.NoDisponible.class);
+    }
+
     @Test void soloUn409ConCodigoConocidoEsRechazoDeNegocio() {
         for (int httpStatus : List.of(401, 403, 404, 500, 503)) {
             status.set(httpStatus); response = "{\"code\":\"STOCK_NO_DISPONIBLE\"}";

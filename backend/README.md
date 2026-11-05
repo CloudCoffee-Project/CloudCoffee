@@ -310,14 +310,14 @@ cualquier otro campo (tarjeta, importe, estado) o valor responde `400`. Requiere
 
 | Escenario | `estado` | `motivo` |
 |---|---|---|
-| `aprobar` | `aprobado` | `aprobacion_simulada` |
+| `aprobar` | `aprobado` (o `pendiente` si Catalog no responde) | `aprobacion_simulada` (o `procesando_stock`) |
 | `rechazar` | `rechazado` | `rechazo_simulado` |
 | `pendiente` | `pendiente` | `escenario_pendiente` |
 
 `Pago`: `pagoId, compraId, estado, motivo, montoTotal` (CLP entero)`, moneda: CLP,
-simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`. El escenario
-se aplica antes de insertar el pago, así que la respuesta de creación trae
-`version: 1` en los tres escenarios.
+simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`. Un resultado
+inmediato se aplica antes de insertar el pago, con `version: 1`. Aprobar una compra
+con reservas guarda primero la decisión, así que su resultado final trae `version: 2`.
 
 - **Solo el CLIENTE propietario:** el dueño se toma del `sub` del JWT. Una compra
   ajena o inexistente responde `404`; otro rol, `403 ROL_NO_PERMITIDO`.
@@ -329,6 +329,36 @@ se aplica antes de insertar el pago, así que la respuesta de creación trae
   pendiente; responde `409 PAGO_YA_INICIADO` y el pago no cambia. Un pendiente solo
   termina al vencer su reserva (INT2-77). Reintentar tras un rechazo exige otra compra.
 - Los errores de dominio llevan las extensiones `code` y `traceId` del contrato.
+
+### Resultado del pago sobre órdenes y reservas (INT2-77)
+
+| Resultado | Pago | Compra y órdenes activas | Reservas |
+|---|---|---|---|
+| Aprobación | `aprobado` | `pagado`, con `retiroHasta` a 2 horas | Confirmadas antes de declarar la aprobación |
+| Rechazo | `rechazado` | `cancelado`, compra con total 0 | Liberadas, con reintentos durables |
+| Pendiente | `pendiente` | Sin cambios | Se conservan hasta `reservaExpiraAt` (15 minutos desde la creación) |
+| Vencimiento | `rechazado`, motivo `reserva_vencida` | `cancelado`, compra con total 0 | Liberadas |
+
+- **Aprobación durable:** el pago se guarda `pendiente` con motivo `procesando_stock`
+  antes de llamar a Catalog. Si Catalog no responde, el comando devuelve ese `201` y
+  `RecuperacionPagos` lo reanuda, también tras un reinicio.
+- **Eventos:** `order.pago.resultado.v1`, `order.compra.estado-cambiado.v1` y
+  `order.orden.estado-cambiado.v1` se guardan en `order_outbox` en la transacción del
+  cambio, con `eventId` propio y el `traceId` de la operación original. El pago emite
+  un evento al quedar pendiente y otro al resolverse. El vencimiento abre su propia traza.
+- **Plazo:** pagar una compra con reservas vencidas responde `409 RESERVA_VENCIDA`.
+  Las compras mínimas sin órdenes no tienen reservas, así que no vencen.
+- **Configuración:** `cloudcoffee.pagos.scan-ms` (2000 por defecto) y
+  `cloudcoffee.pagos.recovery-enabled`.
+
+**Limitación conocida:** Catalog aún no ofrece la confirmación atómica por lote del
+contrato de INT2-50, por lo que Order confirma las reservas de a una. Si el plazo se
+cumple a mitad del recorrido, el pago se rechaza pero las reservas ya confirmadas no se
+pueden liberar: Order lo registra como error para revisión manual. Las reservas comparten
+vencimiento, así que el caso se limita a ese instante. Cerrarlo requiere el lote en Catalog.
+
+`PagoService.registrarResultado` no tiene llamadores en producción y solo cambia el pago;
+los flujos reales pasan por `ResultadoPagoService`.
 
 Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
 compras de prueba para las cuentas de INT2-65:
