@@ -445,6 +445,14 @@ class RevisionCompraIntegrationTests extends JwtTestSupport {
             if (perderReserva.getAndSet(false)) throw new NoDisponible();
             return reserva;
         }
+        public synchronized boolean confirmar(UUID id) {
+            for (var entry : reservas.entrySet()) {
+                Reserva r = entry.getValue();
+                if (r.reservationId().equals(id) && r.status().equals("RESERVED"))
+                    entry.setValue(new Reserva(id, r.orderId(), r.offerId(), r.attemptId(), r.quantity(), "CONFIRMED", r.reservedAt(), r.expiresAt()));
+            }
+            return true;
+        }
         public synchronized void liberar(UUID id) {
             for (var entry : reservas.entrySet()) {
                 Reserva r = entry.getValue();

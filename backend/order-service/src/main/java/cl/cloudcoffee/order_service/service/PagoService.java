@@ -58,6 +58,12 @@ public class PagoService {
      */
     @Transactional
     public Pago iniciarPago(UUID compraId, MotivoPago motivo, EstadoPago resultado) {
+        return iniciarPago(compraId, motivo, resultado, null);
+    }
+
+    /** Igual que el anterior, guardando la traza que heredarán sus eventos y reintentos. */
+    @Transactional
+    public Pago iniciarPago(UUID compraId, MotivoPago motivo, EstadoPago resultado, String trace) {
         Compra compra = compraRepository.findForUpdate(compraId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND,
                         URI.create("/problems/compra-no-encontrada"), "Compra no encontrada",
@@ -77,6 +83,7 @@ public class PagoService {
         if (motivo != null) {
             pago.registrarMotivo(motivo);
         }
+        pago.registrarTrace(trace);
         if (resultado != null && resultado != EstadoPago.PENDIENTE) {
             pago.aplicarResultado(resultado, null);
         }

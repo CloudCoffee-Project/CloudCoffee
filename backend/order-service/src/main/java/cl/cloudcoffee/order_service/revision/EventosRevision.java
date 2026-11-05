@@ -2,6 +2,7 @@ package cl.cloudcoffee.order_service.revision;
 
 import cl.cloudcoffee.order_service.dto.CompraResponse;
 import cl.cloudcoffee.order_service.dto.OrdenResponse;
+import cl.cloudcoffee.order_service.dto.PagoResponse;
 import static cl.cloudcoffee.order_service.persistence.JdbcInstants.utc;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -18,7 +19,7 @@ public class EventosRevision {
     private final JsonMapper json;
     public EventosRevision(JdbcTemplate jdbc, JsonMapper json) { this.jdbc = jdbc; this.json = json; }
 
-    void orden(OrdenResponse anterior, OrdenResponse actual, UUID cliente, String trace, Instant ahora) {
+    public void orden(OrdenResponse anterior, OrdenResponse actual, UUID cliente, String trace, Instant ahora) {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("compraId", actual.compraId()); payload.put("ordenId", actual.ordenId());
         payload.put("clienteId", cliente); payload.put("cafeteriaId", actual.cafeteriaId());
@@ -26,7 +27,16 @@ public class EventosRevision {
         payload.put("version", actual.version());
         guardar("order.orden.estado-cambiado.v1", payload, trace, ahora);
     }
-    void compra(CompraResponse anterior, CompraResponse actual, String trace, Instant ahora) {
+    public void pago(PagoResponse pago, UUID cliente, String trace, Instant ahora) {
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("pagoId", pago.pagoId()); payload.put("compraId", pago.compraId());
+        payload.put("clienteId", cliente); payload.put("estado", pago.estado());
+        payload.put("motivo", pago.motivo()); payload.put("montoTotal", pago.montoTotal());
+        payload.put("moneda", pago.moneda()); payload.put("simulado", pago.simulado());
+        payload.put("version", pago.version());
+        guardar("order.pago.resultado.v1", payload, trace, ahora);
+    }
+    public void compra(CompraResponse anterior, CompraResponse actual, String trace, Instant ahora) {
         guardar("order.compra.estado-cambiado.v1", Map.of("compraId", actual.compraId(), "clienteId", actual.clienteId(),
                 "estadoAnterior", anterior.estado(), "estado", actual.estado(), "montoTotal", actual.montoTotal(),
                 "moneda", actual.moneda(), "version", actual.version()), trace, ahora);

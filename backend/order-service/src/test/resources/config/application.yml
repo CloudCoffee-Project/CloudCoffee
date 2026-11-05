@@ -1,0 +1,5 @@
+# Solo para pruebas: Spring Boot carga este archivo además de classpath:/application.yml.
+# El job de pagos cambiaría datos de otras pruebas; ResultadoPagoIntegrationTests lo activa e invoca a mano.
+cloudcoffee:
+  pagos:
+    recovery-enabled: false

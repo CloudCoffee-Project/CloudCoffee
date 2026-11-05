@@ -14,6 +14,8 @@ public interface CatalogoCompras {
     List<Oferta> cotizar(List<UUID> ofertas);
     Reserva reservar(UUID ordenId, UUID ofertaId, int cantidad, UUID intento, Instant vence, BigDecimal precio);
     void liberar(UUID reservaId);
+    /** true si queda confirmada, también al repetir; false si venció o ya se liberó. */
+    boolean confirmar(UUID reservaId);
 
     /** Solo estos fallos de negocio tienen significado conocido para Order. */
     class Rechazo extends RuntimeException {
