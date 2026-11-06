@@ -44,3 +44,45 @@ Las variables obligatorias se agrupan así:
 
 Los valores de `.env.example` son exclusivamente locales. En otros entornos deben
 usarse credenciales y llaves propias, y los perfiles no deben incluir `dev`.
+
+## 2. Arranque desde un checkout limpio
+
+```bash
+git clone https://github.com/CloudCoffee-Project/CloudCoffee.git
+cd CloudCoffee
+./scripts/setup-dev-environment.sh
+docker compose up --build -d
+docker compose ps
+```
+
+Esperar hasta que los servicios necesarios aparezcan como `healthy`. Luego ejecutar
+la comprobación HTTP reproducible:
+
+```bash
+./scripts/smoke-compose.sh --check-only
+```
+
+También puede construirse, arrancarse y verificarse todo en un solo paso:
+
+```bash
+./scripts/smoke-compose.sh
+```
+
+Accesos predeterminados:
+
+| Componente | URL |
+| --- | --- |
+| Web | <http://localhost:3000> |
+| API Gateway | <http://localhost:18080> |
+| Mailpit | <http://localhost:8025> |
+| RabbitMQ Management | <http://localhost:15672> |
+| Zipkin | <http://localhost:9411> |
+
+Los clientes deben usar Gateway y no los puertos internos de los microservicios.
+Una verificación manual mínima es:
+
+```bash
+curl --fail http://localhost:18080/actuator/health
+curl --fail http://localhost:18080/v1/catalog/campus
+curl --fail http://localhost:3000/
+```
