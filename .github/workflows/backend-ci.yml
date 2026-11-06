@@ -149,6 +149,16 @@ jobs:
           cache-dependency-path: |
             backend/pom.xml
             backend/*/pom.xml
+      - name: Create isolated integration databases
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -e PGPASSWORD=cloudcoffee_test "$POSTGRES_CONTAINER" \
+            psql -h 127.0.0.1 -U cloudcoffee -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE cloudcoffee_catalog_integration'
+          docker exec -e PGPASSWORD=cloudcoffee_test "$POSTGRES_CONTAINER" \
+            psql -h 127.0.0.1 -U cloudcoffee -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE cloudcoffee_order_integration'
       - name: Test auth publisher with RabbitMQ
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl auth-service -am clean verify
       - name: Test notification consumer with RabbitMQ and PostgreSQL
@@ -157,7 +167,17 @@ jobs:
           SPRING_DATASOURCE_USERNAME: cloudcoffee
           SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl notification-service -am clean verify
-      - name: Test order creation outbox with RabbitMQ
+      - name: Test catalog stock events with RabbitMQ and PostgreSQL
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_catalog_integration
+          SPRING_DATASOURCE_USERNAME: cloudcoffee
+          SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl catalog-service -am clean verify
+      - name: Test order creation outbox with RabbitMQ and PostgreSQL
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_order_integration
+          SPRING_DATASOURCE_USERNAME: cloudcoffee
+          SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl order-service -am clean verify
 
   docker:
