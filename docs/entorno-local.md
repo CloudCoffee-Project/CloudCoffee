@@ -86,3 +86,71 @@ curl --fail http://localhost:18080/actuator/health
 curl --fail http://localhost:18080/v1/catalog/campus
 curl --fail http://localhost:3000/
 ```
+
+## 3. Reinicio y recuperación segura
+
+Aplicar la alternativa menos destructiva que resuelva el problema:
+
+### Reiniciar un proceso
+
+```bash
+docker compose restart catalog-service
+docker compose ps catalog-service
+docker compose logs --tail=100 catalog-service
+```
+
+### Recrear un contenedor tras cambiar `.env`
+
+```bash
+docker compose up -d --force-recreate catalog-service
+```
+
+### Reconstruir después de cambiar código o dependencias
+
+```bash
+docker compose up --build -d catalog-service
+```
+
+Si cambió `web/package.json` o `web/package-lock.json`:
+
+```bash
+docker compose build web
+docker compose run --rm --no-deps web npm ci
+docker compose up -d web
+```
+
+### Detener conservando datos
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+### Recuperar una base de desarrollo incompatible
+
+Primero revisar la migración que falla:
+
+```bash
+docker compose logs --tail=200 catalog-service
+```
+
+Solo cuando sea aceptable perder **todas** las bases, mensajes y correos locales:
+
+```bash
+docker compose down --volumes
+docker compose up --build -d
+```
+
+`--volumes` es destructivo y no es necesario para cambios normales de código.
+Nunca debe ejecutarse contra un entorno compartido.
+
+### Fallos frecuentes
+
+| Síntoma | Diagnóstico | Recuperación |
+| --- | --- | --- |
+| Puerto ocupado | `docker compose ps` y `ss -ltnp` | Cambiar el puerto publicado en `.env` y recrear el servicio |
+| Variable vacía | `docker compose config` | Agregar únicamente la variable faltante desde `.env.example` |
+| Servicio `unhealthy` | `docker compose logs --tail=200 SERVICIO` | Resolver la dependencia y recrear solo ese servicio |
+| JWT no inicia | Revisar logs y archivos de `secrets/` | Ejecutar `setup-dev-environment.sh` sin reemplazar llaves válidas |
+| Web sin dependencias | Logs de `web` | Reinstalar el volumen de npm con los comandos anteriores |
+| Migración Flyway falla | Logs del microservicio y nombre de migración | Corregir la migración; reiniciar volúmenes solo si los datos son descartables |
