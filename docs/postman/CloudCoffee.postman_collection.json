@@ -1,0 +1,119 @@
+{
+  "info": {
+    "_postman_id": "ec7827c6-e24c-43c3-a214-9103e73c3fc7",
+    "name": "CloudCoffee - Auth y Catálogo",
+    "description": "INT2-37: ejecutar en orden. Los scripts guardan tokens e identificadores en el environment activo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Autenticación",
+      "item": [
+        {
+          "name": "Registrar cliente",
+          "request": {
+            "auth": { "type": "noauth" }, "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-Trace-Id", "value": "postman-{{$guid}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"nombre\": \"Cliente\",\n  \"apellido\": \"Postman\",\n  \"telefono\": \"+56 9 1234 5678\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/register",
+            "description": "Crea una cuenta CLIENTE. El token de correo se consulta en Mailpit."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Registro creado', () => pm.response.to.have.status(201));", "if (pm.response.code === 201) pm.environment.set('userId', pm.response.json().id);"] } }]
+        },
+        {
+          "name": "Reenviar verificación",
+          "request": {
+            "auth": { "type": "noauth" }, "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/verificacion/reenviar",
+            "description": "Opcional. Revoca el token anterior; copia el nuevo desde Mailpit a verificationToken."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Reenvío aceptado', () => pm.response.to.have.status(202));"] } }]
+        },
+        {
+          "name": "Verificar correo",
+          "request": {
+            "auth": { "type": "noauth" }, "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/verificacion"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Correo verificado', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Login y captura de JWT",
+          "request": {
+            "auth": { "type": "noauth" }, "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Login correcto', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) { const body = pm.response.json(); pm.environment.set('accessToken', body.accessToken); pm.environment.set('refreshToken', body.refreshToken); }"] } }]
+        },
+        {
+          "name": "Consultar perfil",
+          "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/v1/auth/users/me" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Perfil disponible', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.environment.set('userId', pm.response.json().id);"] } }]
+        },
+        {
+          "name": "Actualizar perfil",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Cliente actualizado\",\n  \"apellido\": \"Postman\",\n  \"telefono\": \"+56 9 8765 4321\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/users/me"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Perfil actualizado', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Refresh y rotación de tokens",
+          "request": {
+            "auth": { "type": "noauth" }, "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/refresh"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Tokens renovados', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) { const body = pm.response.json(); pm.environment.set('accessToken', body.accessToken); pm.environment.set('refreshToken', body.refreshToken); }"] } }]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/v1/auth/logout", "description": "Ejecutar al final: revoca el refresh token."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Sesión cerrada', () => pm.response.to.have.status(204));", "if (pm.response.code === 204) pm.environment.unset('refreshToken');"] } }]
+        }
+      ]
+    },
+    {
+      "name": "2. Catálogo",
+      "item": [
+        {
+          "name": "Listar campus",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/v1/catalog/campus" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Campus consultados', () => pm.response.to.have.status(200));", "if (pm.response.code === 200 && pm.response.json().length) { const campus = pm.response.json()[0]; pm.environment.set('campusId', campus.id); if (campus.cafeterias?.length) pm.environment.set('cafeteriaId', campus.cafeterias[0].id); }"] } }]
+        },
+        {
+          "name": "Listar categorías",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/v1/catalog/categorias" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Categorías consultadas', () => pm.response.to.have.status(200));", "if (pm.response.code === 200 && pm.response.json().length) pm.environment.set('categoryId', pm.response.json()[0].id);"] } }]
+        },
+        {
+          "name": "Buscar productos",
+          "request": {
+            "auth": { "type": "noauth" }, "method": "GET",
+            "url": { "raw": "{{baseUrl}}/v1/catalog/productos?campusId={{campusId}}&page=0&size=20&sort=name,asc", "host": ["{{baseUrl}}"], "path": ["v1", "catalog", "productos"], "query": [{ "key": "campusId", "value": "{{campusId}}" }, { "key": "categoriaId", "value": "{{categoryId}}", "disabled": true }, { "key": "q", "value": "café", "disabled": true }, { "key": "page", "value": "0" }, { "key": "size", "value": "20" }, { "key": "sort", "value": "name,asc" }] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Productos consultados', () => pm.response.to.have.status(200));", "if (pm.response.code === 200 && pm.response.json().content.length) pm.environment.set('productId', pm.response.json().content[0].id);"] } }]
+        },
+        {
+          "name": "Detalle de producto",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/v1/catalog/productos/{{productId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Detalle consultado', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Comparar ofertas",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/v1/catalog/productos/{{productId}}/ofertas?campusId={{campusId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Ofertas consultadas', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    }
+  ]
+}
