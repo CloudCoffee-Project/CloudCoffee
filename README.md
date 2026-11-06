@@ -260,6 +260,9 @@ Auth/Catálogo desde Gateway y probar operaciones con JWT. Está desactivada por
 Con Docker Compose, Swagger se abre en http://localhost:18080/swagger-ui.html;
 al ejecutar Gateway directamente con su TLS predeterminado, usar HTTPS.
 
+La [colección reproducible de Postman](docs/postman/README.md) permite ejecutar Auth
+y Catálogo, captura los tokens de sesión y encadena los identificadores necesarios.
+
 ## Servicios
 
 | Componente | Acceso desde el computador |
