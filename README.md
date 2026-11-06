@@ -247,6 +247,10 @@ docker compose down --volumes
 
 El último comando elimina las bases de datos locales y debe utilizarse con precaución.
 
+Para reproducir el proyecto desde cero, recuperarlo sin perder datos y correlacionar
+fallos entre servicios, consultar la
+[guía de arranque limpio y recuperación](docs/entorno-local.md).
+
 ## Contrato de API para web y mobile
 
 Para el Sprint 2, consultar el

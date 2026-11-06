@@ -154,3 +154,63 @@ Nunca debe ejecutarse contra un entorno compartido.
 | JWT no inicia | Revisar logs y archivos de `secrets/` | Ejecutar `setup-dev-environment.sh` sin reemplazar llaves válidas |
 | Web sin dependencias | Logs de `web` | Reinstalar el volumen de npm con los comandos anteriores |
 | Migración Flyway falla | Logs del microservicio y nombre de migración | Corregir la migración; reiniciar volúmenes solo si los datos son descartables |
+
+## 4. Diagnóstico por `traceId`
+
+Para reproducir una petición HTTP con un identificador conocido, enviar cabeceras
+B3 válidas. El trace tiene 32 caracteres hexadecimales y el span 16:
+
+```bash
+TRACE_ID=$(openssl rand -hex 16)
+SPAN_ID=$(openssl rand -hex 8)
+curl --fail http://localhost:18080/v1/catalog/campus \
+  -H "X-B3-TraceId: $TRACE_ID" \
+  -H "X-B3-SpanId: $SPAN_ID" \
+  -H 'X-B3-Sampled: 1'
+echo "$TRACE_ID"
+```
+
+Consultar el valor impreso directamente en la API de Zipkin:
+
+```bash
+curl --fail "http://localhost:9411/api/v2/trace/$TRACE_ID"
+```
+
+También puede pegarse en **Trace ID** de <http://localhost:9411> para consultar la
+traza completa. Con muestreo `1.0`, la solicitud anterior debe mostrar spans de
+Gateway y Catalog. Una solicitud exitosa no siempre genera una línea de aplicación;
+si la operación sí registra actividad o falla, los logs también pueden filtrarse:
+
+```bash
+docker compose logs api-gateway catalog-service | grep "$TRACE_ID"
+```
+
+`X-Trace-Id` tiene otro propósito: Auth lo incorpora a eventos de registro,
+verificación y recuperación para correlacionarlos a través de RabbitMQ. No reemplaza
+las cabeceras B3 de trazabilidad HTTP. Para seguir un evento:
+
+```bash
+EVENT_TRACE=demo-correo-001
+curl --fail --request POST http://localhost:18080/v1/auth/password/recovery \
+  --header 'Content-Type: application/json' \
+  --header "X-Trace-Id: $EVENT_TRACE" \
+  --data '{"email":"comprador@cloudcoffee.dev"}'
+docker compose logs auth-service notification-service | grep "$EVENT_TRACE"
+```
+
+Ante un error de dominio, revisar además la propiedad `traceId` de la respuesta
+`application/problem+json` y buscarla de la misma manera.
+
+## 5. Verificación de esta guía
+
+El procedimiento se verificó el 6 de noviembre de 2026 ejecutando:
+
+```bash
+./scripts/setup-dev-environment.sh
+./scripts/smoke-compose.sh --check-only
+```
+
+La preparación conservó el `.env` existente y validó Compose. El smoke confirmó
+healthchecks de infraestructura, cuatro bases, cuatro microservicios, Gateway y web;
+además comprobó salud del Gateway, catálogo público y aplicación web. Finalizó con
+código `0` y `Smoke HTTP completado correctamente`.
