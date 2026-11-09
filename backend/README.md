@@ -55,6 +55,17 @@ se admiten `http://localhost:3000` y `http://127.0.0.1:3000`. La autorización d
 de los eventos de órdenes consumidos por notification-service y queda persistida
 para poder validar suscripciones después de reinicios.
 
+### Reconciliación de eventos tras reconexión WebSocket (INT2-81)
+
+Al recuperar una sesión STOMP en `/v1/notifications/ws`, el cliente vuelve a
+suscribirse a los destinos autorizados y ejecuta la consulta HTTP correspondiente
+(`/v1/compras/{compraId}`, `/v1/orders/{ordenId}` o `/v1/orders`) para recuperar
+transiciones ocurridas durante la desconexión. La combinación se realiza mediante
+el campo monotónico `version`: los eventos con `eventId` ya procesado o `version`
+anterior se descartan sin retroceder el estado, los saltos (`version > actual + 1`)
+disparan una relectura HTTP y `notification-service` deduplica reentregas de
+RabbitMQ por `eventId` preservando el `traceId` original en `notification_history`.
+
 ## Requisitos
 
 - JDK 21
