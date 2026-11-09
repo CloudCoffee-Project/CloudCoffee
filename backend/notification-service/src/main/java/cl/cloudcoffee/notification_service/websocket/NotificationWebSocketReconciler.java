@@ -135,17 +135,14 @@ public class NotificationWebSocketReconciler {
 
         if (incomingVersion > current.version() + 1) {
             ReconciliationOutcome reconciled = reconcileOnReconnect(resourceId, httpSnapshotSupplier);
-            ResourceSnapshot reconciledSnapshot = reconciled.snapshot();
-            if (reconciledSnapshot.lastTraceId() == null) {
-                reconciledSnapshot = new ResourceSnapshot(
-                        reconciledSnapshot.resourceId(),
-                        reconciledSnapshot.status(),
-                        reconciledSnapshot.version(),
-                        event.traceId(),
-                        event.eventId(),
-                        event.eventType());
-                snapshots.put(resourceId, reconciledSnapshot);
-            }
+            ResourceSnapshot reconciledSnapshot = new ResourceSnapshot(
+                    reconciled.snapshot().resourceId(),
+                    reconciled.snapshot().status(),
+                    reconciled.snapshot().version(),
+                    event.traceId(),
+                    event.eventId(),
+                    event.eventType());
+            snapshots.put(resourceId, reconciledSnapshot);
             return new ReconciliationOutcome(Resolution.RECONCILED_VIA_HTTP, reconciledSnapshot);
         }
 

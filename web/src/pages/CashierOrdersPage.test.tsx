@@ -322,4 +322,104 @@ describe('CashierOrdersPage (INT2-62)', () => {
     expect(screen.queryByText('Panel de Cajero')).not.toBeTruthy();
     expect(httpClient.request).not.toHaveBeenCalled();
   });
+
+  it('ignora eventos duplicados con traceId o versiones anteriores y reconcilia por HTTP ante saltos de versión (INT2-81)', async () => {
+    const token = createJwt({
+      sub: 'cajero-1',
+      role: 'CAJERO',
+      cafeteriaId: 'caf-1',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    localStorage.setItem('accessToken', token);
+
+    const reconciledPageV3: CashierOrderPage = {
+      ...sampleOrdersPage,
+      content: [
+        {
+          ...sampleOrdersPage.content[0],
+          estado: 'entregado',
+          entregadoAt: '2026-11-03T18:10:00Z',
+          version: 3,
+        },
+      ],
+    };
+
+    vi.mocked(httpClient.request)
+      .mockResolvedValueOnce(sampleOrdersPage)
+      .mockResolvedValue(reconciledPageV3);
+
+    renderCashierRoute();
+
+    expect(await screen.findByText('ORD-101')).toBeTruthy();
+    const socket = FakeWebSocket.instances[0];
+    act(() => {
+      socket.simulateOpenAndConnected();
+    });
+
+    const initialHttpCalls = vi.mocked(httpClient.request).mock.calls.length;
+
+    // 1. Evento consecutivo (version: 2) con traceId: actualiza en memoria sin requerir salto HTTP
+    const eventV2 = {
+      eventId: 'evt-v2-duplicado',
+      traceId: 'trace-orden-101-v2',
+      eventType: 'order.orden.estado-cambiado.v1',
+      timestamp: '2026-11-03T18:05:00Z',
+      payload: {
+        ordenId: 'ord-1',
+        cafeteriaId: 'caf-1',
+        estadoAnterior: 'pagado',
+        estado: 'listo_para_retiro',
+        version: 2,
+      },
+    };
+
+    act(() => {
+      socket.simulateMessage(eventV2);
+      // Enviar exactamente el mismo evento duplicado con el mismo eventId y traceId
+      socket.simulateMessage(eventV2);
+    });
+
+    expect(
+      await screen.findByText(/Pedido actualizado en tiempo real \(Listo para retiro\)/i),
+    ).toBeTruthy();
+    expect(vi.mocked(httpClient.request).mock.calls.length).toBe(initialHttpCalls);
+
+    // 2. Evento obsoleto (version: 1) llega tarde: debe ser ignorado y mantener 'Listo para retiro'
+    act(() => {
+      socket.simulateMessage({
+        eventId: 'evt-v1-tardio',
+        traceId: 'trace-orden-101-v1',
+        eventType: 'order.orden.estado-cambiado.v1',
+        timestamp: '2026-11-03T18:01:00Z',
+        payload: {
+          ordenId: 'ord-1',
+          cafeteriaId: 'caf-1',
+          estado: 'pendiente_pago',
+          version: 1,
+        },
+      });
+    });
+
+    expect(screen.queryByText('Pendiente de pago', { selector: '.cashier-order-status' })).toBeNull();
+
+    // 3. Salto de versión (version: 4 cuando local es 2) dispara reconciliación HTTP
+    act(() => {
+      socket.simulateMessage({
+        eventId: 'evt-v4-salto',
+        traceId: 'trace-orden-101-v4',
+        eventType: 'order.orden.estado-cambiado.v1',
+        timestamp: '2026-11-03T18:10:00Z',
+        payload: {
+          ordenId: 'ord-1',
+          cafeteriaId: 'caf-1',
+          estado: 'entregado',
+          version: 4,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(httpClient.request).mock.calls.length).toBeGreaterThan(initialHttpCalls);
+    });
+  });
 });
