@@ -44,6 +44,9 @@ export function CashierOrdersPage() {
   const estadoFilterRef = useRef(estadoFilter);
   estadoFilterRef.current = estadoFilter;
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   const triggerHttpReconcile = useCallback((reason?: string) => {
     if (reason) {
       setLastSyncMessage(reason);
@@ -100,7 +103,51 @@ export function CashierOrdersPage() {
     }
 
     const handleRealtimeEvent = (event: OrderRealtimeEvent) => {
-      const { ordenId, estado, entregadoAt } = event.payload;
+      const { ordenId, estado, entregadoAt, version: incomingVersion } = event.payload;
+      const eventTimestamp = event.timestamp || event.occurredAt;
+      const currentState = stateRef.current;
+
+      if (currentState.status !== 'success') {
+        setLastSyncMessage(`Pedido actualizado en tiempo real (${formatOrderStatus(estado)}).`);
+        setReloadToken((prev) => prev + 1);
+        return;
+      }
+
+      const existingIndex = currentState.pageData.content.findIndex(
+        (order) => order.ordenId === ordenId,
+      );
+      if (existingIndex === -1) {
+        // Pedido nuevo descubierto por WebSocket: reconciliar por HTTP
+        setLastSyncMessage(`Pedido actualizado en tiempo real (${formatOrderStatus(estado)}).`);
+        setReloadToken((prev) => prev + 1);
+        return;
+      }
+
+      const existingOrder = currentState.pageData.content[existingIndex];
+      let shouldReconcileByHttp = false;
+
+      if (incomingVersion !== undefined) {
+        if (incomingVersion < existingOrder.version) {
+          return;
+        }
+        if (
+          incomingVersion === existingOrder.version &&
+          event.eventType !== 'order.orden.entregada.v1'
+        ) {
+          return;
+        }
+        if (incomingVersion > existingOrder.version + 1) {
+          shouldReconcileByHttp = true;
+        }
+      } else {
+        shouldReconcileByHttp = true;
+      }
+
+      const currentFilter = estadoFilterRef.current;
+      if (currentFilter && currentFilter !== estado) {
+        shouldReconcileByHttp = true;
+      }
+
       setLastSyncMessage(`Pedido actualizado en tiempo real (${formatOrderStatus(estado)}).`);
 
       setState((prev) => {
@@ -108,14 +155,7 @@ export function CashierOrdersPage() {
           return prev;
         }
 
-        const existingIndex = prev.pageData.content.findIndex((order) => order.ordenId === ordenId);
-        if (existingIndex === -1) {
-          return prev;
-        }
-
-        const currentFilter = estadoFilterRef.current;
         let updatedContent: CashierOrder[];
-
         if (currentFilter && currentFilter !== estado) {
           updatedContent = prev.pageData.content.filter((order) => order.ordenId !== ordenId);
         } else {
@@ -125,7 +165,8 @@ export function CashierOrdersPage() {
                   ...order,
                   estado,
                   entregadoAt: entregadoAt !== undefined ? entregadoAt : order.entregadoAt,
-                  actualizadoAt: event.occurredAt || order.actualizadoAt,
+                  actualizadoAt: eventTimestamp || order.actualizadoAt,
+                  version: incomingVersion ?? order.version,
                 }
               : order,
           );
@@ -141,8 +182,10 @@ export function CashierOrdersPage() {
         };
       });
 
-      // Reconciliar silenciosamente por HTTP para traer pedidos nuevos o mantener paginación exacta
-      setReloadToken((prev) => prev + 1);
+      if (shouldReconcileByHttp) {
+        // Reconciliar silenciosamente por HTTP ante pedidos nuevos, saltos de versión o cambio de filtro
+        setReloadToken((prev) => prev + 1);
+      }
     };
 
     const disconnect = connectCashierOrdersStream({

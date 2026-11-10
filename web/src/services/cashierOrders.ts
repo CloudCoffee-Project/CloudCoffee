@@ -62,15 +62,18 @@ export interface OrderRealtimePayload {
   compraId?: string;
   clienteId?: string;
   cafeteriaId: string;
+  estadoAnterior?: OrderStatus | string | null;
   estado: OrderStatus | string;
   entregadoAt?: string | null;
+  version?: number;
 }
 
 export interface OrderRealtimeEvent {
   eventId: string;
   traceId?: string;
   eventType: string;
-  occurredAt: string;
+  timestamp?: string;
+  occurredAt?: string;
   payload: OrderRealtimePayload;
 }
 
@@ -177,16 +180,52 @@ function parseStompFrames(rawData: string): Array<{ command: string; headers: Re
     });
 }
 
-function isOrderRealtimeEvent(value: unknown): value is OrderRealtimeEvent {
+function normalizeRealtimeEvent(value: unknown): OrderRealtimeEvent | null {
   if (typeof value !== 'object' || value === null) {
-    return false;
+    return null;
   }
   const event = value as Record<string, unknown>;
   if (typeof event.eventType !== 'string' || typeof event.payload !== 'object' || event.payload === null) {
-    return false;
+    return null;
   }
   const payload = event.payload as Record<string, unknown>;
-  return typeof payload.ordenId === 'string' && typeof payload.estado === 'string';
+  if (typeof payload.ordenId !== 'string') {
+    return null;
+  }
+  const resolvedEstado =
+    typeof payload.estado === 'string'
+      ? payload.estado
+      : event.eventType === 'order.orden.entregada.v1'
+        ? 'entregado'
+        : null;
+
+  if (!resolvedEstado) {
+    return null;
+  }
+
+  return {
+    eventId: typeof event.eventId === 'string' ? event.eventId : '',
+    traceId: typeof event.traceId === 'string' ? event.traceId : undefined,
+    eventType: event.eventType,
+    timestamp: typeof event.timestamp === 'string' ? event.timestamp : undefined,
+    occurredAt: typeof event.occurredAt === 'string' ? event.occurredAt : undefined,
+    payload: {
+      ordenId: payload.ordenId,
+      compraId: typeof payload.compraId === 'string' ? payload.compraId : undefined,
+      clienteId: typeof payload.clienteId === 'string' ? payload.clienteId : undefined,
+      cafeteriaId: typeof payload.cafeteriaId === 'string' ? payload.cafeteriaId : '',
+      estadoAnterior:
+        typeof payload.estadoAnterior === 'string' || payload.estadoAnterior === null
+          ? payload.estadoAnterior
+          : undefined,
+      estado: resolvedEstado,
+      entregadoAt:
+        typeof payload.entregadoAt === 'string' || payload.entregadoAt === null
+          ? payload.entregadoAt
+          : undefined,
+      version: typeof payload.version === 'number' ? payload.version : undefined,
+    },
+  };
 }
 
 export function connectCashierOrdersStream(options: CashierOrdersStreamOptions): () => void {
@@ -205,6 +244,7 @@ export function connectCashierOrdersStream(options: CashierOrdersStreamOptions):
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let hasConnectedOnce = false;
   let reconnecting = false;
+  const seenEventIds = new Set<string>();
 
   const updateState = (state: StreamConnectionState) => {
     if (!disposed) {
@@ -290,8 +330,15 @@ export function connectCashierOrdersStream(options: CashierOrdersStreamOptions):
         } else if (frame.command === 'MESSAGE' && frame.body) {
           try {
             const parsed: unknown = JSON.parse(frame.body);
-            if (isOrderRealtimeEvent(parsed)) {
-              onEvent(parsed);
+            const normalized = normalizeRealtimeEvent(parsed);
+            if (normalized) {
+              if (normalized.eventId) {
+                if (seenEventIds.has(normalized.eventId)) {
+                  continue;
+                }
+                seenEventIds.add(normalized.eventId);
+              }
+              onEvent(normalized);
             }
           } catch {
             // Ignorar frames con JSON malformado
