@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import {
   addOfferToCart,
+  applyStockEventToOffers,
+  clearCartItems,
+  connectCatalogStockStream,
   getCampus,
   getProductById,
   getProductOffers,
+  reconcileCartWithOffers,
+  reconcileCartWithStock,
   type Campus,
   type ProductDetail,
   type ProductOffer,
 } from '../services/catalog';
-import { ApiRequestError } from '../services/httpClient';
+import { AUTH_SESSION_EVENT, ApiRequestError } from '../services/httpClient';
+import { decodeSessionToken } from '../utils/jwt';
 import './CatalogPage.css';
 
 type ProductLoadState =
@@ -48,6 +54,13 @@ export function ProductDetailPage() {
   const [cartFeedback, setCartFeedback] = useState<string>('');
   const [productRetry, setProductRetry] = useState(0);
   const [offersRetry, setOffersRetry] = useState(0);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(
+    () => decodeSessionToken(localStorage.getItem('accessToken') ?? '')?.userId ?? null,
+  );
+  const previousUserIdRef = useRef<string | null>(sessionUserId);
+  const offerVersionsRef = useRef<Map<string, number>>(new Map());
+  const offersStateRef = useRef<OffersLoadState>(offersState);
+  offersStateRef.current = offersState;
 
   useEffect(() => {
     const trimmedId = id.trim();
@@ -116,6 +129,12 @@ export function ProductDetailPage() {
       try {
         const offers = await getProductOffers(product.id, selectedCampusId, controller.signal);
         if (controller.signal.aborted) return;
+        for (const offer of offers) {
+          if (typeof offer.version === 'number') {
+            offerVersionsRef.current.set(offer.id, offer.version);
+          }
+        }
+        reconcileCartWithOffers(offers);
         setOffersState({ status: 'success', offers });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -127,10 +146,95 @@ export function ProductDetailPage() {
         });
       }
     }
-
     void loadOffers();
     return () => controller.abort();
   }, [productState, selectedCampusId, offersRetry]);
+
+  useEffect(() => {
+    offerVersionsRef.current.clear();
+  }, [selectedCampusId, id]);
+
+  useEffect(() => {
+    const syncSession = () => {
+      const token = localStorage.getItem('accessToken');
+      const nextUserId = token ? (decodeSessionToken(token)?.userId ?? null) : null;
+      if (previousUserIdRef.current && previousUserIdRef.current !== nextUserId) {
+        clearCartItems();
+        setQuantities({});
+        setCartFeedback('');
+      }
+      previousUserIdRef.current = nextUserId;
+      setSessionUserId(nextUserId);
+    };
+
+    window.addEventListener(AUTH_SESSION_EVENT, syncSession);
+    window.addEventListener('storage', syncSession);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, syncSession);
+      window.removeEventListener('storage', syncSession);
+    };
+  }, []);
+
+  const offerCafeteriaIdsKey =
+    offersState.status === 'success'
+      ? [...new Set(offersState.offers.map((offer) => offer.cafeteriaId))].sort().join(',')
+      : '';
+
+  useEffect(() => {
+    if (!sessionUserId || !selectedCampusId || !offerCafeteriaIdsKey) {
+      return;
+    }
+
+    const cafeteriaIds = offerCafeteriaIdsKey.split(',').filter(Boolean);
+    return connectCatalogStockStream({
+      cafeteriaIds,
+      onStockEvent: (event) => {
+        if (event.payload.campusId && event.payload.campusId !== selectedCampusId) {
+          return;
+        }
+
+        reconcileCartWithStock(
+          event.payload.ofertaId,
+          event.payload.stockActual,
+          event.payload.version,
+        );
+
+        const currentOffersState = offersStateRef.current;
+        if (currentOffersState.status === 'success') {
+          const result = applyStockEventToOffers(
+            currentOffersState.offers,
+            event,
+            offerVersionsRef.current,
+          );
+          if (result.requiresHttpReconciliation) {
+            setOffersRetry((retry) => retry + 1);
+            return;
+          }
+          if (result.applied) {
+            const nextState: OffersLoadState = { status: 'success', offers: result.offers };
+            offersStateRef.current = nextState;
+            setOffersState(nextState);
+          }
+        }
+
+        setQuantities((current) => {
+          const currentQty = current[event.payload.ofertaId];
+          if (currentQty === undefined) return current;
+          const nextStock = Math.max(0, Math.floor(event.payload.stockActual));
+          if (nextStock <= 0) {
+            return { ...current, [event.payload.ofertaId]: 1 };
+          }
+          if (currentQty > nextStock) {
+            return { ...current, [event.payload.ofertaId]: nextStock };
+          }
+          return current;
+        });
+      },
+      onReconnect: () => {
+        setOffersRetry((retry) => retry + 1);
+      },
+    });
+  }, [sessionUserId, selectedCampusId, offerCafeteriaIdsKey]);
 
   function handleCampusChange(campusId: string) {
     setSelectedCampusId(campusId);

@@ -1,24 +1,30 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   CART_UPDATED_EVENT,
   CART_STORAGE_KEY,
+  connectCatalogStockStream,
   readCartItems,
+  reconcileCartWithStock,
   type CartItem,
 } from '../services/catalog';
-import { ApiRequestError } from '../services/httpClient';
+import { AUTH_SESSION_EVENT, ApiRequestError } from '../services/httpClient';
 import {
   cancelPurchase,
   clearPendingPurchaseCreation,
   clearPurchaseActionKey,
   clearSavedPurchase,
   confirmPurchase,
+  connectPurchaseRealtimeStream,
   createPurchase,
+  getPurchase,
   getPurchaseActionKey,
   isPurchase,
   newIdempotencyKey,
   readPendingPurchaseCreation,
   readSavedPurchase,
+  reconcilePurchaseFromHttp,
+  reconcilePurchaseRealtimeEvent,
   savePendingPurchaseCreation,
   savePurchase,
   shouldReuseIdempotencyKey,
@@ -26,8 +32,8 @@ import {
   type Purchase,
   type PurchaseRequestItem,
 } from '../services/purchases';
+import { decodeSessionToken } from '../utils/jwt';
 import './CheckoutPage.css';
-
 const clpFormatter = new Intl.NumberFormat('es-CL', {
   style: 'currency',
   currency: 'CLP',
@@ -77,6 +83,125 @@ export function CheckoutPage() {
   );
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(
+    () => decodeSessionToken(localStorage.getItem('accessToken') ?? '')?.userId ?? null,
+  );
+  const previousUserIdRef = useRef<string | null>(sessionUserId);
+  const purchaseRef = useRef<Purchase | null>(purchase);
+  purchaseRef.current = purchase;
+
+  const reconcileActivePurchaseByHttp = useCallback(async (compraId: string) => {
+    try {
+      const freshPurchase = await getPurchase(compraId);
+      setPurchase((current) => {
+        const reconciled = reconcilePurchaseFromHttp(current, freshPurchase);
+        savePurchase(reconciled);
+        return reconciled;
+      });
+    } catch {
+      // Conservar último estado válido si falla la relectura puntual
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncCart = () => {
+      if (!pendingIntent) {
+        setCartItems(readCartItems());
+      }
+    };
+    window.addEventListener(CART_UPDATED_EVENT, syncCart);
+    window.addEventListener('storage', syncCart);
+    return () => {
+      window.removeEventListener(CART_UPDATED_EVENT, syncCart);
+      window.removeEventListener('storage', syncCart);
+    };
+  }, [pendingIntent]);
+
+  useEffect(() => {
+    const syncSession = () => {
+      const token = localStorage.getItem('accessToken');
+      const decoded = token ? decodeSessionToken(token) : null;
+      const nextUserId = decoded?.userId ?? null;
+
+      if (
+        (previousUserIdRef.current && previousUserIdRef.current !== nextUserId) ||
+        (purchase?.clienteId && nextUserId && purchase.clienteId !== nextUserId)
+      ) {
+        clearSavedPurchase();
+        clearPendingPurchaseCreation();
+        clearCart();
+        setPurchase(null);
+        setPendingIntent(null);
+        setCartItems([]);
+        setErrorMessage('');
+      }
+
+      previousUserIdRef.current = nextUserId;
+      setSessionUserId(nextUserId);
+    };
+
+    syncSession();
+    window.addEventListener(AUTH_SESSION_EVENT, syncSession);
+    window.addEventListener('storage', syncSession);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, syncSession);
+      window.removeEventListener('storage', syncSession);
+    };
+  }, [purchase?.clienteId]);
+
+  const activeCompraId = purchase?.compraId ?? '';
+  const activeOrdenIdsKey = purchase
+    ? purchase.ordenes.map((order) => order.ordenId).sort().join(',')
+    : '';
+
+  useEffect(() => {
+    if (!sessionUserId || !activeCompraId) return;
+
+    const ordenIds = activeOrdenIdsKey ? activeOrdenIdsKey.split(',').filter(Boolean) : [];
+    return connectPurchaseRealtimeStream({
+      compraId: activeCompraId,
+      ordenIds,
+      onEvent: (event) => {
+        const current = purchaseRef.current;
+        if (!current || current.compraId !== activeCompraId) return;
+        const result = reconcilePurchaseRealtimeEvent(current, event);
+        if (result.applied) {
+          purchaseRef.current = result.purchase;
+          savePurchase(result.purchase);
+          setPurchase(result.purchase);
+        }
+
+        if (result.requiresHttpReconciliation) {
+          void reconcileActivePurchaseByHttp(activeCompraId);
+        }
+      },
+      onReconnect: () => {
+        void reconcileActivePurchaseByHttp(activeCompraId);
+      },
+    });
+  }, [sessionUserId, activeCompraId, activeOrdenIdsKey, reconcileActivePurchaseByHttp]);
+
+  const checkoutCafeteriaIdsKey = !purchase
+    ? [...new Set(cartItems.map((item) => item.cafeteriaId))].sort().join(',')
+    : '';
+
+  useEffect(() => {
+    if (!sessionUserId || purchase || !checkoutCafeteriaIdsKey) return;
+
+    return connectCatalogStockStream({
+      cafeteriaIds: checkoutCafeteriaIdsKey.split(',').filter(Boolean),
+      onStockEvent: (event) => {
+        reconcileCartWithStock(
+          event.payload.ofertaId,
+          event.payload.stockActual,
+          event.payload.version,
+        );
+      },
+      onReconnect: () => {
+        setCartItems(readCartItems());
+      },
+    });
+  }, [sessionUserId, purchase, checkoutCafeteriaIdsKey]);
 
   async function submitPurchase() {
     if (!pendingIntent && cartItems.length === 0) return;

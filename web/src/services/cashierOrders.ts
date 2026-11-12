@@ -148,12 +148,12 @@ export function buildNotificationsWebSocketUrl(baseUrl: string = env.apiBaseUrl)
   }
 }
 
-function buildStompFrame(command: string, headers: Record<string, string>, body = ''): string {
+export function buildStompFrame(command: string, headers: Record<string, string>, body = ''): string {
   const headerLines = Object.entries(headers).map(([key, value]) => `${key}:${value}`);
   return `${command}\n${headerLines.join('\n')}\n\n${body}\0`;
 }
 
-function parseStompFrames(rawData: string): Array<{ command: string; headers: Record<string, string>; body: string }> {
+export function parseStompFrames(rawData: string): Array<{ command: string; headers: Record<string, string>; body: string }> {
   return rawData
     .split('\0')
     .map((chunk) => chunk.replace(/^\n+/, ''))

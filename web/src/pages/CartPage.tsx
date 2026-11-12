@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   CART_UPDATED_EVENT,
+  clearCartItems,
+  connectCatalogStockStream,
   readCartItems,
+  reconcileCartWithStock,
   removeCartItem,
   updateCartItemQuantity,
   type CartItem,
 } from '../services/catalog';
+import { AUTH_SESSION_EVENT } from '../services/httpClient';
+import { decodeSessionToken } from '../utils/jwt';
 import './CartPage.css';
 
 const clpFormatter = new Intl.NumberFormat('es-CL', {
@@ -45,6 +50,50 @@ export function CartPage() {
       window.removeEventListener('storage', refreshItems);
     };
   }, []);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(
+    () => decodeSessionToken(localStorage.getItem('accessToken') ?? '')?.userId ?? null,
+  );
+  const previousUserIdRef = useRef<string | null>(sessionUserId);
+
+  useEffect(() => {
+    const syncSession = () => {
+      const token = localStorage.getItem('accessToken');
+      const nextUserId = token ? (decodeSessionToken(token)?.userId ?? null) : null;
+      if (previousUserIdRef.current && previousUserIdRef.current !== nextUserId) {
+        clearCartItems();
+        setItems([]);
+      }
+      previousUserIdRef.current = nextUserId;
+      setSessionUserId(nextUserId);
+    };
+
+    window.addEventListener(AUTH_SESSION_EVENT, syncSession);
+    window.addEventListener('storage', syncSession);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, syncSession);
+      window.removeEventListener('storage', syncSession);
+    };
+  }, []);
+
+  const cartCafeteriaIdsKey = [...new Set(items.map((item) => item.cafeteriaId))].sort().join(',');
+
+  useEffect(() => {
+    if (!sessionUserId || !cartCafeteriaIdsKey) return;
+
+    return connectCatalogStockStream({
+      cafeteriaIds: cartCafeteriaIdsKey.split(',').filter(Boolean),
+      onStockEvent: (event) => {
+        reconcileCartWithStock(
+          event.payload.ofertaId,
+          event.payload.stockActual,
+          event.payload.version,
+        );
+      },
+      onReconnect: () => {
+        setItems(readCartItems());
+      },
+    });
+  }, [sessionUserId, cartCafeteriaIdsKey]);
 
   function changeQuantity(offerId: string, quantity: number) {
     try {
@@ -114,7 +163,9 @@ export function CartPage() {
                         <div className="cart-item-details">
                           <h3>{item.productName}</h3>
                           <p>{formatPrice(item.price)} por unidad</p>
-                          <p className="cart-item-stock">Stock registrado: {item.stock}</p>
+                          <p className="cart-item-stock">
+                            {item.stock > 0 ? `Stock registrado: ${item.stock}` : 'Sin stock disponible'}
+                          </p>
                         </div>
                         <div className="cart-item-actions">
                           <div className="cart-quantity">

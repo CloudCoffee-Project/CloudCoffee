@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act ,waitFor , cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductDetailPage } from './ProductDetailPage';
-import { ApiRequestError, request } from '../services/httpClient';
+import { ApiRequestError, request, AUTH_SESSION_EVENT } from '../services/httpClient';
 import { CART_STORAGE_KEY, readCartItems } from '../services/catalog';
 
 vi.mock('../services/httpClient', async (importOriginal) => ({
@@ -178,5 +178,207 @@ describe('detalle de producto en web (INT2-102)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
 
     expect(await screen.findByRole('heading', { name: 'Café Latte Artesanal' })).toBeTruthy();
+  });
+});
+vi.mock('../config/env', () => ({
+  env: {
+    appTitle: 'CloudCoffee Test',
+    apiBaseUrl: 'http://localhost:18080',
+  },
+}));
+
+function createClientJwt(sub = 'cliente-1'): string {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = btoa(
+    JSON.stringify({
+      sub,
+      role: 'CLIENTE',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  );
+  return `${header}.${body}.signature`;
+}
+
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = [];
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readonly url: string;
+  readyState = FakeWebSocket.CONNECTING;
+  sentFrames: string[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: (() => void) | null = null;
+  onclose: (() => void) | null = null;
+
+  constructor(url: string) {
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+  }
+
+  send(data: string) {
+    this.sentFrames.push(data);
+  }
+
+  close() {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.onclose?.();
+  }
+
+  simulateOpenAndConnected() {
+    this.readyState = FakeWebSocket.OPEN;
+    this.onopen?.();
+    this.onmessage?.({ data: 'CONNECTED\nversion:1.2\n\n\0' } as MessageEvent);
+  }
+
+  simulateMessage(destination: string, payload: unknown) {
+    const body = JSON.stringify(payload);
+    this.onmessage?.({
+      data: `MESSAGE\ndestination:${destination}\ncontent-type:application/json\n\n${body}\0`,
+    } as MessageEvent);
+  }
+}
+describe('actualización de stock por WebSocket en detalle de producto (INT2-139)', () => {
+  const originalWebSocket = globalThis.WebSocket;
+
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    globalThis.WebSocket = originalWebSocket;
+  });
+
+  it('actualiza stock a cero y reposición por WebSocket y descarta eventos fuera de orden o duplicados', async () => {
+    localStorage.setItem('accessToken', createClientJwt('cliente-1'));
+    renderDetail();
+
+    expect(await screen.findByText('Stock disponible: 5')).toBeTruthy();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    const ws = FakeWebSocket.instances[0];
+
+    await act(async () => {
+      ws.simulateOpenAndConnected();
+    });
+
+    expect(
+      ws.sentFrames.some((f) =>
+        f.includes('destination:/topic/cafeteria/44444444-4444-4444-8444-444444444444/stock'),
+      ),
+    ).toBe(true);
+
+    // Stock cae a 0 (version 2)
+    await act(async () => {
+      ws.simulateMessage('/topic/cafeteria/44444444-4444-4444-8444-444444444444/stock', {
+        eventId: 'evt-stock-2',
+        traceId: 'trace-stock-2',
+        eventType: 'catalog.stock.actualizado.v1',
+        payload: {
+          ofertaId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          productoId: productId,
+          cafeteriaId: '44444444-4444-4444-8444-444444444444',
+          campusId: campusA,
+          stockActual: 0,
+          version: 2,
+        },
+      });
+    });
+
+    expect(screen.getAllByText('Sin stock disponible')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Sin stock' })).toHaveLength(2);
+
+    // Reposición a 7 unidades (version 3)
+    await act(async () => {
+      ws.simulateMessage('/topic/cafeteria/44444444-4444-4444-8444-444444444444/stock', {
+        eventId: 'evt-stock-3',
+        traceId: 'trace-stock-3',
+        eventType: 'catalog.stock.actualizado.v1',
+        payload: {
+          ofertaId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          productoId: productId,
+          cafeteriaId: '44444444-4444-4444-8444-444444444444',
+          campusId: campusA,
+          stockActual: 7,
+          version: 3,
+        },
+      });
+    });
+
+    expect(screen.getByText('Stock disponible: 7')).toBeTruthy();
+
+    // Evento fuera de orden (version 2) se descarta
+    await act(async () => {
+      ws.simulateMessage('/topic/cafeteria/44444444-4444-4444-8444-444444444444/stock', {
+        eventId: 'evt-stock-old',
+        traceId: 'trace-stock-old',
+        eventType: 'catalog.stock.actualizado.v1',
+        payload: {
+          ofertaId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          productoId: productId,
+          cafeteriaId: '44444444-4444-4444-8444-444444444444',
+          campusId: campusA,
+          stockActual: 1,
+          version: 2,
+        },
+      });
+    });
+
+    expect(screen.getByText('Stock disponible: 7')).toBeTruthy();
+  });
+
+  it('reconcilia ofertas por HTTP tras reconexión y cancela suscripciones al cambiar campus o expirar sesión', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    localStorage.setItem('accessToken', createClientJwt('cliente-1'));
+    renderDetail();
+
+    expect(await screen.findByText('Stock disponible: 5')).toBeTruthy();
+    const ws1 = FakeWebSocket.instances[0];
+
+    await act(async () => {
+      ws1.simulateOpenAndConnected();
+    });
+
+    // Preparar respuesta HTTP actualizada tras reconexión
+    vi.mocked(request).mockImplementation((path: string) => {
+      if (path.startsWith(`/v1/catalog/productos/${productId}/ofertas?`)) {
+        return Promise.resolve([
+          { ...sampleOffers[0], stock: 9, disponible: true, version: 4 },
+          sampleOffers[1],
+        ]);
+      }
+      if (path === `/v1/catalog/productos/${productId}`) return Promise.resolve(sampleProduct);
+      if (path === '/v1/catalog/campus') return Promise.resolve(sampleCampus);
+      return Promise.resolve([]);
+    });
+
+    await act(async () => {
+      ws1.close();
+      vi.advanceTimersByTime(3100);
+    });
+
+    const ws2 = FakeWebSocket.instances[1];
+    await act(async () => {
+      ws2.simulateOpenAndConnected();
+    });
+
+    expect(await screen.findByText('Stock disponible: 9')).toBeTruthy();
+
+    // Expirar sesión cancela suscripciones activas
+    await act(async () => {
+      localStorage.removeItem('accessToken');
+      window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
+    });
+
+    await waitFor(() => {
+      expect(ws2.sentFrames.some((f) => f.startsWith('UNSUBSCRIBE\n'))).toBe(true);
+      expect(ws2.sentFrames.some((f) => f.startsWith('DISCONNECT\n'))).toBe(true);
+    });
+
+    vi.useRealTimers();
   });
 });
