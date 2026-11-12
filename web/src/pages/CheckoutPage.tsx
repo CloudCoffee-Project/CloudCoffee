@@ -87,6 +87,8 @@ export function CheckoutPage() {
     () => decodeSessionToken(localStorage.getItem('accessToken') ?? '')?.userId ?? null,
   );
   const previousUserIdRef = useRef<string | null>(sessionUserId);
+  const purchaseRef = useRef<Purchase | null>(purchase);
+  purchaseRef.current = purchase;
 
   const reconcileActivePurchaseByHttp = useCallback(async (compraId: string) => {
     try {
@@ -160,17 +162,16 @@ export function CheckoutPage() {
       compraId: activeCompraId,
       ordenIds,
       onEvent: (event) => {
-        let shouldReloadHttp = false;
-        setPurchase((current) => {
-          if (!current || current.compraId !== activeCompraId) return current;
-          const result = reconcilePurchaseRealtimeEvent(current, event);
-          shouldReloadHttp = result.requiresHttpReconciliation;
-          if (!result.applied) return current;
+        const current = purchaseRef.current;
+        if (!current || current.compraId !== activeCompraId) return;
+        const result = reconcilePurchaseRealtimeEvent(current, event);
+        if (result.applied) {
+          purchaseRef.current = result.purchase;
           savePurchase(result.purchase);
-          return result.purchase;
-        });
+          setPurchase(result.purchase);
+        }
 
-        if (shouldReloadHttp) {
+        if (result.requiresHttpReconciliation) {
           void reconcileActivePurchaseByHttp(activeCompraId);
         }
       },

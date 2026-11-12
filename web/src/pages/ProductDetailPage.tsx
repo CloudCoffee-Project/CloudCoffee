@@ -59,6 +59,8 @@ export function ProductDetailPage() {
   );
   const previousUserIdRef = useRef<string | null>(sessionUserId);
   const offerVersionsRef = useRef<Map<string, number>>(new Map());
+  const offersStateRef = useRef<OffersLoadState>(offersState);
+  offersStateRef.current = offersState;
 
   useEffect(() => {
     const trimmedId = id.trim();
@@ -197,22 +199,22 @@ export function ProductDetailPage() {
           event.payload.version,
         );
 
-        let needsHttpReload = false;
-        setOffersState((current) => {
-          if (current.status !== 'success') return current;
+        const currentOffersState = offersStateRef.current;
+        if (currentOffersState.status === 'success') {
           const result = applyStockEventToOffers(
-            current.offers,
+            currentOffersState.offers,
             event,
             offerVersionsRef.current,
           );
-          needsHttpReload = result.requiresHttpReconciliation;
-          if (!result.applied) return current;
-          return { status: 'success', offers: result.offers };
-        });
-
-        if (needsHttpReload) {
-          setOffersRetry((retry) => retry + 1);
-          return;
+          if (result.requiresHttpReconciliation) {
+            setOffersRetry((retry) => retry + 1);
+            return;
+          }
+          if (result.applied) {
+            const nextState: OffersLoadState = { status: 'success', offers: result.offers };
+            offersStateRef.current = nextState;
+            setOffersState(nextState);
+          }
         }
 
         setQuantities((current) => {
