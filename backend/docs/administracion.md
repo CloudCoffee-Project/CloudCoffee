@@ -55,6 +55,7 @@ Reglas comunes:
 | Operación | Ruta | CLIENTE | CAJERO | ADMIN_CAFETERIA | SUPER_ADMIN |
 | --- | --- | --- | --- | --- | --- |
 | Consultas públicas | `GET /v1/catalog/...` (existen) | ✅ | ✅ | ✅ | ✅ |
+| Seguimientos de productos (INT2-116) | `/v1/catalog/seguimientos/**` (existe) | 👤 | ❌ | ❌ | ❌ |
 | Campus: listar, crear, editar, baja, reactivar | `/v1/catalog/admin/campus/**` | ❌ | ❌ | ❌ | ✅ |
 | Cafeterías: listar, crear, editar, baja, reactivar | `/v1/catalog/admin/cafeterias/**` | ❌ | ❌ | ❌ | ✅ |
 | Cierre operativo (abrir/cerrar) | `POST /v1/catalog/cafeterias/{id}/estado-operativo` | ❌ | ❌ | 🏪 | ❌ |

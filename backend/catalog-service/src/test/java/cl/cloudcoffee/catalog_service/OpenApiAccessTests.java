@@ -26,7 +26,21 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(6);
+        // INT2-116 agrega /catalog/seguimientos y /catalog/seguimientos/{seguimientoId}.
+        assertThat(api.path("paths").size()).isEqualTo(8);
+        for (String method : new String[]{"get", "post"}) {
+            assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/security/0/bearerAuth").isArray()).isTrue();
+            assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/responses/403/content/application~1problem+json/schema/$ref")
+                    .asText()).endsWith("/Problem");
+        }
+        assertThat(api.at("/paths/~1catalog~1seguimientos/get/responses/200/content/application~1json/schema/type").asText())
+                .isEqualTo("array");
+        assertThat(api.at("/paths/~1catalog~1seguimientos/get/responses/200/headers/X-Total-Count").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1catalog~1seguimientos/post/responses/201").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1catalog~1seguimientos/post/responses/409").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1catalog~1seguimientos~1{seguimientoId}/delete/responses/204").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1catalog~1seguimientos~1{seguimientoId}/delete/responses/404").isMissingNode()).isFalse();
+        assertThat(api.at("/components/schemas/SeguimientoResponse/properties/cafeteriaId/format").asText()).isEqualTo("uuid");
         assertThat(api.at("/paths/~1catalog~1cafeterias~1{cafeteriaId}~1ofertas/get/security/0/bearerAuth").isArray()).isTrue();
         assertThat(api.at("/servers/0/url").asText()).isEqualTo("/v1");
         assertThat(api.at("/paths/~1catalog~1campus/get/security").isMissingNode()).isTrue();
