@@ -1,0 +1,4722 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CloudCoffee · Administración y permisos de los cuatro roles",
+    "version": "1.0.0",
+    "description": "Contrato objetivo de INT2-109. Las rutas /internal no se publican en Gateway. Reglas completas en administracion.md."
+  },
+  "servers": [
+    {
+      "url": "/v1",
+      "description": "API Gateway; elimina /v1 antes de reenviar. /internal solo red privada."
+    }
+  ],
+  "paths": {
+    "/auth/activacion": {
+      "post": {
+        "operationId": "activarCuenta",
+        "summary": "Activar cuenta de personal y definir contraseña",
+        "x-roles": [
+          "Anónimo con token de invitación"
+        ],
+        "description": "Token de un solo uso, 72 horas. Marca el correo verificado. Token desconocido, vencido o usado: 400 TOKEN_ACTIVACION_INVALIDO. Cuenta desactivada o dada de baja: 409 ESTADO_INVALIDO.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivarCuenta"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivacionResultado"
+                },
+                "example": {
+                  "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  "email": "cajera.nueva@uct.cl",
+                  "rol": "CAJERO"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/users/me/baja": {
+      "post": {
+        "operationId": "bajaPropia",
+        "summary": "Dar de baja y anonimizar la cuenta propia",
+        "x-roles": [
+          "CLIENTE"
+        ],
+        "description": "Contraseña actual incorrecta: 401 CONTRASENA_INCORRECTA. Compras en curso: 409 COMPRAS_EN_CURSO. Si Order no responde: 503 OPERACION_PENDIENTE, sin cambios.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BajaPropia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Éxito"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios": {
+      "get": {
+        "operationId": "listarUsuarios",
+        "summary": "Listar cuentas administrables",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "ADMIN_CAFETERIA ve solo CAJERO de su cafetería; SUPER_ADMIN ve todas. Orden: email ASC, id ASC.",
+        "parameters": [
+          {
+            "name": "rol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Rol"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoCuenta"
+            }
+          },
+          {
+            "name": "cafeteriaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Solo SUPER_ADMIN; ADMIN_CAFETERIA siempre ve su cafetería."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            },
+            "description": "Coincidencia parcial en email, nombre o apellido."
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaUsuarios"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/personal": {
+      "post": {
+        "operationId": "crearPersonal",
+        "summary": "Invitar personal de cafetería",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Crea la cuenta pendiente de activación y envía la invitación. ADMIN_CAFETERIA solo crea CAJERO para su cafetería. Email existente: 409 EMAIL_YA_REGISTRADO, sin cambiar el rol de esa cuenta.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearPersonal"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                },
+                "example": {
+                  "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  "email": "cajera.nueva@uct.cl",
+                  "nombre": "Ana",
+                  "apellido": "Pérez",
+                  "telefono": "+56912345678",
+                  "rol": "CAJERO",
+                  "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                  "estado": "pendiente_activacion",
+                  "creadoAt": "2026-11-13T15:00:00Z",
+                  "actualizadoAt": "2026-11-13T15:00:00Z",
+                  "version": 1
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios/{usuarioId}": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "verUsuario",
+        "summary": "Ver una cuenta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "editarUsuario",
+        "summary": "Editar datos de contacto",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarUsuario"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios/{usuarioId}/asignacion": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "cambiarAsignacion",
+        "summary": "Reasignar personal a otra cafetería",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "description": "Revoca los refresh tokens; rige en la siguiente solicitud.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambiarAsignacion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios/{usuarioId}/desactivar": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "desactivarUsuario",
+        "summary": "Desactivar cuenta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Reversible. Revoca refresh tokens; la asignación deja de autorizar de inmediato.",
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios/{usuarioId}/reactivar": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reactivarUsuario",
+        "summary": "Reactivar cuenta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Repetir sobre una cuenta activa devuelve 200 sin cambios.",
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios/{usuarioId}/baja": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "bajaUsuario",
+        "summary": "Dar de baja y anonimizar una cuenta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Irreversible. Mismas reglas que la baja propia. No aplica a uno mismo.",
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/admin/usuarios/{usuarioId}/invitacion": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "invitacionUsuario",
+        "summary": "Reenviar invitación",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Solo pendiente_activacion; revoca el token anterior.",
+        "responses": {
+          "202": {
+            "description": "Éxito"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/campus": {
+      "get": {
+        "operationId": "listarCampusAdmin",
+        "summary": "Listar campus (incluye dados de baja)",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "description": "Orden: nombre ASC, id ASC.",
+        "parameters": [
+          {
+            "name": "activo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaCampus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "crearCampus",
+        "summary": "Crear campus",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCampus"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campus"
+                },
+                "example": {
+                  "campusId": "33333333-3333-4333-8333-333333333333",
+                  "nombre": "Campus San Francisco",
+                  "direccion": "Manuel Montt 056, Temuco",
+                  "activo": true,
+                  "bajaAt": null,
+                  "version": 1
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/campus/{campusId}": {
+      "parameters": [
+        {
+          "name": "campusId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "editarCampus",
+        "summary": "Editar campus",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarCampus"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/campus/{campusId}/baja": {
+      "parameters": [
+        {
+          "name": "campusId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "bajaCampus",
+        "summary": "Dar de baja campus",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/campus/{campusId}/reactivar": {
+      "parameters": [
+        {
+          "name": "campusId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reactivarCampus",
+        "summary": "Reactivar campus",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/cafeterias": {
+      "get": {
+        "operationId": "listarCafeteriaAdmin",
+        "summary": "Listar cafeterias (incluye dados de baja)",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "description": "Orden: nombre ASC, id ASC.",
+        "parameters": [
+          {
+            "name": "campusId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "activo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaCafeterias"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "crearCafeteria",
+        "summary": "Crear cafeteria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCafeteria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cafeteria"
+                },
+                "example": {
+                  "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                  "campusId": "33333333-3333-4333-8333-333333333333",
+                  "nombre": "Cafetería Central",
+                  "estadoOperativo": "OPEN",
+                  "activa": true,
+                  "bajaAt": null,
+                  "version": 1
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/cafeterias/{cafeteriaId}": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "editarCafeteria",
+        "summary": "Editar cafeteria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarCafeteria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cafeteria"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/cafeterias/{cafeteriaId}/baja": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "bajaCafeteria",
+        "summary": "Dar de baja cafeteria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cafeteria"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/cafeterias/{cafeteriaId}/reactivar": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reactivarCafeteria",
+        "summary": "Reactivar cafeteria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cafeteria"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/categorias": {
+      "get": {
+        "operationId": "listarCategoriaAdmin",
+        "summary": "Listar categorias (incluye dados de baja)",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "description": "Orden: nombre ASC, id ASC.",
+        "parameters": [
+          {
+            "name": "activo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaCategorias"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "crearCategoria",
+        "summary": "Crear categoria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearCategoria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Categoria"
+                },
+                "example": {
+                  "categoriaId": "22222222-2222-4222-8222-222222222222",
+                  "nombre": "Café",
+                  "descripcion": "Bebidas de café",
+                  "activa": true,
+                  "version": 1
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/categorias/{categoriaId}": {
+      "parameters": [
+        {
+          "name": "categoriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "editarCategoria",
+        "summary": "Editar categoria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarCategoria"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Categoria"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/categorias/{categoriaId}/baja": {
+      "parameters": [
+        {
+          "name": "categoriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "bajaCategoria",
+        "summary": "Dar de baja categoria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Categoria"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/categorias/{categoriaId}/reactivar": {
+      "parameters": [
+        {
+          "name": "categoriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reactivarCategoria",
+        "summary": "Reactivar categoria",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Categoria"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/productos": {
+      "get": {
+        "operationId": "listarProductoAdmin",
+        "summary": "Listar productos (incluye dados de baja)",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "description": "Orden: nombre ASC, id ASC.",
+        "parameters": [
+          {
+            "name": "categoriaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "activo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaProductos"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "crearProducto",
+        "summary": "Crear producto",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearProducto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Producto"
+                },
+                "example": {
+                  "productoId": "55555555-5555-4555-8555-555555555501",
+                  "categoriaId": "22222222-2222-4222-8222-222222222222",
+                  "nombre": "Café americano 12 oz",
+                  "descripcion": "Espresso doble con agua caliente",
+                  "imagenUrl": null,
+                  "activo": true,
+                  "version": 1
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/productos/{productoId}": {
+      "parameters": [
+        {
+          "name": "productoId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "editarProducto",
+        "summary": "Editar producto",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarProducto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Producto"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/productos/{productoId}/baja": {
+      "parameters": [
+        {
+          "name": "productoId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "bajaProducto",
+        "summary": "Dar de baja producto",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Producto"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/admin/productos/{productoId}/reactivar": {
+      "parameters": [
+        {
+          "name": "productoId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reactivarProducto",
+        "summary": "Reactivar producto",
+        "x-roles": [
+          "SUPER_ADMIN"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Producto"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/cafeterias/{cafeteriaId}/estado-operativo": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "cambiarEstadoOperativo",
+        "summary": "Abrir o cerrar temporalmente la cafetería",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "description": "Cierre operativo: no vende mientras no esté OPEN. Cafetería dada de baja: 409 CAFETERIA_DADA_DE_BAJA.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambiarEstadoOperativo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cafeteria"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/cafeterias/{cafeteriaId}/ofertas": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "crearOferta",
+        "summary": "Ofrecer un producto del catálogo",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "description": "El GET de esta ruta ya existe (inventario del personal) y no cambia. Par cafetería/producto existente: 409 OFERTA_EXISTENTE; reactivar en vez de crear. Producto inactivo: 409 PRODUCTO_INACTIVO.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearOferta"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfertaAdmin"
+                },
+                "example": {
+                  "ofertaId": "66666666-6666-4666-8666-666666666601",
+                  "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                  "productoId": "55555555-5555-4555-8555-555555555501",
+                  "productoNombre": "Café americano 12 oz",
+                  "precio": 1800,
+                  "stock": 25,
+                  "activa": true,
+                  "bajaAt": null,
+                  "version": 4
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "ofertaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "editarPrecioOferta",
+        "summary": "Cambiar el precio de una oferta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "description": "Las reservas y órdenes existentes conservan su snapshot de precio.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarOferta"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfertaAdmin"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}/baja": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "ofertaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "bajaOferta",
+        "summary": "Dar de baja oferta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfertaAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}/reactivar": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "ofertaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reactivarOferta",
+        "summary": "Reactivar oferta",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfertaAdmin"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}/ajustes-stock": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "ofertaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "ajustarStock",
+        "summary": "Ajustar stock con registro auditado",
+        "x-roles": [
+          "CAJERO (su cafetería)",
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "description": "SUPER_ADMIN no tiene este permiso operativo. Resultado negativo: 409 STOCK_NEGATIVO. Publica catalog.stock.actualizado.v1.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AjusteStock"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AjusteStockRegistro"
+                },
+                "example": {
+                  "ajusteId": "77777777-7777-4777-8777-777777777701",
+                  "ofertaId": "66666666-6666-4666-8666-666666666601",
+                  "cantidad": 12,
+                  "motivo": "REPOSICION",
+                  "nota": null,
+                  "stockAnterior": 13,
+                  "stockActual": 25,
+                  "realizadoPor": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  "realizadoAt": "2026-11-13T15:00:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "listarAjustesStock",
+        "summary": "Historial de ajustes de una oferta",
+        "x-roles": [
+          "CAJERO (su cafetería)",
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "description": "Orden: realizadoAt DESC, id DESC.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaAjustesStock"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/orders/ventas": {
+      "get": {
+        "operationId": "listarVentas",
+        "summary": "Ventas de órdenes pagadas",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Orden: pagadoAt DESC, id DESC. ADMIN_CAFETERIA no puede pedir otra cafetería: 403.",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive, zona America/Santiago. Por defecto hace 30 días."
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive. Rango máximo 92 días."
+          },
+          {
+            "name": "cafeteriaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Solo SUPER_ADMIN."
+          },
+          {
+            "name": "campusId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Solo SUPER_ADMIN."
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoVenta"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Size"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaVentas"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/orders/ventas/resumen": {
+      "get": {
+        "operationId": "resumenVentas",
+        "summary": "Totales de ventas del periodo",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive, zona America/Santiago. Por defecto hace 30 días."
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive. Rango máximo 92 días."
+          },
+          {
+            "name": "cafeteriaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Solo SUPER_ADMIN."
+          },
+          {
+            "name": "campusId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Solo SUPER_ADMIN."
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoVenta"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenVentas"
+                },
+                "example": {
+                  "desde": "2026-11-01",
+                  "hasta": "2026-11-13",
+                  "moneda": "CLP",
+                  "ordenes": 2,
+                  "montoTotal": 4800,
+                  "porEstado": [
+                    {
+                      "estado": "entregado",
+                      "ordenes": 2,
+                      "montoTotal": 4800
+                    }
+                  ],
+                  "porCafeteria": [
+                    {
+                      "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                      "cafeteriaNombre": "Cafetería Central",
+                      "ordenes": 2,
+                      "montoTotal": 4800
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/orders/{ordenId}/comprobante": {
+      "parameters": [
+        {
+          "name": "ordenId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "comprobanteOrden",
+        "summary": "Comprobante interno de una orden pagada",
+        "x-roles": [
+          "CLIENTE propietario",
+          "CAJERO (su cafetería)",
+          "ADMIN_CAFETERIA (su cafetería)",
+          "SUPER_ADMIN"
+        ],
+        "description": "Orden sin pago aprobado: 409 ESTADO_INVALIDO. Respuesta con Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComprobanteInterno"
+                },
+                "example": {
+                  "tipo": "comprobante_interno",
+                  "leyenda": "Documento interno sin validez tributaria",
+                  "numero": "CC-000001",
+                  "ordenId": "40000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "cafeteria": {
+                    "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                    "nombre": "Cafetería Central"
+                  },
+                  "emitidoAt": "2026-11-13T15:00:00Z",
+                  "items": [
+                    {
+                      "productoNombre": "Café americano 12 oz",
+                      "cantidad": 2,
+                      "precioUnitario": 1800,
+                      "subtotal": 3600
+                    }
+                  ],
+                  "montoTotal": 3600,
+                  "moneda": "CLP",
+                  "pago": {
+                    "proveedor": "simulado",
+                    "estado": "aprobado"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/internal/servicios/compras/usuarios/{usuarioId}/en-curso": {
+      "parameters": [
+        {
+          "name": "usuarioId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "comprasEnCurso",
+        "summary": "Order informa si el usuario tiene compras sin cerrar",
+        "x-roles": [
+          "Token interno (Auth → Order)"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComprasEnCurso"
+                },
+                "example": {
+                  "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  "enCurso": false,
+                  "compras": 0
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          }
+        },
+        "security": [
+          {
+            "internalToken": []
+          }
+        ]
+      }
+    },
+    "/internal/servicios/catalogo/cafeterias/{cafeteriaId}": {
+      "parameters": [
+        {
+          "name": "cafeteriaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "cafeteriaInterna",
+        "summary": "Catalog confirma una cafetería para asignar personal",
+        "x-roles": [
+          "Token interno (Auth → Catalog)"
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CafeteriaInterna"
+                },
+                "example": {
+                  "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                  "campusId": "33333333-3333-4333-8333-333333333333",
+                  "nombre": "Cafetería Central",
+                  "estadoOperativo": "OPEN",
+                  "activa": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          }
+        },
+        "security": [
+          {
+            "internalToken": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT RS256"
+      },
+      "internalToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Internal-Service-Token"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "UUID por intención; misma semántica que INT2-50.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "Size": {
+        "name": "size",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Validación, parámetros o JSON inválidos.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "JWT ausente, inválido o vencido.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Rol no permitido, asignación ausente/revocada o cafetería distinta de la asignada.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Recurso inexistente o fuera del alcance del usuario (no revela existencia).",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Versión, unicidad, idempotencia, estado o regla de negocio en conflicto.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error415": {
+        "description": "Content-Type distinto de application/json.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "Dependencia no disponible; la operación falla cerrada.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Rol": {
+        "type": "string",
+        "enum": [
+          "CLIENTE",
+          "CAJERO",
+          "ADMIN_CAFETERIA",
+          "SUPER_ADMIN"
+        ]
+      },
+      "RolPersonal": {
+        "type": "string",
+        "enum": [
+          "CAJERO",
+          "ADMIN_CAFETERIA"
+        ],
+        "description": "Roles que se crean por invitación. CLIENTE nace del registro público; SUPER_ADMIN no se crea por API."
+      },
+      "EstadoCuenta": {
+        "type": "string",
+        "enum": [
+          "pendiente_activacion",
+          "activa",
+          "inactiva"
+        ],
+        "description": "Las cuentas dadas de baja (anonimizadas) no se listan."
+      },
+      "EstadoOperativo": {
+        "type": "string",
+        "enum": [
+          "OPEN",
+          "CLOSED",
+          "MAINTENANCE"
+        ],
+        "description": "Cierre operativo temporal, distinto de la baja lógica."
+      },
+      "MotivoAjuste": {
+        "type": "string",
+        "enum": [
+          "REPOSICION",
+          "MERMA",
+          "CORRECCION_INVENTARIO",
+          "REINGRESO_NO_RETIRADO"
+        ]
+      },
+      "EstadoVenta": {
+        "type": "string",
+        "enum": [
+          "pagado",
+          "listo_para_retiro",
+          "entregado",
+          "no_retirado_pendiente_revision",
+          "no_retirado_final"
+        ],
+        "description": "Solo órdenes de compras con pago aprobado cuentan como venta."
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Extensión de dominio; ausente en errores de seguridad o Gateway."
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "message"
+              ]
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "timestamp"
+        ],
+        "examples": [
+          {
+            "type": "/problems/asignacion-no-autorizada",
+            "title": "Acceso denegado",
+            "status": 403,
+            "detail": "El usuario no está autorizado para operar esta cafetería.",
+            "instance": "/catalog/cafeterias/44444444-4444-4444-8444-444444444444/ofertas/66666666-6666-4666-8666-666666666601/ajustes-stock",
+            "timestamp": "2026-11-13T15:00:00Z",
+            "code": "ASIGNACION_NO_AUTORIZADA",
+            "traceId": "aabbccddeeff00112233445566778899"
+          }
+        ]
+      },
+      "UsuarioAdmin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "telefono": {
+            "type": "string",
+            "pattern": "^[0-9+ ()-]{6,20}$",
+            "minLength": 6,
+            "maxLength": 20
+          },
+          "rol": {
+            "$ref": "#/components/schemas/Rol"
+          },
+          "cafeteriaId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Asignación persistida; null para CLIENTE y SUPER_ADMIN."
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoCuenta"
+          },
+          "creadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "usuarioId",
+          "email",
+          "nombre",
+          "apellido",
+          "telefono",
+          "rol",
+          "cafeteriaId",
+          "estado",
+          "creadoAt",
+          "actualizadoAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "email": "cajera.nueva@uct.cl",
+            "nombre": "Ana",
+            "apellido": "Pérez",
+            "telefono": "+56912345678",
+            "rol": "CAJERO",
+            "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+            "estado": "pendiente_activacion",
+            "creadoAt": "2026-11-13T15:00:00Z",
+            "actualizadoAt": "2026-11-13T15:00:00Z",
+            "version": 1
+          }
+        ]
+      },
+      "PaginaUsuarios": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsuarioAdmin"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "CrearPersonal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 150
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "telefono": {
+            "type": "string",
+            "pattern": "^[0-9+ ()-]{6,20}$",
+            "minLength": 6,
+            "maxLength": 20
+          },
+          "rol": {
+            "$ref": "#/components/schemas/RolPersonal"
+          },
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Obligatorio para SUPER_ADMIN. ADMIN_CAFETERIA lo omite o envía su propia cafetería."
+          }
+        },
+        "required": [
+          "email",
+          "nombre",
+          "apellido",
+          "telefono",
+          "rol"
+        ],
+        "examples": [
+          {
+            "email": "cajera.nueva@uct.cl",
+            "nombre": "Ana",
+            "apellido": "Pérez",
+            "telefono": "+56912345678",
+            "rol": "CAJERO"
+          }
+        ],
+        "description": "No admite contraseña: la define la persona al activar su cuenta."
+      },
+      "EditarUsuario": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "telefono": {
+            "type": "string",
+            "pattern": "^[0-9+ ()-]{6,20}$",
+            "minLength": 6,
+            "maxLength": 20
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "examples": [
+          {
+            "telefono": "+56987654321",
+            "version": 1
+          }
+        ],
+        "description": "El email y el rol no se editan."
+      },
+      "CambiarAsignacion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "cafeteriaId",
+          "version"
+        ],
+        "examples": [
+          {
+            "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+            "version": 2
+          }
+        ]
+      },
+      "ActivarCuenta": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Token opaco del enlace de invitación.",
+            "minLength": 43,
+            "maxLength": 43
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "examples": [
+          {
+            "token": "q8Yt3rU1oP0aZx9Lk2mN4bV6cX7zA5sD1fG3hJ8kL0w",
+            "password": "UnaClaveSegura2026"
+          }
+        ]
+      },
+      "ActivacionResultado": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "rol": {
+            "$ref": "#/components/schemas/RolPersonal"
+          }
+        },
+        "required": [
+          "usuarioId",
+          "email",
+          "rol"
+        ],
+        "examples": [
+          {
+            "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "email": "cajera.nueva@uct.cl",
+            "rol": "CAJERO"
+          }
+        ]
+      },
+      "BajaPropia": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "passwordActual": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "passwordActual"
+        ],
+        "examples": [
+          {
+            "passwordActual": "MiClaveActual1"
+          }
+        ]
+      },
+      "Campus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "campusId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 255
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "bajaAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "campusId",
+          "nombre",
+          "direccion",
+          "activo",
+          "bajaAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "campusId": "33333333-3333-4333-8333-333333333333",
+            "nombre": "Campus San Francisco",
+            "direccion": "Manuel Montt 056, Temuco",
+            "activo": true,
+            "bajaAt": null,
+            "version": 1
+          }
+        ]
+      },
+      "CrearCampus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "examples": [
+          {
+            "nombre": "Campus Norte",
+            "direccion": "Av. Alemania 0211, Temuco"
+          }
+        ]
+      },
+      "EditarCampus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "examples": [
+          {
+            "direccion": "Av. Alemania 0215, Temuco",
+            "version": 1
+          }
+        ]
+      },
+      "PaginaCampus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Campus"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "Cafeteria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campusId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "estadoOperativo": {
+            "$ref": "#/components/schemas/EstadoOperativo"
+          },
+          "activa": {
+            "type": "boolean"
+          },
+          "bajaAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "cafeteriaId",
+          "campusId",
+          "nombre",
+          "estadoOperativo",
+          "activa",
+          "bajaAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+            "campusId": "33333333-3333-4333-8333-333333333333",
+            "nombre": "Cafetería Central",
+            "estadoOperativo": "OPEN",
+            "activa": true,
+            "bajaAt": null,
+            "version": 1
+          }
+        ]
+      },
+      "CrearCafeteria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "campusId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          }
+        },
+        "required": [
+          "campusId",
+          "nombre"
+        ],
+        "examples": [
+          {
+            "campusId": "33333333-3333-4333-8333-333333333333",
+            "nombre": "Kiosko Pabellón D"
+          }
+        ],
+        "description": "Nace activa y CLOSED; abrir es una decisión operativa de su administrador."
+      },
+      "EditarCafeteria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "examples": [
+          {
+            "nombre": "Cafetería Central Piso 1",
+            "version": 1
+          }
+        ],
+        "description": "Mover una cafetería de campus no está permitido."
+      },
+      "CambiarEstadoOperativo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "estadoOperativo": {
+            "$ref": "#/components/schemas/EstadoOperativo"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "estadoOperativo",
+          "version"
+        ],
+        "examples": [
+          {
+            "estadoOperativo": "CLOSED",
+            "version": 3
+          }
+        ]
+      },
+      "PaginaCafeterias": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cafeteria"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "Categoria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "descripcion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "activa": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "categoriaId",
+          "nombre",
+          "descripcion",
+          "activa",
+          "version"
+        ],
+        "examples": [
+          {
+            "categoriaId": "22222222-2222-4222-8222-222222222222",
+            "nombre": "Café",
+            "descripcion": "Bebidas de café",
+            "activa": true,
+            "version": 1
+          }
+        ]
+      },
+      "CrearCategoria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "examples": [
+          {
+            "nombre": "Snacks"
+          }
+        ]
+      },
+      "EditarCategoria": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "description": "Texto sin espacios exteriores.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "examples": [
+          {
+            "descripcion": "Galletas y barras",
+            "version": 1
+          }
+        ]
+      },
+      "PaginaCategorias": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Categoria"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "Producto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "productoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "descripcion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "imagenUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "maxLength": 255
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "productoId",
+          "categoriaId",
+          "nombre",
+          "descripcion",
+          "imagenUrl",
+          "activo",
+          "version"
+        ],
+        "examples": [
+          {
+            "productoId": "55555555-5555-4555-8555-555555555501",
+            "categoriaId": "22222222-2222-4222-8222-222222222222",
+            "nombre": "Café americano 12 oz",
+            "descripcion": "Espresso doble con agua caliente",
+            "imagenUrl": null,
+            "activo": true,
+            "version": 1
+          }
+        ]
+      },
+      "CrearProducto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "imagenUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 255,
+            "pattern": "^https://"
+          }
+        },
+        "required": [
+          "categoriaId",
+          "nombre"
+        ],
+        "examples": [
+          {
+            "categoriaId": "22222222-2222-4222-8222-222222222222",
+            "nombre": "Capuccino 12 oz"
+          }
+        ]
+      },
+      "EditarProducto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "categoriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "imagenUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 255,
+            "pattern": "^https://"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "examples": [
+          {
+            "nombre": "Capuccino 12 oz con canela",
+            "version": 1
+          }
+        ]
+      },
+      "PaginaProductos": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Producto"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "OfertaAdmin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ofertaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productoNombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "precio": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "description": "Precio final en CLP entero, impuestos incluidos."
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activa": {
+            "type": "boolean"
+          },
+          "bajaAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "ofertaId",
+          "cafeteriaId",
+          "productoId",
+          "productoNombre",
+          "precio",
+          "stock",
+          "activa",
+          "bajaAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "ofertaId": "66666666-6666-4666-8666-666666666601",
+            "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+            "productoId": "55555555-5555-4555-8555-555555555501",
+            "productoNombre": "Café americano 12 oz",
+            "precio": 1800,
+            "stock": 25,
+            "activa": true,
+            "bajaAt": null,
+            "version": 4
+          }
+        ]
+      },
+      "CrearOferta": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "productoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "precio": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "description": "Precio final en CLP entero, impuestos incluidos."
+          },
+          "stockInicial": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "productoId",
+          "precio",
+          "stockInicial"
+        ],
+        "examples": [
+          {
+            "productoId": "55555555-5555-4555-8555-555555555501",
+            "precio": 1800,
+            "stockInicial": 20
+          }
+        ]
+      },
+      "EditarOferta": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "precio": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "description": "Precio final en CLP entero, impuestos incluidos."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Versión optimista del recurso; se envía la última leída."
+          }
+        },
+        "required": [
+          "precio",
+          "version"
+        ],
+        "examples": [
+          {
+            "precio": 1900,
+            "version": 4
+          }
+        ],
+        "description": "El stock no se edita aquí: se ajusta con un registro auditado."
+      },
+      "AjusteStock": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cantidad": {
+            "type": "integer",
+            "minimum": -10000,
+            "maximum": 10000,
+            "not": {
+              "const": 0
+            },
+            "description": "Delta sobre la disponibilidad vendible actual."
+          },
+          "motivo": {
+            "$ref": "#/components/schemas/MotivoAjuste"
+          },
+          "nota": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "cantidad",
+          "motivo"
+        ],
+        "examples": [
+          {
+            "cantidad": 12,
+            "motivo": "REPOSICION"
+          },
+          {
+            "cantidad": -2,
+            "motivo": "MERMA",
+            "nota": "Vencimiento"
+          }
+        ]
+      },
+      "AjusteStockRegistro": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ajusteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ofertaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cantidad": {
+            "type": "integer"
+          },
+          "motivo": {
+            "$ref": "#/components/schemas/MotivoAjuste"
+          },
+          "nota": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "stockAnterior": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stockActual": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "realizadoPor": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "realizadoAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ajusteId",
+          "ofertaId",
+          "cantidad",
+          "motivo",
+          "nota",
+          "stockAnterior",
+          "stockActual",
+          "realizadoPor",
+          "realizadoAt"
+        ],
+        "examples": [
+          {
+            "ajusteId": "77777777-7777-4777-8777-777777777701",
+            "ofertaId": "66666666-6666-4666-8666-666666666601",
+            "cantidad": 12,
+            "motivo": "REPOSICION",
+            "nota": null,
+            "stockAnterior": 13,
+            "stockActual": 25,
+            "realizadoPor": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "realizadoAt": "2026-11-13T15:00:00Z"
+          }
+        ]
+      },
+      "PaginaAjustesStock": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AjusteStockRegistro"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "Venta": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ordenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigoOrden": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cafeteriaNombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "campusId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoVenta"
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000000000
+          },
+          "moneda": {
+            "const": "CLP"
+          },
+          "cantidadItems": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pagadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entregadoAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ordenId",
+          "compraId",
+          "codigoOrden",
+          "cafeteriaId",
+          "cafeteriaNombre",
+          "campusId",
+          "estado",
+          "montoTotal",
+          "moneda",
+          "cantidadItems",
+          "pagadoAt",
+          "entregadoAt"
+        ],
+        "examples": [
+          {
+            "ordenId": "40000000-0000-4000-8000-000000000001",
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "codigoOrden": "CC-000001",
+            "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+            "cafeteriaNombre": "Cafetería Central",
+            "campusId": "33333333-3333-4333-8333-333333333333",
+            "estado": "entregado",
+            "montoTotal": 3600,
+            "moneda": "CLP",
+            "cantidadItems": 2,
+            "pagadoAt": "2026-11-13T15:00:00Z",
+            "entregadoAt": "2026-11-13T15:20:00Z"
+          }
+        ],
+        "description": "Sin datos personales del comprador."
+      },
+      "PaginaVentas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Venta"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "number",
+          "size",
+          "totalElements",
+          "totalPages",
+          "first",
+          "last",
+          "empty"
+        ]
+      },
+      "ResumenVentas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "desde": {
+            "type": "string",
+            "format": "date"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date"
+          },
+          "moneda": {
+            "const": "CLP"
+          },
+          "ordenes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "porEstado": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "estado": {
+                  "$ref": "#/components/schemas/EstadoVenta"
+                },
+                "ordenes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "montoTotal": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "estado",
+                "ordenes",
+                "montoTotal"
+              ]
+            }
+          },
+          "porCafeteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cafeteriaId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "cafeteriaNombre": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                "ordenes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "montoTotal": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "cafeteriaId",
+                "cafeteriaNombre",
+                "ordenes",
+                "montoTotal"
+              ]
+            }
+          }
+        },
+        "required": [
+          "desde",
+          "hasta",
+          "moneda",
+          "ordenes",
+          "montoTotal",
+          "porEstado",
+          "porCafeteria"
+        ],
+        "examples": [
+          {
+            "desde": "2026-11-01",
+            "hasta": "2026-11-13",
+            "moneda": "CLP",
+            "ordenes": 2,
+            "montoTotal": 4800,
+            "porEstado": [
+              {
+                "estado": "entregado",
+                "ordenes": 2,
+                "montoTotal": 4800
+              }
+            ],
+            "porCafeteria": [
+              {
+                "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+                "cafeteriaNombre": "Cafetería Central",
+                "ordenes": 2,
+                "montoTotal": 4800
+              }
+            ]
+          }
+        ]
+      },
+      "ComprobanteInterno": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tipo": {
+            "const": "comprobante_interno"
+          },
+          "leyenda": {
+            "const": "Documento interno sin validez tributaria"
+          },
+          "numero": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "ordenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cafeteria": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cafeteriaId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "nombre": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              }
+            },
+            "required": [
+              "cafeteriaId",
+              "nombre"
+            ]
+          },
+          "emitidoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "productoNombre": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                "cantidad": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "precioUnitario": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "subtotal": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "productoNombre",
+                "cantidad",
+                "precioUnitario",
+                "subtotal"
+              ]
+            }
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "moneda": {
+            "const": "CLP"
+          },
+          "pago": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "proveedor": {
+                "type": "string",
+                "enum": [
+                  "simulado",
+                  "mercadopago_sandbox"
+                ]
+              },
+              "estado": {
+                "const": "aprobado"
+              }
+            },
+            "required": [
+              "proveedor",
+              "estado"
+            ]
+          }
+        },
+        "required": [
+          "tipo",
+          "leyenda",
+          "numero",
+          "ordenId",
+          "compraId",
+          "cafeteria",
+          "emitidoAt",
+          "items",
+          "montoTotal",
+          "moneda",
+          "pago"
+        ],
+        "examples": [
+          {
+            "tipo": "comprobante_interno",
+            "leyenda": "Documento interno sin validez tributaria",
+            "numero": "CC-000001",
+            "ordenId": "40000000-0000-4000-8000-000000000001",
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "cafeteria": {
+              "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+              "nombre": "Cafetería Central"
+            },
+            "emitidoAt": "2026-11-13T15:00:00Z",
+            "items": [
+              {
+                "productoNombre": "Café americano 12 oz",
+                "cantidad": 2,
+                "precioUnitario": 1800,
+                "subtotal": 3600
+              }
+            ],
+            "montoTotal": 3600,
+            "moneda": "CLP",
+            "pago": {
+              "proveedor": "simulado",
+              "estado": "aprobado"
+            }
+          }
+        ],
+        "description": "Snapshot de la orden pagada; no incluye datos personales del comprador."
+      },
+      "ComprasEnCurso": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "usuarioId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enCurso": {
+            "type": "boolean"
+          },
+          "compras": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "usuarioId",
+          "enCurso",
+          "compras"
+        ],
+        "examples": [
+          {
+            "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "enCurso": false,
+            "compras": 0
+          }
+        ]
+      },
+      "CafeteriaInterna": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cafeteriaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campusId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "estadoOperativo": {
+            "$ref": "#/components/schemas/EstadoOperativo"
+          },
+          "activa": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cafeteriaId",
+          "campusId",
+          "nombre",
+          "estadoOperativo",
+          "activa"
+        ],
+        "examples": [
+          {
+            "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+            "campusId": "33333333-3333-4333-8333-333333333333",
+            "nombre": "Cafetería Central",
+            "estadoOperativo": "OPEN",
+            "activa": true
+          }
+        ]
+      }
+    }
+  }
+}
