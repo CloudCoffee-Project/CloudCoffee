@@ -173,6 +173,55 @@ services:
         networks:
             - backend
 
+    payment-service:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+            args:
+                SERVICE_NAME: payment-service
+        environment:
+            SPRING_PROFILES_ACTIVE: docker
+            SERVER_PORT: 8085
+            DB_URL: jdbc:postgresql://payment-db:5432/${PAYMENT_DB_NAME:-cloudcoffee_payment}
+            DB_USER: ${PAYMENT_DB_USER:-cloudcoffee_payment}
+            DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_local_password}
+            JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
+            INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
+            AUTH_SERVICE_URL: http://auth-service:8081
+            ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+            TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
+            SPRING_RABBITMQ_HOST: rabbitmq
+            SPRING_RABBITMQ_PORT: 5672
+            SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+            SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+            PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-disabled}
+            MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+            MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+            PAYMENT_WEBHOOK_PUBLIC_URL: ${PAYMENT_WEBHOOK_PUBLIC_URL:-}
+            PAYMENT_WEB_RETURN_URL: ${PAYMENT_WEB_RETURN_URL:-}
+            PAYMENT_MOBILE_RETURN_URL: ${PAYMENT_MOBILE_RETURN_URL:-}
+            PAYMENT_REQUEST_TIMEOUT: ${PAYMENT_REQUEST_TIMEOUT:-PT5S}
+            PAYMENT_SIGNATURE_TOLERANCE: ${PAYMENT_SIGNATURE_TOLERANCE:-PT5M}
+            TZ: America/Santiago
+            JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
+        secrets:
+            - jwt_public_key
+        ports:
+            - "${PAYMENT_SERVICE_PORT:-18085}:8085"
+        healthcheck:
+            test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://127.0.0.1:8085/actuator/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+        depends_on:
+            payment-db:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+        networks:
+            - backend
+
     notification-service:
         build:
             context: ./backend
@@ -256,6 +305,7 @@ services:
             AUTH_SERVICE_URL: http://auth-service:8081
             CATALOG_SERVICE_URL: http://catalog-service:8082
             ORDER_SERVICE_URL: http://order-service:8083
+            PAYMENT_SERVICE_URL: http://payment-service:8085
             NOTIFICATION_SERVICE_URL: http://notification-service:8084
             TZ: America/Santiago
             JAVA_TOOL_OPTIONS: -Duser.timezone=America/Santiago
@@ -277,6 +327,8 @@ services:
             order-service:
                 condition: service_healthy
             notification-service:
+                condition: service_healthy
+            payment-service:
                 condition: service_healthy
         networks:
             - backend
@@ -395,6 +447,25 @@ services:
             retries: 5
             start_period: 10s
 
+    payment-db:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_DB: ${PAYMENT_DB_NAME:-cloudcoffee_payment}
+            POSTGRES_USER: ${PAYMENT_DB_USER:-cloudcoffee_payment}
+            POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_local_password}
+        ports:
+            - "${PAYMENT_DB_PORT:-15436}:5432"
+        volumes:
+            - payment_db_data:/var/lib/postgresql/data
+        networks:
+            - backend
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
 networks:
   backend:
     driver: bridge
@@ -407,6 +478,7 @@ volumes:
   catalog_db_data:
   order_db_data:
   notification_db_data:
+  payment_db_data:
 
 # Solo auth-service recibe el secreto privado. Los archivos quedan fuera del build.
 secrets:
