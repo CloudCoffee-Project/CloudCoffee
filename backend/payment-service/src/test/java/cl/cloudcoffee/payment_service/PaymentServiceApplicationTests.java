@@ -22,6 +22,7 @@ class PaymentServiceApplicationTests extends ServiceJwtTests {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_intent", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_inbox", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_outbox", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_anomaly", Integer.class)).isZero();
     }
 
     @Test

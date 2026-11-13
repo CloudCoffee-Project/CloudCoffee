@@ -35,7 +35,7 @@ class MercadoPagoPreferenciasTests {
 
     MercadoPagoPreferencias adapter(String token, String mode) {
         var properties = new PaymentProperties("mercadopago_sandbox", Duration.ofSeconds(5), Duration.ofMinutes(5),
-                token, "", URI.create("https://pagos.cloudcoffee.test/webhooks/mercadopago"),
+                token, "webhook-secret", URI.create("https://pagos.cloudcoffee.test/webhooks/mercadopago"),
                 URI.create("https://app.cloudcoffee.test/pagos/retorno"),
                 URI.create("https://app.cloudcoffee.test/m/pagos/retorno"), mode, null, null);
         RestClient.Builder builder = RestClient.builder();

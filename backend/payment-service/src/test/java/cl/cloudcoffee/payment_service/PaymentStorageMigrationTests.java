@@ -106,6 +106,25 @@ class PaymentStorageMigrationTests {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_outbox WHERE status = 'PENDING'", Integer.class)).isEqualTo(2);
     }
 
+    @Test
+    void v2AddsReconciliationColumnsAndIdempotentAnomalyEvidenceWithoutTouchingExistingRows() {
+        UUID id = newIntent();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_intent WHERE status_reason IS NULL AND provider_checked_at IS NULL",
+                Integer.class)).isEqualTo(1);
+        String sql = "INSERT INTO payment_anomaly (id, payment_intent_id, provider_payment_id, reason, evidence) VALUES (?, ?, ?, ?, '{}')";
+        jdbc.update(sql, UUID.randomUUID(), id, "provider-1", "monto_discrepante");
+        // Un pago con referencia ajena no tiene intención local.
+        jdbc.update(sql, UUID.randomUUID(), null, "provider-2", "referencia_ajena");
+        assertThatThrownBy(() -> jdbc.update(sql, UUID.randomUUID(), id, "provider-1", "monto_discrepante"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(sql, UUID.randomUUID(), UUID.randomUUID(), "provider-3", "monto_discrepante"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM payment_intent WHERE id = ?", id))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        flyway.validate();
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
+
     UUID newIntent() {
         UUID id = UUID.randomUUID();
         intent(id, UUID.randomUUID(), UUID.randomUUID());
