@@ -50,7 +50,7 @@ tokens. La generación manual se explica en
 docker compose up --build -d
 ```
 
-Este comando inicia PostgreSQL, RabbitMQ, Zipkin, los cuatro microservicios, el API
+Este comando inicia PostgreSQL, RabbitMQ, Zipkin, los cinco microservicios, el API
 Gateway y la web de Vite. La aplicación queda disponible en
 http://localhost:3000 y todas sus peticiones pasan por el Gateway publicado en
 http://localhost:18080.
@@ -85,9 +85,9 @@ es destructiva.
 docker compose ps
 ```
 
-Los cinco procesos Spring Boot y la web se consideran listos únicamente cuando
+Los seis procesos Spring Boot y la web se consideran listos únicamente cuando
 sus healthchecks responden correctamente. El API Gateway espera a Auth,
-Catalog, Order y Notification; la web espera al Gateway.
+Catalog, Order, Notification y Payment; la web espera al Gateway.
 
 Comprobación mínima del entorno integrado:
 
@@ -270,12 +270,14 @@ al ejecutar Gateway directamente con su TLS predeterminado, usar HTTPS.
 | Catalog Service | http://localhost:18082 |
 | Order Service | http://localhost:18083 |
 | Notification Service | http://localhost:18084 |
+| Payment Service (módulo base, proveedor deshabilitado) | http://localhost:18085 |
 | Mailpit SMTP | localhost:1025 |
 | Mailpit Web | http://localhost:8025 |
 | Auth PostgreSQL | localhost:15432 |
 | Catalog PostgreSQL | localhost:15433 |
 | Order PostgreSQL | localhost:15434 |
 | Notification PostgreSQL | localhost:15435 |
+| Payment PostgreSQL | localhost:15436 |
 | RabbitMQ | localhost:5672 |
 | RabbitMQ Management | http://localhost:15672 |
 | Zipkin | http://localhost:9411 |
@@ -290,6 +292,7 @@ Los contenedores se comunican mediante nombres internos de Docker:
 - `catalog-service` → `catalog-db:5432`
 - `order-service` → `order-db:5432`
 - `notification-service` → `notification-db:5432`
+- `payment-service` → `payment-db:5432`
 - `notification-service` → `mailpit:1025`
 - `api-gateway` → nombres internos de los microservicios
 
