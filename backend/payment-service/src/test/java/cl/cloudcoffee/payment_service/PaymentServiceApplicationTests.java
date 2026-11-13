@@ -45,7 +45,20 @@ class PaymentServiceApplicationTests extends ServiceJwtTests {
         mvc.perform(post("/payments/webhooks/mercadopago/other")).andExpect(status().isUnauthorized());
         mvc.perform(post("/internal/servicios/payments/preferencias"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void disabledProviderFailsClosedWithoutPersistingIntents() throws Exception {
         mvc.perform(post("/internal/servicios/payments/preferencias")
+                        .header("X-Internal-Service-Token", INTERNAL_TOKEN)
+                        .header("Idempotency-Key", java.util.UUID.randomUUID().toString())
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("PAYMENT_NOT_ENABLED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_intent", Integer.class)).isZero();
+        mvc.perform(get("/internal/servicios/payments/preferencias/" + java.util.UUID.randomUUID())
                         .header("X-Internal-Service-Token", INTERNAL_TOKEN))
                 .andExpect(status().isNotFound());
     }

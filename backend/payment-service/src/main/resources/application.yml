@@ -68,3 +68,8 @@ cloudcoffee:
     webhook-public-url: ${PAYMENT_WEBHOOK_PUBLIC_URL:}
     web-return-url: ${PAYMENT_WEB_RETURN_URL:}
     mobile-return-url: ${PAYMENT_MOBILE_RETURN_URL:}
+    # INT2-111: test-user (init_point) o test-credentials (sandbox_init_point); debe coincidir con la credencial.
+    checkout-mode: ${PAYMENT_CHECKOUT_MODE:}
+    mercadopago-api-url: ${MERCADOPAGO_API_URL:https://api.mercadopago.com}
+    # Tras un POST ambiguo al proveedor, solo se vuelve a crear si la búsqueda sigue vacía pasado este plazo.
+    reconciliation-settle-time: ${PAYMENT_RECONCILIATION_SETTLE_TIME:PT1M}
