@@ -73,7 +73,7 @@ Si no se puede demostrar que no existe una preferencia, mantener conciliación y
 exigir resolución operativa; no cobrar otra vez. Retener correlaciones e historial
 mientras exista una posible confirmación externa, incluso tras limpiar claves.
 
-Errores usan Problem Details común con `codigo`, `timestamp` e `instance`:
+Errores usan Problem Details común con `code`, `timestamp` e `instance`:
 400 validación; 401 sin credencial; 403 rol/credencial insuficiente; 404 recurso
 ajeno/inexistente; 409 revisión, vencimiento o conflicto; 503 dependencia no
 disponible/resultado ambiguo. Respuestas privadas: `Cache-Control:no-store`.

@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudcoffee.local/contracts/payment.pago.resultado.v1.schema.json",
+  "title": "Resultado externo de Payment; no equivale a stock confirmado por Order",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "payment.pago.resultado.v1"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "traceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "compraId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "clienteId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "preferenciaId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proveedorPagoId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estado": {
+          "type": "string",
+          "enum": [
+            "pendiente",
+            "aprobado",
+            "rechazado",
+            "cancelado",
+            "vencido",
+            "requiere_conciliacion"
+          ]
+        },
+        "motivo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "montoTotal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000000000
+        },
+        "moneda": {
+          "const": "CLP"
+        },
+        "proveedor": {
+          "const": "mercadopago_sandbox"
+        },
+        "entorno": {
+          "const": "sandbox"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ocurridoAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiraAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "paymentId",
+        "compraId",
+        "clienteId",
+        "preferenciaId",
+        "proveedorPagoId",
+        "estado",
+        "motivo",
+        "montoTotal",
+        "moneda",
+        "proveedor",
+        "entorno",
+        "version",
+        "ocurridoAt",
+        "expiraAt"
+      ]
+    }
+  },
+  "required": [
+    "eventId",
+    "eventType",
+    "timestamp",
+    "traceId",
+    "payload"
+  ],
+  "examples": [
+    {
+      "eventId": "a0000000-0000-4000-8000-000000000001",
+      "eventType": "payment.pago.resultado.v1",
+      "timestamp": "2026-11-13T15:02:00Z",
+      "traceId": "0123456789abcdef0123456789abcdef",
+      "payload": {
+        "compraId": "30000000-0000-4000-8000-000000000001",
+        "clienteId": "10000000-0000-4000-8000-000000000001",
+        "paymentId": "91000000-0000-4000-8000-000000000001",
+        "preferenciaId": "sandbox-preference-001",
+        "proveedorPagoId": "test-payment-1",
+        "estado": "aprobado",
+        "motivo": "proveedor_confirmado",
+        "montoTotal": 4800,
+        "moneda": "CLP",
+        "proveedor": "mercadopago_sandbox",
+        "entorno": "sandbox",
+        "version": 2,
+        "ocurridoAt": "2026-11-13T15:02:00Z",
+        "expiraAt": "2026-11-13T15:15:00Z"
+      }
+    },
+    {
+      "eventId": "a0000000-0000-4000-8000-000000000002",
+      "eventType": "payment.pago.resultado.v1",
+      "timestamp": "2026-11-13T15:02:00Z",
+      "traceId": "0123456789abcdef0123456789abcdef",
+      "payload": {
+        "compraId": "30000000-0000-4000-8000-000000000001",
+        "clienteId": "10000000-0000-4000-8000-000000000001",
+        "paymentId": "91000000-0000-4000-8000-000000000001",
+        "preferenciaId": "sandbox-preference-001",
+        "proveedorPagoId": "test-payment-2",
+        "estado": "rechazado",
+        "motivo": "proveedor_rechazado",
+        "montoTotal": 4800,
+        "moneda": "CLP",
+        "proveedor": "mercadopago_sandbox",
+        "entorno": "sandbox",
+        "version": 2,
+        "ocurridoAt": "2026-11-13T15:02:00Z",
+        "expiraAt": "2026-11-13T15:15:00Z"
+      }
+    },
+    {
+      "eventId": "a0000000-0000-4000-8000-000000000003",
+      "eventType": "payment.pago.resultado.v1",
+      "timestamp": "2026-11-13T15:16:00Z",
+      "traceId": "0123456789abcdef0123456789abcdef",
+      "payload": {
+        "compraId": "30000000-0000-4000-8000-000000000001",
+        "clienteId": "10000000-0000-4000-8000-000000000001",
+        "paymentId": "91000000-0000-4000-8000-000000000001",
+        "preferenciaId": "sandbox-preference-001",
+        "proveedorPagoId": "test-payment-3",
+        "estado": "requiere_conciliacion",
+        "motivo": "aprobacion_tardia",
+        "montoTotal": 4800,
+        "moneda": "CLP",
+        "proveedor": "mercadopago_sandbox",
+        "entorno": "sandbox",
+        "version": 2,
+        "ocurridoAt": "2026-11-13T15:16:00Z",
+        "expiraAt": "2026-11-13T15:15:00Z"
+      }
+    }
+  ]
+}
