@@ -1,5 +1,10 @@
 # Contrato de compra, pago simulado y retiro · INT2-50
 
+> Referencia histórica del simulador de Sprint 2. INT2-108 define la evolución
+> objetivo hacia Payment y Mercado Pago sandbox en [payment-service.md](payment-service.md)
+> y su [ADR](decisiones/0001-payment-service-sandbox.md). Esta versión se conserva
+> para reproducir el flujo existente; publicar el nuevo contrato no activa la integración.
+
 Versión 1.0.0. Contrato objetivo para las issues de implementación del Sprint 2.
 La definición HTTP está en [compra-pago-retiro.openapi.json](compra-pago-retiro.openapi.json).
 Este documento define las reglas de negocio que complementan sus schemas.

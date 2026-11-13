@@ -1,0 +1,1061 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CloudCoffee · Payment y checkout sandbox",
+    "version": "2.0.0",
+    "description": "Contrato objetivo INT2-108; ejecución INT2-111/112/113. No describe endpoints ya disponibles. Histórico del simulador en compra-pago-retiro.openapi.json."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Rutas /v1 vía Gateway; /internal solo conexión privada a Payment."
+    }
+  ],
+  "paths": {
+    "/v1/compras/{compraId}/pago": {
+      "parameters": [
+        {
+          "name": "compraId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "iniciarPagoSandbox",
+        "summary": "Order inicia un checkout con el total definitivo",
+        "description": "Contrato objetivo INT2-113. Solo CLIENTE propietario. Revisión y reservas resueltas. No acepta escenario, monto ni URL. Misma intención no crea otro pago.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IniciarPago"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado persistido; consultar reglas en payment-service.md.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoSandbox"
+                },
+                "example": {
+                  "pagoId": "90000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "estado": "pendiente",
+                  "motivo": "esperando_proveedor",
+                  "montoTotal": 4800,
+                  "moneda": "CLP",
+                  "simulado": false,
+                  "proveedor": "mercadopago_sandbox",
+                  "creadoAt": "2026-11-13T15:01:00Z",
+                  "actualizadoAt": "2026-11-13T15:01:00Z",
+                  "version": 1,
+                  "paymentId": "91000000-0000-4000-8000-000000000001",
+                  "preferenciaId": "sandbox-preference-001",
+                  "initPoint": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=sandbox-preference-001",
+                  "entorno": "sandbox",
+                  "expiraAt": "2026-11-13T15:15:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details HTTP 400.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details HTTP 401.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details HTTP 403.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details HTTP 404.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details HTTP 409.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details HTTP 503.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Segundos antes de reconsultar la misma intención."
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "consultarPagoSandbox",
+        "summary": "Consultar la proyección de pago del propietario en Order",
+        "description": "Sin efectos; 404 si no existe o pertenece a otro usuario. Retorno del navegador nunca aprueba.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado persistido; consultar reglas en payment-service.md.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoSandbox"
+                },
+                "example": {
+                  "pagoId": "90000000-0000-4000-8000-000000000001",
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "estado": "pendiente",
+                  "motivo": "esperando_proveedor",
+                  "montoTotal": 4800,
+                  "moneda": "CLP",
+                  "simulado": false,
+                  "proveedor": "mercadopago_sandbox",
+                  "creadoAt": "2026-11-13T15:01:00Z",
+                  "actualizadoAt": "2026-11-13T15:01:00Z",
+                  "version": 1,
+                  "paymentId": "91000000-0000-4000-8000-000000000001",
+                  "preferenciaId": "sandbox-preference-001",
+                  "initPoint": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=sandbox-preference-001",
+                  "entorno": "sandbox",
+                  "expiraAt": "2026-11-13T15:15:00Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details HTTP 401.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details HTTP 403.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details HTTP 404.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details HTTP 503.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Segundos antes de reconsultar la misma intención."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/servicios/payments/preferencias": {
+      "post": {
+        "operationId": "crearPreferenciaInterna",
+        "summary": "Order solicita una preferencia idempotente a Payment",
+        "description": "Acceso directo interno, sin ruta Gateway. Verificar suma CLP, expiración y unicidad por compra. Resultado ambiguo: persistir y conciliar antes de repetir POST externo.",
+        "security": [
+          {
+            "internalToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearPreferencia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Resultado persistido; consultar reglas en payment-service.md.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferencia"
+                },
+                "example": {
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "clienteId": "10000000-0000-4000-8000-000000000001",
+                  "paymentId": "91000000-0000-4000-8000-000000000001",
+                  "preferenciaId": "sandbox-preference-001",
+                  "referenciaExterna": "91000000-0000-4000-8000-000000000001",
+                  "estado": "pendiente",
+                  "montoTotal": 4800,
+                  "moneda": "CLP",
+                  "entorno": "sandbox",
+                  "initPoint": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=sandbox-preference-001",
+                  "expiraAt": "2026-11-13T15:15:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details HTTP 400.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details HTTP 401.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details HTTP 403.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details HTTP 409.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details HTTP 503.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Segundos antes de reconsultar la misma intención."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/servicios/payments/preferencias/{compraId}": {
+      "get": {
+        "operationId": "consultarPreferenciaInterna",
+        "summary": "Consultar la intención persistida por compra sin iniciar pagos",
+        "security": [
+          {
+            "internalToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "compraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado persistido; consultar reglas en payment-service.md.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              },
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferencia"
+                },
+                "example": {
+                  "compraId": "30000000-0000-4000-8000-000000000001",
+                  "clienteId": "10000000-0000-4000-8000-000000000001",
+                  "paymentId": "91000000-0000-4000-8000-000000000001",
+                  "preferenciaId": "sandbox-preference-001",
+                  "referenciaExterna": "91000000-0000-4000-8000-000000000001",
+                  "estado": "pendiente",
+                  "montoTotal": 4800,
+                  "moneda": "CLP",
+                  "entorno": "sandbox",
+                  "initPoint": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=sandbox-preference-001",
+                  "expiraAt": "2026-11-13T15:15:00Z",
+                  "version": 1
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details HTTP 401.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details HTTP 403.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details HTTP 404.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details HTTP 503.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Segundos antes de reconsultar la misma intención."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payments/webhooks/mercadopago": {
+      "post": {
+        "operationId": "recibirNotificacionMercadoPago",
+        "summary": "Recibir una notificación autenticada y persistir inbox",
+        "description": "Firma HMAC verificada por INT2-112, no por JWT. Consulta posterior al proveedor valida referencia, total, moneda y entorno. En módulo base responde 503 sin efectos.",
+        "security": [
+          {
+            "webhookSignature": [],
+            "webhookRequestId": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "data.id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "const": "payment"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Notificación autenticada persistida durablemente."
+          },
+          "200": {
+            "description": "Duplicado ya persistido; sin repetir efectos."
+          },
+          "400": {
+            "description": "Problem Details HTTP 400.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details HTTP 401.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details HTTP 503.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Segundos antes de reconsultar la misma intención."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT RS256"
+      },
+      "internalToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Internal-Service-Token"
+      },
+      "webhookSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-signature",
+        "description": "HMAC del proveedor; validación detallada en payment-service.md."
+      },
+      "webhookRequestId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-request-id"
+      }
+    },
+    "schemas": {
+      "CanalRetorno": {
+        "type": "string",
+        "enum": [
+          "web",
+          "mobile"
+        ]
+      },
+      "IniciarPago": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "canalRetorno": {
+            "$ref": "#/components/schemas/CanalRetorno"
+          }
+        },
+        "required": [
+          "canalRetorno"
+        ]
+      },
+      "ItemPreferencia": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ordenId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ofertaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "titulo": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "cantidad": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "precioUnitario": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000000000
+          }
+        },
+        "required": [
+          "ordenId",
+          "ofertaId",
+          "titulo",
+          "cantidad",
+          "precioUnitario"
+        ]
+      },
+      "CrearPreferencia": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clienteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000000000
+          },
+          "moneda": {
+            "const": "CLP"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ItemPreferencia"
+            }
+          },
+          "canalRetorno": {
+            "$ref": "#/components/schemas/CanalRetorno"
+          },
+          "expiraAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "compraId",
+          "clienteId",
+          "montoTotal",
+          "moneda",
+          "items",
+          "canalRetorno",
+          "expiraAt"
+        ],
+        "examples": [
+          {
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "clienteId": "10000000-0000-4000-8000-000000000001",
+            "montoTotal": 4800,
+            "moneda": "CLP",
+            "items": [
+              {
+                "ordenId": "40000000-0000-4000-8000-000000000001",
+                "ofertaId": "50000000-0000-4000-8000-000000000001",
+                "titulo": "Café americano",
+                "cantidad": 2,
+                "precioUnitario": 1800
+              },
+              {
+                "ordenId": "40000000-0000-4000-8000-000000000002",
+                "ofertaId": "50000000-0000-4000-8000-000000000002",
+                "titulo": "Té",
+                "cantidad": 1,
+                "precioUnitario": 1200
+              }
+            ],
+            "canalRetorno": "web",
+            "expiraAt": "2026-11-13T15:15:00Z"
+          }
+        ]
+      },
+      "Preferencia": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clienteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "preferenciaId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "referenciaExterna": {
+            "type": "string",
+            "minLength": 1
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "pendiente",
+              "aprobado",
+              "rechazado",
+              "cancelado",
+              "vencido",
+              "requiere_conciliacion"
+            ]
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000000000
+          },
+          "moneda": {
+            "const": "CLP"
+          },
+          "entorno": {
+            "const": "sandbox"
+          },
+          "initPoint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expiraAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "paymentId",
+          "compraId",
+          "clienteId",
+          "preferenciaId",
+          "referenciaExterna",
+          "estado",
+          "montoTotal",
+          "moneda",
+          "entorno",
+          "initPoint",
+          "expiraAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "clienteId": "10000000-0000-4000-8000-000000000001",
+            "paymentId": "91000000-0000-4000-8000-000000000001",
+            "preferenciaId": "sandbox-preference-001",
+            "referenciaExterna": "91000000-0000-4000-8000-000000000001",
+            "estado": "pendiente",
+            "montoTotal": 4800,
+            "moneda": "CLP",
+            "entorno": "sandbox",
+            "initPoint": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=sandbox-preference-001",
+            "expiraAt": "2026-11-13T15:15:00Z",
+            "version": 1
+          }
+        ]
+      },
+      "PagoSandbox": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pagoId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "compraId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "preferenciaId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "initPoint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "pendiente",
+              "aprobado",
+              "rechazado",
+              "cancelado",
+              "vencido",
+              "requiere_conciliacion"
+            ]
+          },
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "montoTotal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000000000
+          },
+          "moneda": {
+            "const": "CLP"
+          },
+          "simulado": {
+            "const": false
+          },
+          "proveedor": {
+            "const": "mercadopago_sandbox"
+          },
+          "entorno": {
+            "const": "sandbox"
+          },
+          "expiraAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actualizadoAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "pagoId",
+          "compraId",
+          "paymentId",
+          "preferenciaId",
+          "initPoint",
+          "estado",
+          "motivo",
+          "montoTotal",
+          "moneda",
+          "simulado",
+          "proveedor",
+          "entorno",
+          "expiraAt",
+          "creadoAt",
+          "actualizadoAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "pagoId": "90000000-0000-4000-8000-000000000001",
+            "compraId": "30000000-0000-4000-8000-000000000001",
+            "estado": "pendiente",
+            "motivo": "esperando_proveedor",
+            "montoTotal": 4800,
+            "moneda": "CLP",
+            "simulado": false,
+            "proveedor": "mercadopago_sandbox",
+            "creadoAt": "2026-11-13T15:01:00Z",
+            "actualizadoAt": "2026-11-13T15:01:00Z",
+            "version": 1,
+            "paymentId": "91000000-0000-4000-8000-000000000001",
+            "preferenciaId": "sandbox-preference-001",
+            "initPoint": "https://sandbox.mercadopago.cl/checkout/v1/redirect?pref_id=sandbox-preference-001",
+            "entorno": "sandbox",
+            "expiraAt": "2026-11-13T15:15:00Z"
+          }
+        ]
+      },
+      "Webhook": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "data"
+        ],
+        "properties": {
+          "id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "type": {
+            "const": "payment"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "timestamp"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

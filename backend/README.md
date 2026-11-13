@@ -2,6 +2,11 @@
 
 Backend de CloudCoffee construido con arquitectura de microservicios.
 
+El contrato objetivo de Sprint 3 para Payment y Mercado Pago sandbox está en
+[Payment (INT2-108)](docs/payment-service.md), con OpenAPI, eventos y decisión de
+arquitectura. El contrato del simulador de INT2-50 se conserva como historial;
+consultar el estado de implementación antes de integrar un cliente.
+
 ## Stack
 
 - Java 21 LTS
