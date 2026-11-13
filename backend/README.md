@@ -7,6 +7,10 @@ El contrato objetivo de Sprint 3 para Payment y Mercado Pago sandbox está en
 arquitectura. El contrato del simulador de INT2-50 se conserva como historial;
 consultar el estado de implementación antes de integrar un cliente.
 
+El contrato objetivo de administración para los cuatro roles (cuentas, catálogo,
+stock, ventas y comprobantes) está en [Administración (INT2-109)](docs/administracion.md),
+con matriz de permisos, OpenAPI, eventos y decisión de arquitectura.
+
 INT2-110 incorpora el [módulo base Payment](payment-service/README.md), su esquema
 propio, ejecución Compose y CI. El proveedor permanece deshabilitado y el webhook
 falla cerrado hasta INT2-111/112; Order conserva su flujo actual hasta INT2-113.
