@@ -5,6 +5,9 @@ Versión **2.0.0**, evolución del contrato de pago simulado 1.0.0 de INT2-50.
 [OpenAPI](payment-service.openapi.json) · [Eventos y ejemplos](payment-service.eventos.json).
 Este documento define la integración que implementarán INT2-111/112/113; no afirma
 que esos endpoints estén disponibles al incorporar el módulo base de INT2-110.
+**Estado:** INT2-111 implementa las dos rutas internas de preferencias con
+`PAYMENT_PROVIDER=mercadopago_sandbox` ([detalle](../payment-service/README.md));
+webhook, conciliación de pagos (INT2-112) e integración con Order (INT2-113) siguen pendientes.
 
 ## Límites e identidad
 

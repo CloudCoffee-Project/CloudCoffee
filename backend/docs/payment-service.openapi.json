@@ -459,6 +459,16 @@
               }
             }
           },
+          "400": {
+            "description": "Problem Details HTTP 400.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Problem Details HTTP 401.",
             "content": {
