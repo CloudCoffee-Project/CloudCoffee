@@ -6,6 +6,9 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+      - 'docker-compose.yml'
+      - '.env.example'
+      - 'scripts/smoke-compose.sh'
 
 permissions:
   contents: read
@@ -49,6 +52,7 @@ jobs:
           - catalog-service
           - order-service
           - notification-service
+          - payment-service
     services:
       postgres:
         image: postgres:16-alpine
@@ -174,6 +178,7 @@ jobs:
           - catalog-service
           - order-service
           - notification-service
+          - payment-service
     steps:
       - name: Checkout
         uses: actions/checkout@v7

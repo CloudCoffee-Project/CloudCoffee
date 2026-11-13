@@ -94,7 +94,7 @@ if [ "$start_environment" = true ]; then
     fi
 fi
 
-services='zipkin rabbitmq auth-db catalog-db order-db notification-db auth-service catalog-service order-service notification-service api-gateway web'
+services='zipkin rabbitmq auth-db catalog-db order-db notification-db payment-db auth-service catalog-service order-service notification-service payment-service api-gateway web'
 
 wait_for_healthy_service() {
     service=$1

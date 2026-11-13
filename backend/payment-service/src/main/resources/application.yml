@@ -1,0 +1,70 @@
+spring:
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+  application:
+    name: payment-service
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    validate-migration-naming: true
+    out-of-order: false
+    clean-disabled: true
+    baseline-on-migrate: false
+    # Las compras de prueba (perfil dev) son una migración repetible; si una base
+    # que las cargó arranca sin ese perfil, la validación no debe fallar.
+    ignore-migration-patterns: "*:future,repeatable:missing"
+
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      zipkin:
+        endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Servicio de pagos sandbox de CloudCoffee
+
+server:
+  port: ${PAYMENT_SERVICE_PORT:18085}
+
+cloudcoffee:
+  payment:
+    provider: ${PAYMENT_PROVIDER:disabled}
+    request-timeout: ${PAYMENT_REQUEST_TIMEOUT:PT5S}
+    signature-tolerance: ${PAYMENT_SIGNATURE_TOLERANCE:PT5M}
+    access-token: ${MERCADOPAGO_ACCESS_TOKEN:}
+    webhook-secret: ${MERCADOPAGO_WEBHOOK_SECRET:}
+    webhook-public-url: ${PAYMENT_WEBHOOK_PUBLIC_URL:}
+    web-return-url: ${PAYMENT_WEB_RETURN_URL:}
+    mobile-return-url: ${PAYMENT_MOBILE_RETURN_URL:}
