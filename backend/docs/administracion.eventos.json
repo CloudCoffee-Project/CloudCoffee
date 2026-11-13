@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudcoffee.local/contracts/administracion.eventos.json",
+  "title": "Eventos de administración · INT2-109",
+  "description": "Envelope CloudCoffeeEvent existente en el exchange cloudcoffee.events; routing key igual a eventType. Ajustar stock reutiliza catalog.stock.actualizado.v1 sin cambios.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "timestamp", "traceId", "eventType", "payload"],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "eventType": { "enum": ["auth.personal.invitacion.v1", "auth.usuario.anonimizado.v1"] },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "eventType": { "const": "auth.personal.invitacion.v1" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["usuarioId", "email", "nombre", "rol", "cafeteriaId", "token", "expiresAt"],
+            "properties": {
+              "usuarioId": { "type": "string", "format": "uuid" },
+              "email": { "type": "string", "format": "email" },
+              "nombre": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "rol": { "enum": ["CAJERO", "ADMIN_CAFETERIA"] },
+              "cafeteriaId": { "type": "string", "format": "uuid" },
+              "token": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+              "expiresAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "auth.usuario.anonimizado.v1" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["usuarioId", "rolAnterior", "anonimizadoAt", "origen"],
+            "properties": {
+              "usuarioId": { "type": "string", "format": "uuid" },
+              "rolAnterior": { "enum": ["CLIENTE", "CAJERO", "ADMIN_CAFETERIA", "SUPER_ADMIN"] },
+              "anonimizadoAt": { "type": "string", "format": "date-time" },
+              "origen": { "enum": ["baja_propia", "baja_administrativa"] }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "eventId": "70000000-0000-4000-8000-000000000101",
+      "timestamp": "2026-11-13T15:00:00Z",
+      "traceId": "aabbccddeeff00112233445566778899",
+      "eventType": "auth.personal.invitacion.v1",
+      "payload": {
+        "usuarioId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "email": "cajera.nueva@uct.cl",
+        "nombre": "Ana",
+        "rol": "CAJERO",
+        "cafeteriaId": "44444444-4444-4444-8444-444444444444",
+        "token": "q8Yt3rU1oP0aZx9Lk2mN4bV6cX7zA5sD1fG3hJ8kL0w",
+        "expiresAt": "2026-11-16T15:00:00Z"
+      }
+    },
+    {
+      "eventId": "70000000-0000-4000-8000-000000000102",
+      "timestamp": "2026-11-13T16:00:00Z",
+      "traceId": "bbccddeeff0011223344556677889900",
+      "eventType": "auth.usuario.anonimizado.v1",
+      "payload": {
+        "usuarioId": "10000000-0000-4000-8000-000000000001",
+        "rolAnterior": "CLIENTE",
+        "anonimizadoAt": "2026-11-13T16:00:00Z",
+        "origen": "baja_propia"
+      }
+    }
+  ]
+}
