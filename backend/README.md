@@ -7,6 +7,10 @@ El contrato objetivo de Sprint 3 para Payment y Mercado Pago sandbox está en
 arquitectura. El contrato del simulador de INT2-50 se conserva como historial;
 consultar el estado de implementación antes de integrar un cliente.
 
+El contrato objetivo de administración para los cuatro roles (cuentas, catálogo,
+stock, ventas y comprobantes) está en [Administración (INT2-109)](docs/administracion.md),
+con matriz de permisos, OpenAPI, eventos y decisión de arquitectura.
+
 INT2-110 incorpora el [módulo base Payment](payment-service/README.md), su esquema
 propio, ejecución Compose y CI. El proveedor permanece deshabilitado y el webhook
 falla cerrado hasta INT2-111/112; Order conserva su flujo actual hasta INT2-113.
@@ -179,6 +183,38 @@ defecto). Las reservas vencidas liberan stock mediante un proceso periódico y a
 volver a operar sobre su oferta. Configuración opcional: `CATALOG_RESERVATION_TTL`
 (duración ISO-8601, por ejemplo `PT5M`) y
 `CATALOG_RESERVATION_EXPIRATION_SCAN_MS` (intervalo de revisión en milisegundos).
+
+### Seguimientos de productos (INT2-116)
+
+Persisten los productos que sigue un cliente para avisarle cuando vuelven a tener
+stock. Requieren JWT de `CLIENTE`: el dueño se toma del `sub` y cualquier otro rol
+recibe `403 ROL_NO_PERMITIDO`. El contrato coincide con el que ya consume la app
+(`mobile/src/services/seguimientos.ts`).
+
+| Endpoint (Gateway) | Respuesta |
+|---|---|
+| `GET /v1/catalog/seguimientos?page=0&size=100` | `200`, **arreglo** de seguimientos activos propios, del más reciente al más antiguo; total en `X-Total-Count` |
+| `POST /v1/catalog/seguimientos` `{productoId, cafeteriaId}` | `201` con `Location` si se crea o reactiva; `200` con el mismo seguimiento si ya existía |
+| `DELETE /v1/catalog/seguimientos/{id}` | `204`, también al repetirlo; `404` si es ajeno o no existe |
+
+Cada seguimiento devuelve `{id, productoId, productoNombre, cafeteriaId,
+cafeteriaNombre, creadoAt}`. Respuestas con `Cache-Control: no-store`.
+
+- **Alcance:** sin `cafeteriaId` (o `null`) sigue el producto en cualquier cafetería;
+  con `cafeteriaId`, esa cafetería debe ofrecerlo, aunque esté agotado.
+- **Validaciones:** producto inexistente `404 PRODUCTO_NO_ENCONTRADO`; inactivo
+  `409 PRODUCTO_INACTIVO`; cafetería que no lo ofrece o inexistente
+  `404 OFERTA_NO_ENCONTRADA`; sin `productoId` `400 SOLICITUD_INVALIDA`; `page < 0` o
+  `size` fuera de 1–100 `400 PAGINACION_INVALIDA`.
+- **Unicidad:** un seguimiento por usuario, producto y cafetería. Repetir el alta,
+  incluso en paralelo, devuelve el mismo registro. El general usa el UUID nulo en
+  `cafeteria_key`, porque dos `NULL` no chocan en un índice único.
+- **Baja lógica:** `deleted_at` hace idempotente el `DELETE`, y volver a seguir
+  reactiva la misma fila (`V5__create_product_follow.sql`).
+
+La app pide el listado sin `page` ni `size`; el tamaño por defecto de 100 entrega sus
+seguimientos más recientes en una sola respuesta. Enviar los avisos de reposición
+queda fuera de esta API.
 
 ### Personal por cafetería y cuentas de prueba (INT2-65)
 

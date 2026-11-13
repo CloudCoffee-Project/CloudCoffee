@@ -32,9 +32,10 @@ public class StaffCatalogController {
     }
 
     @Operation(operationId = "inventarioCafeteria", summary = "Inventario de la cafetería asignada",
-            description = "Requiere JWT de CAJERO o ADMIN_CAFETERIA cuyo claim cafeteriaId coincida con la ruta; "
-                    + "SUPER_ADMIN consulta cualquier cafetería. Devuelve todas las ofertas, sin filtrar por estado, "
-                    + "ordenadas por nombre de producto. Personal sin asignación, de otra cafetería o clientes reciben 403.")
+            description = "Requiere JWT de CAJERO o ADMIN_CAFETERIA cuya asignación persistida en Auth coincida "
+                    + "con la ruta; el claim cafeteriaId no autoriza. Devuelve todas las ofertas, sin filtrar por estado, "
+                    + "ordenadas por nombre de producto. Personal sin asignación, de otra cafetería, clientes y "
+                    + "SUPER_ADMIN reciben 403.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponse(responseCode = "200", description = "Ofertas de la cafetería")
     @GetMapping("/{cafeteriaId}/ofertas")
