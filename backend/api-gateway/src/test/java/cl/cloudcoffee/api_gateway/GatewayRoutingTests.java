@@ -250,6 +250,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
             "POST, /v1/catalog/productos",
             "PUT, /v1/catalog/productos/33333333-3333-4333-8333-333333333333",
             "DELETE, /v1/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas",
+            "POST, /v1/notifications/device-token",
+            "DELETE, /v1/notifications/device-token",
             "GET, /v1/auth/login",
             "POST, /v1/auth/login/extra",
             "GET, /v1/catalog/campus/extra",
@@ -300,6 +302,37 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertThat(forwarded.path()).isEqualTo("/notifications");
         assertThat(forwarded.query()).isEqualTo("page=0&size=5");
         assertThat(forwarded.authorization()).isEqualTo("Bearer " + jwt);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CLIENTE", "CAJERO", "ADMIN_CAFETERIA", "SUPER_ADMIN"})
+    void authenticatedUsersCanRegisterAndDeleteTheirDeviceToken(String role) throws Exception {
+        String authorization = "Bearer " + sign(
+                claims().subject(java.util.UUID.randomUUID().toString()).claim("role", role).build(),
+                KEYS, com.nimbusds.jose.JWSAlgorithm.RS256);
+        String body = "{\"token\":\"fcm-test-token\",\"plataforma\":\"android\"}";
+
+        mvc.perform(post("/v1/notifications/device-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("notifications"));
+        RecordedRequest post = BACKENDS.get("notifications").take();
+        assertThat(post.method()).isEqualTo("POST");
+        assertThat(post.path()).isEqualTo("/notifications/device-token");
+        assertThat(post.authorization()).isEqualTo(authorization);
+        assertThat(post.body()).isEqualTo(body);
+
+        mvc.perform(delete("/v1/notifications/device-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("notifications"));
+        RecordedRequest delete = BACKENDS.get("notifications").take();
+        assertThat(delete.method()).isEqualTo("DELETE");
+        assertThat(delete.path()).isEqualTo("/notifications/device-token");
+        assertThat(delete.authorization()).isEqualTo(authorization);
+        assertThat(delete.body()).isEqualTo(body);
     }
 
     @ParameterizedTest

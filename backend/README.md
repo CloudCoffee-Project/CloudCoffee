@@ -48,6 +48,32 @@ La respuesta conserva la paginación de Spring Data (`page` y `size`). El payloa
 elimina recursivamente campos de tokens y credenciales, y los detalles de error
 se saneán antes de persistirse y de responder.
 
+### Tokens de dispositivos para notificaciones push (INT2-114)
+
+`POST /v1/notifications/device-token` registra y
+`DELETE /v1/notifications/device-token` elimina el token del cuerpo
+`{ "token": "...", "plataforma": "android" | "ios" }`. Ambas rutas requieren un
+JWT y el propietario siempre se toma de `sub`; no aceptan un usuario indicado
+por el cliente. `tipoToken` es opcional: por omisión se asigna `FCM` a Android y
+`APNS` a iOS, de acuerdo con `getDevicePushTokenAsync()` de Expo. Puede enviarse
+`"tipoToken": "FCM"` en iOS si el token proporcionado es una registration token
+FCM válido; Android solo acepta FCM y APNs exige un token hexadecimal de 64
+caracteres.
+
+Los tokens son únicos globalmente mediante su hash. Repetir el alta es idempotente;
+si el mismo token se registra con otra sesión, se transfiere al usuario del último
+JWT autenticado. Cada dispositivo es independiente: una rotación crea el token
+nuevo y el cliente debe dar de baja el anterior explícitamente; otros dispositivos
+del usuario permanecen registrados. La baja repetida o de un token que no
+pertenece a ese usuario responde `204` sin revelar su propietario. El historial
+operacional `GET /v1/notifications` continúa siendo exclusivo de `SUPER_ADMIN`.
+
+Expo entrega actualmente un token APNs en iOS. Ese registro queda distinguido de
+FCM, pero no puede usarse para enviar mediante Firebase Cloud Messaging: las
+notificaciones FCM a iOS dependen de que el cliente registre un token FCM válido.
+Esta limitación no abre ni modifica el historial global y no cambia el cliente
+mobile en esta entrega.
+
 ### Eventos WebSocket autorizados (INT2-80)
 
 `/v1/notifications/ws` expone STOMP sobre SockJS a través del Gateway. El cliente

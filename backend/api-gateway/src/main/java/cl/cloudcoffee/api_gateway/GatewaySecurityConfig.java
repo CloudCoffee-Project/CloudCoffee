@@ -83,6 +83,9 @@ public class GatewaySecurityConfig {
                         .requestMatchers("/v1/payments", "/v1/payments/**").denyAll()
                         // SockJS handshake is anonymous; STOMP CONNECT authenticates its JWT.
                         .requestMatchers("/v1/notifications/ws", "/v1/notifications/ws/**").permitAll()
+                        // El registro de dispositivo pertenece al sub autenticado; el historial sigue siendo global.
+                        .requestMatchers(HttpMethod.POST, "/v1/notifications/device-token").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/v1/notifications/device-token").authenticated()
                         // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
                         .requestMatchers("/v1/notifications", "/v1/notifications/**").hasRole("SUPER_ADMIN")
                         // Solo un JWT validado con la llave publica autentica estas rutas.
