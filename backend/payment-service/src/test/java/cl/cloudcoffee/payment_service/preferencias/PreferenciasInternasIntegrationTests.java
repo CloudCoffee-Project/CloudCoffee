@@ -49,7 +49,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "cloudcoffee.payment.checkout-mode=test-user",
         "cloudcoffee.payment.web-return-url=https://app.cloudcoffee.test/pagos/retorno",
         "cloudcoffee.payment.mobile-return-url=https://app.cloudcoffee.test/m/pagos/retorno",
-        "cloudcoffee.payment.reconciliation-settle-time=PT1M"})
+        "cloudcoffee.payment.reconciliation-settle-time=PT1M",
+        // Sin tareas en segundo plano: no deben consultar al proveedor real mientras corren estas pruebas.
+        "cloudcoffee.payment.processing.enabled=false"})
 @AutoConfigureMockMvc
 class PreferenciasInternasIntegrationTests extends JwtTestSupport {
 
@@ -82,6 +84,10 @@ class PreferenciasInternasIntegrationTests extends JwtTestSupport {
     // En el job PostgreSQL de CI todos los contextos comparten la base: no dejar intenciones para otras clases.
     @AfterEach
     void borrarIntenciones() {
+        jdbc.update("DELETE FROM payment_outbox");
+        jdbc.update("DELETE FROM payment_inbox");
+        jdbc.update("DELETE FROM payment_anomaly");
+        jdbc.update("DELETE FROM provider_payment");
         jdbc.update("DELETE FROM payment_preference");
         jdbc.update("DELETE FROM payment_intent");
     }

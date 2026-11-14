@@ -37,11 +37,22 @@ public record PaymentProperties(String provider, Duration requestTimeout, Durati
         if (MERCADOPAGO_SANDBOX.equals(provider)) {
             validateSandbox(accessToken, checkoutMode, webReturnUrl, mobileReturnUrl, webhookPublicUrl,
                     mercadopagoApiUrl);
+            // Si se anuncia notification_url al proveedor, debe existir el secreto para verificar sus firmas.
+            if (webhookPublicUrl != null && !webhookPublicUrl.toString().isBlank()
+                    && (webhookSecret == null || webhookSecret.isBlank())) {
+                throw new IllegalArgumentException(
+                        "MERCADOPAGO_WEBHOOK_SECRET is required when PAYMENT_WEBHOOK_PUBLIC_URL is set");
+            }
         }
     }
 
     public boolean enabled() {
         return MERCADOPAGO_SANDBOX.equals(provider);
+    }
+
+    /** INT2-112: sin secreto el webhook falla cerrado (503) en vez de aceptar notificaciones sin verificar. */
+    public boolean webhookEnabled() {
+        return enabled() && webhookSecret != null && !webhookSecret.isBlank();
     }
 
     public boolean usesSandboxInitPoint() {

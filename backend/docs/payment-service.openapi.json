@@ -525,7 +525,7 @@
       "post": {
         "operationId": "recibirNotificacionMercadoPago",
         "summary": "Recibir una notificación autenticada y persistir inbox",
-        "description": "Firma HMAC verificada por INT2-112, no por JWT. Consulta posterior al proveedor valida referencia, total, moneda y entorno. En módulo base responde 503 sin efectos.",
+        "description": "Firma HMAC verificada por INT2-112 (x-signature ts/v1 sobre id:data.id;request-id:x-request-id;ts:ts;), no por JWT. La consulta posterior al proveedor valida referencia, total, moneda y entorno. Sin proveedor o sin secreto configurado responde 503 PAYMENT_NOT_ENABLED sin efectos; firma inválida 401 FIRMA_INVALIDA; cuerpo que no coincide con data.id firmado 400 NOTIFICACION_INVALIDA.",
         "security": [
           {
             "webhookSignature": [],

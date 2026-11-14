@@ -14,7 +14,8 @@ public record PreferenciaResponse(UUID paymentId, UUID compraId, UUID clienteId,
                 "CLP", "sandbox", intencion.initPoint(), intencion.expiraAt(), Math.max(1, intencion.version()));
     }
 
-    static String estado(String interno) {
+    /** Estado público del contrato (también el {@code estado} del evento payment.pago.resultado.v1). */
+    public static String estado(String interno) {
         return switch (interno) {
             case "CREATING", "PENDING" -> "pendiente";
             case "APPROVED" -> "aprobado";

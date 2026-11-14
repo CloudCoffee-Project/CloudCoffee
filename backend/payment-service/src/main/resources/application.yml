@@ -73,3 +73,17 @@ cloudcoffee:
     mercadopago-api-url: ${MERCADOPAGO_API_URL:https://api.mercadopago.com}
     # Tras un POST ambiguo al proveedor, solo se vuelve a crear si la búsqueda sigue vacía pasado este plazo.
     reconciliation-settle-time: ${PAYMENT_RECONCILIATION_SETTLE_TIME:PT1M}
+    # INT2-112: inbox de webhooks, conciliación periódica con el proveedor y outbox de eventos.
+    processing:
+      enabled: ${PAYMENT_PROCESSING_ENABLED:true}
+      poll-interval: ${PAYMENT_POLL_INTERVAL:PT5S}
+      # Consulta al proveedor de cada intención abierta aunque no lleguen notificaciones.
+      reconciliation-interval: ${PAYMENT_RECONCILIATION_INTERVAL:PT2M}
+      # Sin respuesta del proveedor, la intención vence igual pasado este margen tras expiraAt.
+      expiry-grace: ${PAYMENT_EXPIRY_GRACE:PT5M}
+      # Tiempo tras el vencimiento durante el que se siguen buscando aprobaciones tardías.
+      late-approval-window: ${PAYMENT_LATE_APPROVAL_WINDOW:P3D}
+      max-attempts: ${PAYMENT_MAX_ATTEMPTS:12}
+      retry-backoff: ${PAYMENT_RETRY_BACKOFF:PT10S}
+      max-backoff: ${PAYMENT_MAX_BACKOFF:PT15M}
+      lease: ${PAYMENT_PROCESSING_LEASE:PT1M}

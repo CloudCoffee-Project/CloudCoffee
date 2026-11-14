@@ -41,6 +41,11 @@ public class IntencionRepository {
         return jdbc.query(SELECT + " WHERE i.compra_id = ?", this::mapear, compraId).stream().findFirst();
     }
 
+    /** INT2-112: la referencia externa que el proveedor devuelve en cada pago. */
+    public Optional<Intencion> porReferencia(String referenciaExterna) {
+        return jdbc.query(SELECT + " WHERE i.external_reference = ?", this::mapear, referenciaExterna).stream().findFirst();
+    }
+
     public Intencion porId(UUID id) {
         return jdbc.query(SELECT + " WHERE i.id = ?", this::mapear, id).stream().findFirst().orElseThrow();
     }

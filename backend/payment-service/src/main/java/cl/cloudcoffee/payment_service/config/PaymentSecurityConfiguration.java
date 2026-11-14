@@ -37,8 +37,8 @@ public class PaymentSecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/actuator/info").permitAll()
-                        // INT2-112 will authenticate provider signatures here, never a user JWT.
-                        // The base controller returns 503 without accepting or persisting notifications.
+                        // INT2-112: authenticated by the provider's HMAC signature (RecepcionWebhook), never a user JWT.
+                        // Only this exact POST is public; any other webhook path or method still requires auth.
                         .requestMatchers(HttpMethod.POST, "/payments/webhooks/mercadopago").permitAll()
                         .requestMatchers(InternalServiceAuthenticationFilter.PATH_PREFIX + "**")
                             .hasRole(InternalServiceAuthenticationFilter.ROLE)
