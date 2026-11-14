@@ -53,8 +53,10 @@ class RabbitCanalEventosIntegrationTests {
         rabbit = plantilla(conexion);
         admin = new RabbitAdmin(conexion);
         canal = new RabbitCanalEventos(rabbit);
-        TopicExchange eventos = new TopicExchange(exchange, false, true);
-        Queue resultados = new Queue(cola, false, false, true);
+        // Sin auto-delete: receive() con timeout abre y cancela un consumidor, y RabbitMQ borraría la cola al
+        // cancelarse el último consumidor (y con ella el exchange al quedar sin bindings). Se borran en @AfterEach.
+        TopicExchange eventos = new TopicExchange(exchange, false, false);
+        Queue resultados = new Queue(cola, false, false, false);
         admin.declareExchange(eventos);
         admin.declareQueue(resultados);
         admin.declareBinding(BindingBuilder.bind(resultados).to(eventos).with(PaymentMessagingConfiguration.PAYMENT_RESULT));
