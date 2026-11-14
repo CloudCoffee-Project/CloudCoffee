@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.MDC;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 import cl.cloudcoffee.catalog_service.model.entity.Offer;
@@ -15,10 +14,10 @@ public class StockEventPublisher {
 
     public static final String STOCK_UPDATED_EVENT = "catalog.stock.actualizado.v1";
 
-    private final RabbitTemplate rabbitTemplate;
+    private final CatalogEventJournal journal;
 
-    public StockEventPublisher(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
+    public StockEventPublisher(CatalogEventJournal journal) {
+        this.journal = journal;
     }
 
     public void publishStockUpdated(Offer offer) {
@@ -40,9 +39,6 @@ public class StockEventPublisher {
                         "stockActual", offer.getStock(),
                         "version", offer.getVersion()));
 
-        rabbitTemplate.convertAndSend(
-                RabbitTopologyConfig.EVENTS_EXCHANGE,
-                STOCK_UPDATED_EVENT,
-                event);
+        journal.append(event);
     }
 }
