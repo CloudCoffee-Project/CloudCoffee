@@ -1,4 +1,4 @@
-# Payment Service · INT2-110 / INT2-111
+# Payment Service · INT2-110 / INT2-111 / INT2-112
 
 Módulo Spring Boot 4.0.8 / Java 21 del reactor backend, con `common-security`,
 `common-errors`, Flyway, PostgreSQL, RabbitMQ, Actuator y Zipkin.
@@ -6,10 +6,11 @@ Módulo Spring Boot 4.0.8 / Java 21 del reactor backend, con `common-security`,
 ## Estado y límites de la entrega
 
 INT2-110 entregó estructura, persistencia y ejecución integrada; INT2-111 agrega la
-creación y consulta de preferencias Checkout Pro sandbox. El contrato objetivo está en
-[Payment INT2-108](../docs/payment-service.md). Verificación de firmas, conciliación de
-pagos/publicación de eventos y consumo por Order siguen en INT2-112/113: Order todavía
-usa su simulador y nadie llama a esta API hasta INT2-113.
+creación y consulta de preferencias Checkout Pro sandbox; INT2-112 agrega el webhook
+firmado, la conciliación de pagos con el proveedor y la publicación durable de
+`payment.pago.resultado.v1`. El contrato objetivo está en
+[Payment INT2-108](../docs/payment-service.md). El consumo del evento por Order sigue en
+INT2-113: Order todavía usa su simulador y nadie llama a esta API hasta entonces.
 
 `PAYMENT_PROVIDER=disabled` (por defecto) mantiene el servicio cerrado: la API interna
 responde **503 PAYMENT_NOT_ENABLED** sin persistir nada. `mercadopago_sandbox` habilita
@@ -17,10 +18,9 @@ el adaptador y exige al arrancar credencial, modalidad de checkout coherente y U
 retorno HTTPS; con configuración incompleta el servicio no arranca.
 
 El único endpoint de negocio expuesto por Gateway es
-`POST /v1/payments/webhooks/mercadopago`. Payment recibe
-`POST /payments/webhooks/mercadopago` y responde **503 PAYMENT_NOT_ENABLED**, sin
-aceptar ni persistir notificaciones. `Retry-After: 2` permite al proveedor reintentar.
-INT2-112 debe reemplazar ese límite por validación de firma e inbox durable.
+`POST /v1/payments/webhooks/mercadopago` (Payment recibe `POST /payments/webhooks/mercadopago`).
+Sin `mercadopago_sandbox` o sin `MERCADOPAGO_WEBHOOK_SECRET` responde **503
+PAYMENT_NOT_ENABLED** con `Retry-After: 2`, sin aceptar ni persistir notificaciones.
 No confundir salud del módulo con integración de pago lista.
 
 Las rutas `/internal/servicios/**` usan `X-Internal-Service-Token` (mínimo 32
@@ -100,6 +100,97 @@ curl -i http://localhost:18085/internal/servicios/payments/preferencias/<compraI
   -H "X-Internal-Service-Token: $INTERNAL_SERVICE_TOKEN"
 ```
 
+## Webhook, conciliación y eventos (INT2-112)
+
+### Recepción: `POST /payments/webhooks/mercadopago`
+
+Público solo para este POST exacto y sin JWT: se autentica con la firma del proveedor.
+
+| Caso | Resultado |
+| --- | --- |
+| Proveedor deshabilitado o sin secreto | `503 PAYMENT_NOT_ENABLED`, `Retry-After: 2`. |
+| `data.id` o `type` de la URL ausentes, o `type` distinto de `payment` | `400 NOTIFICACION_INVALIDA`. |
+| `x-signature`/`x-request-id` ausentes, HMAC distinto o timestamp fuera de `PAYMENT_SIGNATURE_TOLERANCE` (5 min, en ambos sentidos) | `401 FIRMA_INVALIDA`. No se guarda nada. |
+| Cuerpo no JSON, sin `id`, con otro `type` o con `data.id` distinto del de la URL firmada (máx. 16 KB) | `400 NOTIFICACION_INVALIDA`. |
+| Notificación nueva | Se guarda en `payment_inbox` y responde **202**. |
+| Mismo `id` de notificación ya guardado (reintento del proveedor) | **200**, sin repetir efectos. |
+| Base de datos no disponible | `503 RECEPCION_NO_DISPONIBLE`; el proveedor reintenta. |
+
+Firma según la documentación de Webhooks de Mercado Pago: `x-signature: ts=<ts>,v1=<hmac>`,
+HMAC-SHA256 hexadecimal con la clave secreta sobre el manifiesto
+`id:<data.id>;request-id:<x-request-id>;ts:<ts>;` (`data.id` de la URL, en minúsculas). Se
+exigen las tres partes, se compara en tiempo constante y se acepta `ts` en segundos o en
+milisegundos. El inbox guarda solo metadatos saneados (id de notificación, acción, `data.id`,
+`live_mode`, fechas y `x-request-id`): nunca la firma, tokens ni datos del pagador.
+**La firma solo prueba el origen; no acredita ningún pago.**
+
+### Procesamiento y estados
+
+Tareas programadas (`PAYMENT_POLL_INTERVAL`, 5 s; se apagan con `PAYMENT_PROCESSING_ENABLED=false`)
+que solo trabajan con `mercadopago_sandbox`. Cada fila se reclama con un `UPDATE` condicionado
+y una reserva (`lease`, 1 min) antes de trabajar en ella: varias instancias o un reinicio a
+mitad de camino nunca procesan dos veces la misma fila, y una reserva abandonada se retoma.
+
+1. **Inbox:** por cada notificación se consulta `GET /v1/payments/{id}` con la credencial del
+   backend. Proveedor caído, pago aún no visible (404) o intención sin preferencia confirmada
+   reprograman con backoff exponencial (10 s hasta 15 min). Tras `PAYMENT_MAX_ATTEMPTS` (12) la
+   entrada queda `DEAD` con su último error, como evidencia.
+2. **Validación contra la intención:** el pago se asocia por `external_reference`. Monto exacto
+   en CLP, moneda `CLP` y `live_mode=false` deben coincidir. Una discrepancia se guarda en
+   `payment_anomaly` (evidencia saneada) y, si el pago está aprobado o en curso, la intención
+   pasa a `REQUIRES_RECONCILIATION`. Un pago con referencia ajena solo deja evidencia.
+3. **Transición**, en una transacción con la fila de la intención bloqueada, junto con el outbox:
+
+| Pago consultado | Intención `PENDING` | Intención ya cerrada |
+| --- | --- | --- |
+| `pending`, `in_process`, `authorized` | Sin cambio ni evento. | Sin cambio. |
+| `approved` con fecha de aprobación ≤ `expiraAt` | `APPROVED` (`proveedor_confirmado`). | `EXPIRED`: conciliación (`aprobacion_tras_vencimiento`); `REJECTED`/`CANCELLED`: `aprobacion_tras_cierre`; otro pago aprobado sobre `APPROVED`: `doble_aprobacion`. |
+| `approved` con fecha > `expiraAt` | Conciliación (`aprobacion_tardia`). | Igual. |
+| `rejected` / `cancelled` | `REJECTED` / `CANCELLED`. | Sin cambio (nunca deshace una aprobación). |
+| `in_mediation`, `refunded`, `charged_back` | Conciliación (`en_mediacion`, `reembolsado`, `contracargo`). | Igual. |
+
+Los estados no retroceden: solo `PENDING` pasa a un resultado, y desde un resultado solo se
+llega a `REQUIRES_RECONCILIATION`, que es final para la automatización (resolución manual).
+Una observación más vieja que la guardada para el mismo pago externo se descarta, y la tardanza
+se decide con la fecha de aprobación del proveedor, no con el orden de llegada.
+
+4. **Conciliación periódica:** cada intención abierta se consulta por referencia externa
+   (`/v1/payments/search`) cada `PAYMENT_RECONCILIATION_INTERVAL` (2 min), aunque se pierdan
+   notificaciones. Pasado `expiraAt` sin aprobación aplicada vence (`EXPIRED`, `reserva_vencida`);
+   si el proveedor no responde se espera `PAYMENT_EXPIRY_GRACE` (5 min) antes de vencer. Las
+   intenciones cerradas se siguen consultando durante `PAYMENT_LATE_APPROVAL_WINDOW` (3 días)
+   para detectar aprobaciones tardías, dobles aprobaciones o reembolsos.
+
+### Evento `payment.pago.resultado.v1`
+
+Cada cambio de estado escribe en `payment_outbox`, en la misma transacción, un evento con el
+envelope y el payload del [contrato](../docs/payment-service.eventos.json): `eventId` estable,
+`traceId` de la notificación, `version` = versión de la intención y `ocurridoAt` = fecha efectiva
+del proveedor (la de aprobación si fue aprobado; `expiraAt` si venció). El publicador envía a
+`cloudcoffee.events` (routing key = tipo) con publisher confirms y `mandatory`:
+
+* Confirmado y enrutado: `PUBLISHED`. Broker caído, sin confirmación, rechazo o sin ruta:
+  reintento con backoff y **el mismo eventId** (Order deduplica por `eventId`).
+* Por intención se publica en orden de versión: una versión no sale antes que una anterior pendiente.
+* Agotados los intentos, el evento se copia a `payment.events.dlq` (exchange `cloudcoffee.dlx`,
+  cabecera `x-cloudcoffee-error`) y la fila queda `DEAD`. Si la DLQ tampoco confirma, el evento
+  sigue `PENDING`: un broker caído nunca pierde ni revierte un hecho de pago.
+
+Hasta INT2-113 nadie enlaza una cola a `payment.pago.resultado.v1`, así que los eventos
+devueltos por falta de ruta terminan en la DLQ tras sus reintentos. Se pueden reencolar desde
+ella o volviendo a poner la fila en `PENDING`.
+
+### Probar notificaciones en sandbox
+
+En la aplicación de Mercado Pago (Tus integraciones, Webhooks) configurar la URL pública HTTPS
+del Gateway con el evento *Pagos*, copiar la clave secreta a `MERCADOPAGO_WEBHOOK_SECRET` y usar
+la misma URL en `PAYMENT_WEBHOOK_PUBLIC_URL` (se envía como `notification_url` en cada preferencia).
+La documentación del proveedor advierte que algunas modalidades con credenciales de prueba no
+envían notificaciones; en ese caso, usar el simulador de notificaciones del panel. El simulador
+envía un `data.id` ficticio: la firma se valida (202), pero la consulta del pago dará 404 y la
+entrada terminará `DEAD`. El resultado real del pago llega igual por la conciliación periódica.
+No presentar una notificación simulada como evidencia de un webhook recibido espontáneamente.
+
 ## Persistencia
 
 V1 crea cinco tablas, sin semillas y sin referencias a bases ajenas:
@@ -112,7 +203,11 @@ V1 crea cinco tablas, sin semillas y sin referencias a bases ajenas:
 | `payment_inbox` | Deduplicación por proveedor/notificación, payload saneado y recuperación de pendientes. |
 | `payment_outbox` | Event ID estable y unicidad por intención/versión/tipo, publicación y reintento pendientes. |
 
-INT2-111 usa `payment_intent` y `payment_preference` sin migraciones nuevas.
+INT2-111 usa `payment_intent` y `payment_preference` sin migraciones nuevas. INT2-112 agrega
+V2 (aditiva): `payment_intent.status_reason` (motivo del último cambio),
+`payment_intent.provider_checked_at` (última consulta periódica) y la tabla `payment_anomaly`
+(evidencia de discrepancias, única por pago externo y motivo, con intención opcional para
+referencias ajenas).
 `compra_id` y `cliente_id` son valores externos; las FK solo conectan tablas de
 Payment. Constraints validan importes, estados, timestamps de procesamiento y
 unicidad; índices cubren conciliación, vencimiento, FK y pendientes por reintentar.
@@ -147,8 +242,12 @@ Payment y solo enruta el POST exacto del webhook. Para levantar todo, usar
 Variables: `PAYMENT_DB_*`, `PAYMENT_SERVICE_PORT`, `INTERNAL_SERVICE_TOKEN`,
 `PAYMENT_PROVIDER`, `PAYMENT_REQUEST_TIMEOUT`, `PAYMENT_SIGNATURE_TOLERANCE`,
 `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `PAYMENT_WEBHOOK_PUBLIC_URL`,
-`PAYMENT_WEB_RETURN_URL`, `PAYMENT_MOBILE_RETURN_URL`, `PAYMENT_CHECKOUT_MODE` y
-`PAYMENT_RECONCILIATION_SETTLE_TIME`. Las credenciales quedan vacías y el proveedor
+`PAYMENT_WEB_RETURN_URL`, `PAYMENT_MOBILE_RETURN_URL`, `PAYMENT_CHECKOUT_MODE`,
+`PAYMENT_RECONCILIATION_SETTLE_TIME` y, para INT2-112, `PAYMENT_RECONCILIATION_INTERVAL`,
+`PAYMENT_EXPIRY_GRACE`, `PAYMENT_LATE_APPROVAL_WINDOW` y `PAYMENT_MAX_ATTEMPTS` (más
+`PAYMENT_PROCESSING_ENABLED`, `PAYMENT_POLL_INTERVAL`, `PAYMENT_RETRY_BACKOFF`,
+`PAYMENT_MAX_BACKOFF` y `PAYMENT_PROCESSING_LEASE`, con valores por defecto en
+`application.yml`). Las credenciales quedan vacías y el proveedor
 deshabilitado en el ejemplo; se inyectan fuera de Git. Las URLs de retorno son bases
 HTTPS confiables por canal, sin query ni fragmento; Payment agrega la correlación.
 
@@ -162,8 +261,19 @@ Desde `backend/`, con Java 21:
 
 Las pruebas normales migran H2 en modo PostgreSQL y verifican constraints,
 idempotencia estructural, preservación de inbox/outbox al volver a migrar,
-seguridad real, ausencia de efectos del webhook y el flujo de preferencias con un
-proveedor controlado (idempotencia, concurrencia, timeout y respuesta perdida). Para validar PostgreSQL real:
+seguridad real, el webhook cerrado sin proveedor y el flujo de preferencias con un
+proveedor controlado (idempotencia, concurrencia, timeout y respuesta perdida).
+
+INT2-112 agrega `FirmaWebhookTests` (manifiesto, HMAC, tolerancia, cabeceras mal formadas),
+`MercadoPagoPagosTests` (servidor HTTP simulado: campos saneados, 404 frente a caída, búsqueda
+incompleta) y `PagosIntegrationTests`, de punta a punta con proveedor, broker y reloj
+controlados: firma inválida, notificación repetida, referencia ajena, monto/moneda/entorno
+discrepantes, rechazo, cancelación, notificaciones fuera de orden, aprobación tardía y tras
+vencimiento, doble aprobación, reembolso, caída del proveedor con backoff y `DEAD`, trabajadores
+concurrentes y reinicio, notificaciones perdidas, vencimiento con proveedor caído, outbox con
+broker caído, DLQ y orden por versión. El evento se valida contra
+`docs/payment-service.eventos.json`. `RabbitCanalEventosIntegrationTests` usa un RabbitMQ real
+(solo con `RABBIT_INTEGRATION_TEST=true`, como en el job de CI). Para validar PostgreSQL real:
 
 ```bash
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:15436/cloudcoffee_payment \

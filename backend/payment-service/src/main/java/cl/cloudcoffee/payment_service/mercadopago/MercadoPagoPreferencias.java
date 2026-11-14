@@ -56,7 +56,7 @@ public class MercadoPagoPreferencias implements ProveedorPreferencias {
         this.http = builder.baseUrl(properties.mercadopagoApiUrl().toString()).build();
     }
 
-    private static SimpleClientHttpRequestFactory factory(PaymentProperties properties) {
+    static SimpleClientHttpRequestFactory factory(PaymentProperties properties) {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(properties.requestTimeout());
         factory.setReadTimeout(properties.requestTimeout());

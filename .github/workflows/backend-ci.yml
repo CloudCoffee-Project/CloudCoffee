@@ -163,6 +163,9 @@ jobs:
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl notification-service -am clean verify
       - name: Test order creation outbox with RabbitMQ
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl order-service -am clean verify
+      # H2 en vez del PostgreSQL del job: esa base ya tiene el historial Flyway de notification-service.
+      - name: Test payment result outbox with RabbitMQ
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl payment-service -am clean verify
 
   docker:
     name: Docker image (${{ matrix.service }})
