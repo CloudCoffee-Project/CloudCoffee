@@ -112,9 +112,9 @@ la compra.
 
 ## Verificación de correo
 
-El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado.
+El enlace HTTPS enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado. El correo también incluye el token para ingresarlo manualmente en la app.
 
-En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. Para probar el flujo en otro origen, configura `FRONTEND_URL` antes de iniciar los servicios y asegúrate de que apunte al sitio web accesible desde el navegador.
+En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. En despliegues, configura esta variable con el origen HTTPS público. Los enlaces abren la web si el dominio no está asociado a la app; el teléfono abrirá la app solo cuando el alojamiento publique los archivos de asociación de Android/iOS y la app configure ese dominio.
 
 ## Perfil propio (INT2-47)
 
@@ -141,8 +141,10 @@ con el correo ingresado. El formulario solicita el enlace mediante
 `POST /v1/auth/password/recovery` y muestra carga, aceptación y errores, incluido
 el límite de solicitudes. La confirmación es la misma exista o no la cuenta.
 
-El correo abre `/restablecer-contrasena?token=...`. La página pide una nueva
-contraseña de al menos 8 caracteres y su confirmación; envía `{ token,
+El correo contiene un enlace HTTPS a `/restaurar-contrasena?token=...`, ruta
+compartida con la app móvil. La web conserva `/restablecer-contrasena` como alias.
+La página pide una nueva contraseña de al menos 8 caracteres y su confirmación;
+envía `{ token,
 nuevaPassword }` a `POST /v1/auth/password/reset`. Con la respuesta `204` muestra
 el éxito y el acceso al login. Los tokens inválidos, expirados o consumidos ofrecen
 solicitar otro enlace; los errores de conexión o del servicio permiten reintentar.
@@ -150,11 +152,14 @@ Sin token no se envía ninguna petición de reset. Ambas operaciones son públic
 y omiten el JWT local para permitir recuperar el acceso con una sesión vencida.
 
 La URL del correo se configura **en notification-service**, mediante
-`RESET_PASSWORD_URL`. Docker Compose y `.env.example` ya usan
-`http://localhost:3000/restablecer-contrasena`; para otro despliegue, usar el origen
-web público seguido de `/restablecer-contrasena` y reiniciar notification-service.
-La variable no es `VITE_*`. Se conserva el respaldo `mobile://restaurar-contrasena`
-del servicio cuando se ejecuta fuera de Compose sin configurar la variable.
+`RESET_PASSWORD_URL`. Docker Compose y `.env.example` usan
+`http://localhost:3000/restaurar-contrasena` para desarrollo; para otro
+despliegue, usar el origen HTTPS web seguido de `/restaurar-contrasena` y
+reiniciar notification-service. La variable no es `VITE_*`. El correo también
+muestra el token para copiarlo en la app o en el sitio web. La app móvil acepta
+las rutas `verificar-correo` y `restaurar-contrasena` con `token` cuando recibe un
+enlace asociado; publicar `assetlinks.json` y `apple-app-site-association` y
+configurar los dominios de la app son tareas del despliegue.
 
 Para comprobar el flujo con Mailpit y una cuenta verificada:
 
@@ -240,7 +245,7 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 ## Estructura
 
-- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena` y `/restablecer-contrasena`.
+- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena`, `/restaurar-contrasena` y el alias `/restablecer-contrasena`.
 - `src/components/`: componentes reutilizables.
 - `src/services/`: cliente HTTP común para acceder al API Gateway.
 - `src/hooks/`: hooks reutilizables.
@@ -248,4 +253,4 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 - `src/config/`: lectura centralizada de configuración pública.
 - `src/App.tsx`: definición de rutas. El layout y la navegación visual corresponden a INT2-42.
 
-Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.
+Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`, `/restaurar-contrasena` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.

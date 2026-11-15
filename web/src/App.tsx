@@ -33,6 +33,7 @@ export function App() {
         <Route path="/verificar-correo" element={<VerificationPage />} />
         <Route path="/recuperar-contrasena" element={<PasswordRecoveryPage />} />
         <Route path="/restablecer-contrasena" element={<PasswordResetPage />} />
+        <Route path="/restaurar-contrasena" element={<PasswordResetPage />} />
 
         {/* Rutas privadas para cualquier usuario con sesión */}
         <Route element={<ProtectedRoute />}>

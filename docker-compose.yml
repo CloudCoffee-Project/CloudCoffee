@@ -245,7 +245,7 @@ services:
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
             JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt_public_key
-            SPRING_PROFILES_ACTIVE: docker
+            SPRING_PROFILES_ACTIVE: ${NOTIFICATION_SPRING_PROFILES:-docker}
             SERVER_PORT: 8084
             DB_URL: jdbc:postgresql://notification-db:5432/${NOTIFICATION_DB_NAME}
             DB_USER: ${NOTIFICATION_DB_USER}
@@ -262,13 +262,15 @@ services:
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER: 2
             SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_INTERVAL: 5000ms
             SPRING_RABBITMQ_LISTENER_SIMPLE_DEFAULT_REQUEUE_REJECTED: "false"
-            SMTP_HOST: mailpit
-            SMTP_PORT: 1025
-            SMTP_AUTH: "false"
-            SMTP_STARTTLS: "false"
+            SMTP_HOST: ${SMTP_HOST:-mailpit}
+            SMTP_PORT: ${SMTP_PORT:-1025}
+            SMTP_AUTH: ${SMTP_AUTH:-false}
+            SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+            SMTP_USERNAME: ${SMTP_USERNAME:-}
+            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
             SMTP_FROM: ${SMTP_FROM:-noreply@cloudcoffee.local}
             FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-            RESET_PASSWORD_URL: ${RESET_PASSWORD_URL:-http://localhost:3000/restablecer-contrasena}
+            RESET_PASSWORD_URL: ${RESET_PASSWORD_URL:-http://localhost:3000/restaurar-contrasena}
             WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
             MANAGEMENT_HEALTH_MAIL_ENABLED: "true"
         secrets:
