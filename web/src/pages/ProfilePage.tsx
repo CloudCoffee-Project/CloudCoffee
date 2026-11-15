@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiRequestError } from '../services/httpClient';
@@ -132,6 +133,9 @@ export function ProfilePage() {
     <section className="profile-page" aria-labelledby="profile-title">
       <h1 id="profile-title">Mi Perfil</h1>
       <p className="profile-intro">Consulta y actualiza tus datos personales.</p>
+      <p className="profile-intro">
+        <Link to="/perfil/cambiar-contrasena">Cambiar contraseña</Link>
+      </p>
 
       {isLoading ? (
         <div role="status">
