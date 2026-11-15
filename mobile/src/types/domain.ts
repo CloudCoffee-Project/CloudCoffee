@@ -292,6 +292,19 @@ export interface PaginaOrdenes {
   empty: boolean;
 }
 
+// Envoltura paginada del contrato de compras (PaginaComprasResponse de
+// order-service). GET /v1/compras devuelve esta página, no un arreglo plano.
+export interface PaginaCompras {
+  content: Compra[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
 // Eventos STOMP de tiempo real (contrato a fijar con el backend cuando
 // exista el endpoint). Se tipan acá para que los hooks/servicios no definan
 // DTOs propios: los estados usan el union EstadoOrden, nunca string plano.

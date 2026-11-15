@@ -114,6 +114,15 @@ export async function resolverOrdenNoRetirada(
   return response.data;
 }
 
+// Genera un UUID v4 para Idempotency-Key (exigido por el backend).
+function generarIdempotencyKey(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // INT4-37: confirmar o cancelar UNA orden puntual de la compra del cliente (las
 // que agrupan una compra cuando el pedido es en varios puntos de retiro).
 // A diferencia de las funciones del cajero de arriba, estas no reciben el token
@@ -121,15 +130,31 @@ export async function resolverOrdenNoRetirada(
 // httpClient ya inyecta el JWT del cliente (mismo patrón que compras.ts).
 //   - POST /v1/orders/{ordenId}/confirmar → Orden
 //   - POST /v1/orders/{ordenId}/cancelar  → Orden
-// Sin body: la acción se define por la ruta.
+// Requieren Idempotency-Key (UUID). Sin body: la acción se define por la ruta.
 export async function confirmarOrden(ordenId: string): Promise<Orden> {
-  const response = await httpClient.post<Orden>(`${ORDENES_ENDPOINT}/${ordenId}/confirmar`);
+  const response = await httpClient.post<Orden>(
+    `${ORDENES_ENDPOINT}/${ordenId}/confirmar`,
+    undefined,
+    {
+      headers: {
+        'Idempotency-Key': generarIdempotencyKey(),
+      },
+    }
+  );
 
   return response.data;
 }
 
 export async function cancelarOrden(ordenId: string): Promise<Orden> {
-  const response = await httpClient.post<Orden>(`${ORDENES_ENDPOINT}/${ordenId}/cancelar`);
+  const response = await httpClient.post<Orden>(
+    `${ORDENES_ENDPOINT}/${ordenId}/cancelar`,
+    undefined,
+    {
+      headers: {
+        'Idempotency-Key': generarIdempotencyKey(),
+      },
+    }
+  );
 
   return response.data;
 }

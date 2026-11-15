@@ -14,7 +14,9 @@
 // ruta aún no está ruteada por el gateway).
 
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../../services/ordenes';
@@ -84,7 +86,7 @@ export default function ConfirmacionEntregaScreen() {
   // pantalla también puede abrirse con params inválidos desde la URL.
   if (!pedido || !estadoValido) {
     return (
-      <View style={styles.contenedor} testID="cajero-confirmacion-invalida">
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-confirmacion-invalida">
         <View style={styles.header}>
           <Text style={styles.headerTitulo}>Confirmación de entrega</Text>
           <Text style={styles.headerSubtitulo}>Verifica los productos antes de entregar</Text>
@@ -95,22 +97,26 @@ export default function ConfirmacionEntregaScreen() {
           <Text style={styles.cardTexto}>
             El código escaneado no corresponde a un retiro válido.
           </Text>
-          <Pressable
+          <Presionable
             style={styles.botonPrimario}
             onPress={volverAlEscaner}
             testID="cajero-confirmacion-volver-escaner"
           >
             <Text style={styles.botonPrimarioTexto}>Volver a escanear</Text>
-          </Pressable>
+          </Presionable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // Entrega confirmada contra el backend.
   if (entregada) {
     return (
-      <View style={styles.contenedor} testID="cajero-confirmacion-entregada">
+      <SafeAreaView
+        style={styles.contenedor}
+        edges={['top']}
+        testID="cajero-confirmacion-entregada"
+      >
         <View style={styles.header}>
           <Text style={styles.headerTitulo}>Confirmación de entrega</Text>
           <Text style={styles.headerSubtitulo}>Verifica los productos antes de entregar</Text>
@@ -121,89 +127,91 @@ export default function ConfirmacionEntregaScreen() {
           </View>
           <Text style={styles.cardTitulo}>Entrega registrada</Text>
           <Text style={styles.cardTexto}>La orden #{pedido} fue marcada como entregada.</Text>
-          <Pressable
+          <Presionable
             style={styles.botonPrimario}
             onPress={volverAlEscaner}
             testID="cajero-confirmacion-otro"
           >
             <Text style={styles.botonPrimarioTexto}>Escanear otro pedido</Text>
-          </Pressable>
+          </Presionable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // QR validado: detalle con el checklist de ítems a entregar.
   return (
-    <ScrollView
-      style={styles.contenedor}
-      contentContainerStyle={styles.scrollContenido}
-      testID="cajero-confirmacion-detalle"
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitulo}>Confirmación de entrega</Text>
-        <Text style={styles.headerSubtitulo}>Verifica los productos antes de entregar</Text>
-      </View>
-      <View style={styles.card}>
-        <View style={styles.checkCircle}>
-          <Text style={styles.checkCircleTexto}>✓</Text>
+    <SafeAreaView style={styles.contenedor} edges={['top']}>
+      <ScrollView
+        style={styles.contenedor}
+        contentContainerStyle={styles.scrollContenido}
+        testID="cajero-confirmacion-detalle"
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitulo}>Confirmación de entrega</Text>
+          <Text style={styles.headerSubtitulo}>Verifica los productos antes de entregar</Text>
         </View>
-        <Text style={styles.cardTitulo}>QR Validado Correctamente</Text>
-        <Text style={styles.cardTexto}>
-          Entrega físicamente los siguientes productos al cliente:
-        </Text>
-
-        <View style={styles.ordenMeta}>
-          <Text style={styles.ordenLabel}>N° DE PEDIDO</Text>
-          <Text style={styles.ordenId}>#{pedido}</Text>
-          {orden?.clienteNombre ? (
-            <Text style={styles.ordenCliente}>Cliente: {orden.clienteNombre}</Text>
-          ) : null}
-        </View>
-
-        {orden && orden.items.length > 0 ? (
-          <View style={styles.checklist}>
-            {orden.items.map((item) => (
-              <View key={item.ordenItemId} style={styles.itemPill}>
-                <Text style={styles.itemCantidad}>{item.cantidad}x</Text>
-                <Text style={styles.itemNombre}>{item.productoNombre}</Text>
-              </View>
-            ))}
+        <View style={styles.card}>
+          <View style={styles.checkCircle}>
+            <Text style={styles.checkCircleTexto}>✓</Text>
           </View>
-        ) : null}
-
-        {orden ? (
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total pagado</Text>
-            <Text style={styles.totalMonto}>{formatearMonto(orden.montoTotal)}</Text>
-          </View>
-        ) : null}
-
-        {errorEntrega ? (
-          <View style={styles.errorBanner} testID="cajero-confirmacion-error-entrega">
-            <Text style={styles.errorTexto}>{errorEntrega}</Text>
-          </View>
-        ) : null}
-
-        <Pressable
-          style={[styles.botonPrimario, confirmando && styles.botonDeshabilitado]}
-          onPress={() => void confirmarEntrega()}
-          disabled={confirmando}
-          testID="cajero-confirmacion-confirmar"
-        >
-          <Text style={styles.botonPrimarioTexto}>
-            {confirmando ? 'Registrando entrega…' : '✓ Confirmar entrega'}
+          <Text style={styles.cardTitulo}>QR Validado Correctamente</Text>
+          <Text style={styles.cardTexto}>
+            Entrega físicamente los siguientes productos al cliente:
           </Text>
-        </Pressable>
-        <Pressable
-          style={styles.botonSecundario}
-          onPress={volverAlEscaner}
-          testID="cajero-confirmacion-volver"
-        >
-          <Text style={styles.botonSecundarioTexto}>Volver a escanear</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+
+          <View style={styles.ordenMeta}>
+            <Text style={styles.ordenLabel}>N° DE PEDIDO</Text>
+            <Text style={styles.ordenId}>#{pedido}</Text>
+            {orden?.clienteNombre ? (
+              <Text style={styles.ordenCliente}>Cliente: {orden.clienteNombre}</Text>
+            ) : null}
+          </View>
+
+          {orden && orden.items.length > 0 ? (
+            <View style={styles.checklist}>
+              {orden.items.map((item) => (
+                <View key={item.ordenItemId} style={styles.itemPill}>
+                  <Text style={styles.itemCantidad}>{item.cantidad}x</Text>
+                  <Text style={styles.itemNombre}>{item.productoNombre}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {orden ? (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total pagado</Text>
+              <Text style={styles.totalMonto}>{formatearMonto(orden.montoTotal)}</Text>
+            </View>
+          ) : null}
+
+          {errorEntrega ? (
+            <View style={styles.errorBanner} testID="cajero-confirmacion-error-entrega">
+              <Text style={styles.errorTexto}>{errorEntrega}</Text>
+            </View>
+          ) : null}
+
+          <Presionable
+            style={[styles.botonPrimario, confirmando && styles.botonDeshabilitado]}
+            onPress={() => void confirmarEntrega()}
+            disabled={confirmando}
+            testID="cajero-confirmacion-confirmar"
+          >
+            <Text style={styles.botonPrimarioTexto}>
+              {confirmando ? 'Registrando entrega…' : '✓ Confirmar entrega'}
+            </Text>
+          </Presionable>
+          <Presionable
+            style={styles.botonSecundario}
+            onPress={volverAlEscaner}
+            testID="cajero-confirmacion-volver"
+          >
+            <Text style={styles.botonSecundarioTexto}>Volver a escanear</Text>
+          </Presionable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

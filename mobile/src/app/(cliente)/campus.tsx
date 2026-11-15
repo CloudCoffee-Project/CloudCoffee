@@ -18,7 +18,8 @@
 // acentos amarillos y bordes cálidos) replicada del mockup web.
 
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -100,13 +101,13 @@ export default function CampusScreen() {
         <Text style={styles.errorIcono}>📍</Text>
         <Text style={styles.errorTitulo}>No pudimos cargar los campus</Text>
         <Text style={styles.errorMensaje}>{errorCarga}</Text>
-        <Pressable
-          style={({ pressed }) => [styles.btnReintentar, pressed && styles.btnPresionado]}
+        <Presionable
+          style={styles.btnReintentar}
           onPress={() => void cargar()}
           testID="campus-reintentar"
         >
           <Text style={styles.btnReintentarTexto}>Reintentar</Text>
-        </Pressable>
+        </Presionable>
       </View>
     );
   } else if (campus === null) {
@@ -161,13 +162,9 @@ export default function CampusScreen() {
           const seleccionado = item.id === seleccionId;
 
           return (
-            <Pressable
+            <Presionable
               key={item.id}
-              style={({ pressed }) => [
-                styles.card,
-                seleccionado && styles.cardSeleccionada,
-                pressed && styles.cardPresionada,
-              ]}
+              style={[styles.card, seleccionado && styles.cardSeleccionada]}
               onPress={() => setSeleccionId(item.id)}
               testID={`campus-card-${item.id}`}
             >
@@ -189,7 +186,7 @@ export default function CampusScreen() {
                   {seleccionado ? '✓' : '›'}
                 </Text>
               </View>
-            </Pressable>
+            </Presionable>
           );
         })}
       </View>
@@ -204,13 +201,9 @@ export default function CampusScreen() {
         testID="campus-scroll"
       >
         {tieneSeleccionPrevia && (
-          <Pressable
-            style={({ pressed }) => [styles.btnVolver, pressed && styles.btnPresionado]}
-            onPress={volverAlCatalogo}
-            testID="campus-volver"
-          >
+          <Presionable style={styles.btnVolver} onPress={volverAlCatalogo} testID="campus-volver">
             <Text style={styles.btnVolverTexto}>← Volver al catálogo</Text>
-          </Pressable>
+          </Presionable>
         )}
 
         <View style={styles.header}>
@@ -234,11 +227,10 @@ export default function CampusScreen() {
               {errorGuardado}
             </Text>
           )}
-          <Pressable
-            style={({ pressed }) => [
+          <Presionable
+            style={[
               styles.btnConfirmar,
               (!seleccionId || guardando) && styles.btnConfirmarInactivo,
-              pressed && styles.btnPresionado,
             ]}
             disabled={!seleccionId || guardando}
             onPress={() => void confirmar()}
@@ -249,7 +241,7 @@ export default function CampusScreen() {
             ) : (
               <Text style={styles.btnConfirmarTexto}>Confirmar y continuar</Text>
             )}
-          </Pressable>
+          </Presionable>
         </View>
       )}
     </SafeAreaView>
@@ -335,9 +327,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F7FE',
     shadowColor: '#0052CC',
     shadowOpacity: 0.12,
-  },
-  cardPresionada: {
-    opacity: 0.85,
   },
   cardIcono: {
     width: 44,
@@ -452,9 +441,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
-  },
-  btnPresionado: {
-    opacity: 0.85,
   },
   tarjetaVacio: {
     backgroundColor: '#FFFFFF',

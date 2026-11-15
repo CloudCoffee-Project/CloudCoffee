@@ -24,7 +24,8 @@
 // cloudcoffee-react → Verificar_Correo): fondo crema, badge azul, tarjeta
 // blanca y botón principal en tinta, con los tokens de src/theme/tokens.
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -68,14 +69,14 @@ export default function ActivarCuentaScreen() {
       showsVerticalScrollIndicator={false}
       testID="activar-cuenta"
     >
-      <Pressable
+      <Presionable
         onPress={() => router.replace('/(auth)/portada')}
         style={styles.backButton}
         hitSlop={tokens.espaciado.md}
         testID="activar-cuenta-volver"
       >
         <Text style={styles.backText}>← Volver</Text>
-      </Pressable>
+      </Presionable>
 
       <View style={styles.contenido}>
         <Text style={styles.icono}>🔐</Text>
@@ -119,13 +120,13 @@ export default function ActivarCuentaScreen() {
           </Text>
         </View>
 
-        <Pressable
+        <Presionable
           onPress={() => router.replace('/(auth)/login')}
           style={styles.botonPrincipal}
           testID="activar-cuenta-ir-login"
         >
           <Text style={styles.botonPrincipalTexto}>Ir a iniciar sesión</Text>
-        </Pressable>
+        </Presionable>
 
         <Text style={styles.ayuda}>
           Si ya tienes tu contraseña, puedes iniciar sesión ahora. Si todavía no puedes entrar,

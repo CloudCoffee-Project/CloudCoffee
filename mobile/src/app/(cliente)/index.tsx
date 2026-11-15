@@ -31,7 +31,8 @@
 // colores y medidas salen de src/theme/tokens.ts (INT4-107).
 
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -360,8 +361,8 @@ export default function CatalogoProductosScreen() {
           const ofertas = item.offers ?? [];
 
           return (
-            <Pressable
-              style={({ pressed }) => [styles.productCard, pressed && styles.btnPresionado]}
+            <Presionable
+              style={styles.productCard}
               onPress={() =>
                 router.push({ pathname: '/(cliente)/producto/[id]', params: { id: item.id } })
               }
@@ -407,7 +408,7 @@ export default function CatalogoProductosScreen() {
                   </Text>
                 )}
               </View>
-            </Pressable>
+            </Presionable>
           );
         }}
       />
@@ -427,13 +428,12 @@ export default function CatalogoProductosScreen() {
             <Text style={styles.campusName} numberOfLines={1}>
               {campus?.nombre ?? 'Sin campus seleccionado'}
             </Text>
-            <Pressable
-              style={({ pressed }) => pressed && styles.btnPresionado}
+            <Presionable
               onPress={() => router.push('/(cliente)/campus')}
               testID="catalogo-cambiar-campus"
             >
               <Text style={styles.campusLink}>Cambiar</Text>
-            </Pressable>
+            </Presionable>
           </View>
         </View>
       </View>
@@ -450,13 +450,13 @@ export default function CatalogoProductosScreen() {
           testID="catalogo-buscar"
         />
         {busqueda.length > 0 && (
-          <Pressable
+          <Presionable
             style={styles.clearButton}
             onPress={() => setBusqueda('')}
             testID="catalogo-limpiar-busqueda"
           >
             <Text style={styles.clearButtonText}>✕</Text>
-          </Pressable>
+          </Presionable>
         )}
       </View>
 
@@ -486,12 +486,8 @@ export default function CatalogoProductosScreen() {
       ) : categorias !== null && categorias.length > 0 ? (
         <View style={styles.categoriesContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.chip,
-                categoriaId === TODAS_CATEGORIAS && styles.chipActivo,
-                pressed && styles.btnPresionado,
-              ]}
+            <Presionable
+              style={[styles.chip, categoriaId === TODAS_CATEGORIAS && styles.chipActivo]}
               onPress={() => setCategoriaId(TODAS_CATEGORIAS)}
               testID="catalogo-chip-todos"
             >
@@ -500,23 +496,19 @@ export default function CatalogoProductosScreen() {
               >
                 TODOS
               </Text>
-            </Pressable>
+            </Presionable>
 
             {categorias.map((cat) => (
-              <Pressable
+              <Presionable
                 key={cat.id}
-                style={({ pressed }) => [
-                  styles.chip,
-                  categoriaId === cat.id && styles.chipActivo,
-                  pressed && styles.btnPresionado,
-                ]}
+                style={[styles.chip, categoriaId === cat.id && styles.chipActivo]}
                 onPress={() => setCategoriaId(cat.id)}
                 testID={`catalogo-chip-${cat.id}`}
               >
                 <Text style={[styles.chipText, categoriaId === cat.id && styles.chipTextActivo]}>
                   {cat.nombre}
                 </Text>
-              </Pressable>
+              </Presionable>
             ))}
           </ScrollView>
         </View>
@@ -744,8 +736,5 @@ const styles = StyleSheet.create({
   // lateral de la pantalla. El vacío ya va dentro del contenido del FlatList.
   tarjetaEstado: {
     marginHorizontal: tokens.espaciado.xxxl,
-  },
-  btnPresionado: {
-    opacity: tokens.estados.presionado,
   },
 });

@@ -6,6 +6,9 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+      - 'docker-compose.yml'
+      - '.env.example'
+      - 'scripts/smoke-compose.sh'
 
 permissions:
   contents: read
@@ -49,6 +52,7 @@ jobs:
           - catalog-service
           - order-service
           - notification-service
+          - payment-service
     services:
       postgres:
         image: postgres:16-alpine
@@ -157,6 +161,13 @@ jobs:
           SPRING_DATASOURCE_USERNAME: cloudcoffee
           SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl notification-service -am clean verify
+      - name: Test catalog stock outbox with RabbitMQ
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl catalog-service -am clean verify
+      - name: Test order creation outbox with RabbitMQ
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl order-service -am clean verify
+      # H2 en vez del PostgreSQL del job: esa base ya tiene el historial Flyway de notification-service.
+      - name: Test payment result outbox with RabbitMQ
+        run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl payment-service -am clean verify
 
   docker:
     name: Docker image (${{ matrix.service }})
@@ -172,6 +183,7 @@ jobs:
           - catalog-service
           - order-service
           - notification-service
+          - payment-service
     steps:
       - name: Checkout
         uses: actions/checkout@v7

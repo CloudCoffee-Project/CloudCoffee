@@ -22,7 +22,8 @@
 // Compras) y el estado que el backend devuelve tras confirmar o cancelar.
 
 import { useCallback, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
@@ -295,16 +296,13 @@ export default function MisComprasScreen() {
                         </Text>
                       </View>
                       {conBoleta ? (
-                        <Pressable
-                          style={({ pressed }) => [
-                            styles.btnBoleta,
-                            pressed && styles.btnPresionado,
-                          ]}
+                        <Presionable
+                          style={styles.btnBoleta}
                           onPress={() => abrirBoleta(orden)}
                           testID={`boleta-orden-${orden.ordenId}`}
                         >
                           <Text style={styles.btnBoletaTexto}>📄 Boleta</Text>
-                        </Pressable>
+                        </Presionable>
                       ) : (
                         <Text style={styles.ordenMonto}>{formatoMonto(orden.montoTotal)}</Text>
                       )}
@@ -316,12 +314,11 @@ export default function MisComprasScreen() {
                     {(puedeConfirmarOrden(orden.estado) || puedeCancelarOrden(orden.estado)) && (
                       <View style={styles.acciones} testID={`orden-acciones-${orden.ordenId}`}>
                         {puedeConfirmarOrden(orden.estado) ? (
-                          <Pressable
-                            style={({ pressed }) => [
+                          <Presionable
+                            style={[
                               styles.btnAccion,
                               styles.btnAccionPrimario,
                               accion !== null && styles.btnAccionDeshabilitado,
-                              pressed && styles.btnPresionado,
                             ]}
                             onPress={() => void ejecutarAccion('orden', 'confirmar', orden.ordenId)}
                             disabled={accion !== null}
@@ -338,7 +335,7 @@ export default function MisComprasScreen() {
                             ) : (
                               <Text style={styles.btnAccionPrimarioTexto}>✓ Confirmar pedido</Text>
                             )}
-                          </Pressable>
+                          </Presionable>
                         ) : null}
 
                         {puedeCancelarOrden(orden.estado) &&
@@ -351,12 +348,11 @@ export default function MisComprasScreen() {
                                 ¿Cancelar el pedido #{orden.codigoOrden}?
                               </Text>
                               <View style={styles.confirmacionBotones}>
-                                <Pressable
-                                  style={({ pressed }) => [
+                                <Presionable
+                                  style={[
                                     styles.btnAccion,
                                     styles.btnAccionPeligro,
                                     accion !== null && styles.btnAccionDeshabilitado,
-                                    pressed && styles.btnPresionado,
                                   ]}
                                   onPress={() =>
                                     void ejecutarAccion('orden', 'cancelar', orden.ordenId)
@@ -375,33 +371,29 @@ export default function MisComprasScreen() {
                                   ) : (
                                     <Text style={styles.btnAccionPeligroTexto}>Sí, cancelar</Text>
                                   )}
-                                </Pressable>
-                                <Pressable
-                                  style={({ pressed }) => [
-                                    styles.btnAccion,
-                                    pressed && styles.btnPresionado,
-                                  ]}
+                                </Presionable>
+                                <Presionable
+                                  style={styles.btnAccion}
                                   onPress={() => setCancelacionPorConfirmar(null)}
                                   testID={`orden-mantener-${orden.ordenId}`}
                                 >
                                   <Text style={styles.btnAccionTexto}>No, mantener</Text>
-                                </Pressable>
+                                </Presionable>
                               </View>
                             </View>
                           ) : (
-                            <Pressable
-                              style={({ pressed }) => [
+                            <Presionable
+                              style={[
                                 styles.btnAccion,
                                 styles.btnAccionPeligro,
                                 accion !== null && styles.btnAccionDeshabilitado,
-                                pressed && styles.btnPresionado,
                               ]}
                               onPress={() => pedirCancelacion('orden', orden.ordenId)}
                               disabled={accion !== null}
                               testID={`orden-cancelar-${orden.ordenId}`}
                             >
                               <Text style={styles.btnAccionPeligroTexto}>Cancelar pedido</Text>
-                            </Pressable>
+                            </Presionable>
                           ))}
                       </View>
                     )}
@@ -415,12 +407,11 @@ export default function MisComprasScreen() {
               {hayAcciones ? (
                 <View style={styles.acciones} testID={`compra-acciones-${compra.compraId}`}>
                   {puedeConfirmar ? (
-                    <Pressable
-                      style={({ pressed }) => [
+                    <Presionable
+                      style={[
                         styles.btnAccion,
                         styles.btnAccionPrimario,
                         accion !== null && styles.btnAccionDeshabilitado,
-                        pressed && styles.btnPresionado,
                       ]}
                       onPress={() => void ejecutarAccion('compra', 'confirmar', compra.compraId)}
                       disabled={accion !== null}
@@ -437,7 +428,7 @@ export default function MisComprasScreen() {
                       ) : (
                         <Text style={styles.btnAccionPrimarioTexto}>✓ Confirmar compra</Text>
                       )}
-                    </Pressable>
+                    </Presionable>
                   ) : null}
 
                   {puedeCancelar ? (
@@ -450,12 +441,11 @@ export default function MisComprasScreen() {
                           ¿Cancelar la compra completa y todos sus pedidos?
                         </Text>
                         <View style={styles.confirmacionBotones}>
-                          <Pressable
-                            style={({ pressed }) => [
+                          <Presionable
+                            style={[
                               styles.btnAccion,
                               styles.btnAccionPeligro,
                               accion !== null && styles.btnAccionDeshabilitado,
-                              pressed && styles.btnPresionado,
                             ]}
                             onPress={() =>
                               void ejecutarAccion('compra', 'cancelar', compra.compraId)
@@ -474,33 +464,29 @@ export default function MisComprasScreen() {
                             ) : (
                               <Text style={styles.btnAccionPeligroTexto}>Sí, cancelar</Text>
                             )}
-                          </Pressable>
-                          <Pressable
-                            style={({ pressed }) => [
-                              styles.btnAccion,
-                              pressed && styles.btnPresionado,
-                            ]}
+                          </Presionable>
+                          <Presionable
+                            style={styles.btnAccion}
                             onPress={() => setCancelacionPorConfirmar(null)}
                             testID={`compra-mantener-${compra.compraId}`}
                           >
                             <Text style={styles.btnAccionTexto}>No, mantener</Text>
-                          </Pressable>
+                          </Presionable>
                         </View>
                       </View>
                     ) : (
-                      <Pressable
-                        style={({ pressed }) => [
+                      <Presionable
+                        style={[
                           styles.btnAccion,
                           styles.btnAccionPeligro,
                           accion !== null && styles.btnAccionDeshabilitado,
-                          pressed && styles.btnPresionado,
                         ]}
                         onPress={() => pedirCancelacion('compra', compra.compraId)}
                         disabled={accion !== null}
                         testID={`compra-cancelar-${compra.compraId}`}
                       >
                         <Text style={styles.btnAccionPeligroTexto}>✕ Cancelar compra</Text>
-                      </Pressable>
+                      </Presionable>
                     )
                   ) : null}
                 </View>
@@ -688,10 +674,6 @@ const styles = StyleSheet.create({
     color: '#0052CC',
     fontSize: 12,
     fontWeight: '800',
-  },
-  btnPresionado: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
   },
   // INT4-110: la tarjeta de estado conserva el margen lateral de la pantalla.
   tarjetaEstado: {

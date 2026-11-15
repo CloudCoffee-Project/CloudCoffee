@@ -13,7 +13,9 @@
 // (docs: "unmount Camera components whenever a screen is unfocused").
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Presionable } from '../../components/Presionable';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 
@@ -112,16 +114,16 @@ export default function EscanerQRScreen() {
   // --- 1. Los permisos de cámara todavía se están leyendo. ---
   if (!permission) {
     return (
-      <View style={styles.centrado} testID="cajero-escaner-cargando">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-escaner-cargando">
         <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   // --- 2. Sin permiso de cámara. ---
   if (!permission.granted) {
     return (
-      <View style={styles.contenedor} testID="cajero-escaner-permiso">
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-escaner-permiso">
         <View style={styles.header}>
           <Text style={styles.headerTitulo}>Escanear QR de Retiro</Text>
           <Text style={styles.headerSubtitulo}>Valida el retiro en el punto de entrega</Text>
@@ -134,34 +136,36 @@ export default function EscanerQRScreen() {
             Si lo denegaste anteriormente, puedes volver a solicitarlo o abrir los ajustes del
             teléfono para habilitarlo.
           </Text>
-          <Pressable
+          <Presionable
             style={styles.botonPrimario}
             onPress={() => void requestPermission()}
             testID="cajero-escaner-pedir-permiso"
           >
             <Text style={styles.botonPrimarioTexto}>Volver a solicitar permiso</Text>
-          </Pressable>
-          <Pressable
+          </Presionable>
+          <Presionable
             style={[styles.botonSecundario, styles.botonSecundarioTop]}
             onPress={() => void Linking.openSettings()}
             testID="cajero-escaner-abrir-ajustes"
           >
             <Text style={styles.botonSecundarioTexto}>Abrir ajustes del teléfono</Text>
-          </Pressable>
+          </Presionable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // --- 3. La pestaña no está enfocada: la cámara no debe estar activa. ---
   if (!estaFocada) {
-    return <View style={styles.contenedor} testID="cajero-escaner-inactivo" />;
+    return (
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-escaner-inactivo" />
+    );
   }
 
   // --- 4. QR procesado con error. ---
   if (resultado?.tipo === 'error') {
     return (
-      <View style={styles.contenedor} testID="cajero-escaner-error">
+      <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-escaner-error">
         <View style={styles.header}>
           <Text style={styles.headerTitulo}>Escanear QR de Retiro</Text>
           <Text style={styles.headerSubtitulo}>Valida el retiro en el punto de entrega</Text>
@@ -170,15 +174,15 @@ export default function EscanerQRScreen() {
           <Text style={styles.cardIcono}>⚠️</Text>
           <Text style={styles.cardTitulo}>QR no válido</Text>
           <Text style={styles.cardTexto}>{resultado.mensaje}</Text>
-          <Pressable
+          <Presionable
             style={styles.botonPrimario}
             onPress={reiniciarEscaneo}
             testID="cajero-escaner-reintentar"
           >
             <Text style={styles.botonPrimarioTexto}>Volver a escanear</Text>
-          </Pressable>
+          </Presionable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -205,13 +209,13 @@ export default function EscanerQRScreen() {
         </Text>
         <View style={styles.marcoEscaneo} />
       </View>
-      <Pressable
+      <Presionable
         style={styles.torchButton}
         onPress={() => setTorchEncendida((actual) => !actual)}
         testID="cajero-escaner-linterna"
       >
         <Text style={styles.torchTexto}>{torchEncendida ? '🔦 Apagar' : '🔦 Linterna'}</Text>
-      </Pressable>
+      </Presionable>
     </View>
   );
 }

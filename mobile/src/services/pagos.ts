@@ -12,12 +12,9 @@ export interface ItemCarrito {
   cantidad: number;
 }
 
-// Datos de entrega y facturación que recopila el checkout (INT4-35) y que viajan
-// en el body de POST /v1/compras junto con los items. El tipo refleja el contrato
-// del backend, que todavía contempla envío a domicilio, pero la app solo retira
-// en cafetería: manda siempre metodoEntrega 'retiro' y sin direccion. El backend
-// lo reutilizará cuando implemente el controller; hoy acepta el body de todos
-// modos (la app no mockea).
+// Datos de entrega y facturación que recopila el checkout (INT4-35). El contrato
+// actual del backend solo acepta { items } al crear la compra; estos datos se
+// mantienen por compatibilidad pero no se envían al backend.
 export interface DatosEntregaCompra {
   nombre: string;
   correo: string;
@@ -26,19 +23,16 @@ export interface DatosEntregaCompra {
   metodoEntrega: 'retiro' | 'envio';
 }
 
-// Estado de la compra en la respuesta de POST /v1/compras. La compra siempre
-// queda registrada (compraId + montoTotal); el estado dice qué sigue:
-//   - 'pendiente de pago': registrada y falta el pago (la app abre Mercado
-//     Pago con el initPoint; sin initPoint se confirma en Mis Compras).
-//   - 'revisión requerida': registrada pero necesita revisión antes de
-//     confirmarse: no está pagada ni rechazada, y la app no debe volver a
-//     cobrar ni abrir un nuevo checkout (INT4-36).
-// El backend aún no implementa el endpoint; este es el contrato que la app usa.
-export type EstadoCompraCreada = 'pendiente de pago' | 'revisión requerida';
+// Estado de la compra en la respuesta de POST /v1/compras (contrato order-service).
+//   - 'pendiente_pago': registrada y falta el pago (pago simulado; sin initPoint
+//     se confirma en Mis Compras).
+//   - 'revision_requerida': registrada pero necesita revisión antes de confirmarse
+//     (no está pagada ni rechazada, no se debe volver a cobrar).
+export type EstadoCompraCreada = 'pendiente_pago' | 'revision_requerida';
 
 // Constante del estado de revisión: ninguna pantalla inventa el string (ver la
 // política de estados de types/domain.ts); la pantalla compara contra esta.
-export const ESTADO_COMPRA_REVISION_REQUERIDA: EstadoCompraCreada = 'revisión requerida';
+export const ESTADO_COMPRA_REVISION_REQUERIDA: EstadoCompraCreada = 'revision_requerida';
 
 export interface CompraCreada {
   compraId: string;
@@ -47,19 +41,29 @@ export interface CompraCreada {
   montoTotal: number;
 }
 
+// Genera un UUID v4 para Idempotency-Key (exigido por el backend).
+function generarIdempotencyKey(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export async function crearCompra(
   items: ItemCarrito[],
   accessToken: string,
-  datosEntrega?: DatosEntregaCompra
+  _datosEntrega?: DatosEntregaCompra
 ): Promise<CompraCreada> {
   const response = await httpClient.post<CompraCreada>(
     '/v1/compras',
-    // El precio no viaja (lo recalcula el backend contra el catálogo); sí viajan
-    // los datos del comprador para armar el pedido y la boleta.
-    { items, ...(datosEntrega ? { datosEntrega } : {}) },
+    // El precio no viaja (lo recalcula el backend contra el catálogo). El contrato
+    // actual solo acepta { items }.
+    { items },
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Idempotency-Key': generarIdempotencyKey(),
       },
     }
   );

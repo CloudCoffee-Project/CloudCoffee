@@ -16,7 +16,8 @@
 //
 // Todos los valores de diseño salen de theme/tokens.ts.
 
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Presionable } from './Presionable';
 
 import { tokens } from '../theme/tokens';
 
@@ -78,15 +79,15 @@ export function EstadoLista({
       </Text>
       <Text style={styles.mensaje}>{mensaje}</Text>
 
-      <Pressable
-        style={({ pressed }) => [styles.boton, pressed && styles.botonPresionado]}
+      <Presionable
+        style={styles.boton}
         onPress={accion.onPress}
         testID={accion.testID}
         accessibilityRole="button"
         accessibilityLabel={accion.etiqueta}
       >
         <Text style={styles.botonTexto}>{accion.etiqueta}</Text>
-      </Pressable>
+      </Presionable>
     </View>
   );
 }
@@ -148,9 +149,6 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.espaciado.xl,
     paddingHorizontal: tokens.espaciado['3xl'],
     alignItems: 'center',
-  },
-  botonPresionado: {
-    opacity: tokens.estados.presionado,
   },
   botonTexto: {
     color: tokens.colores.superficie,

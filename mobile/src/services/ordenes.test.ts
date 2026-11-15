@@ -154,7 +154,13 @@ describe('confirmarOrden y cancelarOrden', () => {
 
     const resultado = await confirmarOrden('o-1');
 
-    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/confirmar`);
+    expect(mockedPost).toHaveBeenCalledWith(
+      `${ORDENES_ENDPOINT}/o-1/confirmar`,
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual(confirmada);
   });
 
@@ -164,7 +170,13 @@ describe('confirmarOrden y cancelarOrden', () => {
 
     const resultado = await cancelarOrden('o-1');
 
-    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/cancelar`);
+    expect(mockedPost).toHaveBeenCalledWith(
+      `${ORDENES_ENDPOINT}/o-1/cancelar`,
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual(cancelada);
   });
 

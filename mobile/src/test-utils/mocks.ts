@@ -10,22 +10,45 @@
 import React from 'react';
 import type { ReactNode } from 'react';
 
+const getRNView = () => {
+  try {
+    if (typeof jest !== 'undefined' && (jest as any).requireActual) {
+      return (jest as any).requireActual('react-native').View;
+    }
+  } catch {}
+  return React.Fragment;
+};
+
 // ---------------------------------------------------------------------------
 // expo-router
 // ---------------------------------------------------------------------------
 
+const createMockFn = () => {
+  if (typeof jest !== 'undefined' && typeof jest.fn === 'function') {
+    return jest.fn();
+  }
+  const fn: any = () => fn;
+  fn.mockClear = () => fn;
+  fn.mockReset = () => fn;
+  fn.mockImplementation = () => fn;
+  fn.mockReturnValue = () => fn;
+  fn.mockResolvedValue = () => fn;
+  fn.mockRejectedValue = () => fn;
+  return fn;
+};
+
 /** Router falso: el mismo objeto que devuelve `useRouter` en las suites. */
 export const routerMock = {
-  push: jest.fn(),
-  replace: jest.fn(),
-  back: jest.fn(),
+  push: createMockFn(),
+  replace: createMockFn(),
+  back: createMockFn(),
 };
 
 /** Limpia las llamadas del router falso sin tocar sus implementaciones. */
 export function limpiarRouter(): void {
-  routerMock.push.mockClear();
-  routerMock.replace.mockClear();
-  routerMock.back.mockClear();
+  routerMock.push.mockClear?.();
+  routerMock.replace.mockClear?.();
+  routerMock.back.mockClear?.();
 }
 
 /**
@@ -38,10 +61,18 @@ export const expoRouterMock = {
   get router() {
     return routerMock;
   },
-  useRouter: jest.fn(() => routerMock),
-  useFocusEffect: jest.fn(),
-  useIsFocused: jest.fn(() => true),
-  useLocalSearchParams: jest.fn(() => ({}) as Record<string, string | string[]>),
+  useRouter: (typeof jest !== 'undefined' && (jest as any).fn
+    ? (jest as any).fn(() => routerMock)
+    : () => routerMock) as any,
+  useFocusEffect: (typeof jest !== 'undefined' && (jest as any).fn
+    ? (jest as any).fn()
+    : () => {}) as any,
+  useIsFocused: (typeof jest !== 'undefined' && (jest as any).fn
+    ? (jest as any).fn(() => true)
+    : () => true) as any,
+  useLocalSearchParams: (typeof jest !== 'undefined' && (jest as any).fn
+    ? (jest as any).fn(() => ({}))
+    : () => ({})) as any,
 };
 
 // ---------------------------------------------------------------------------
@@ -54,9 +85,11 @@ export const expoRouterMock = {
  * `SafeAreaView` como las que leen `useSafeAreaInsets`.
  */
 export const safeAreaContextMock = {
-  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 })),
+  useSafeAreaInsets: (typeof jest !== 'undefined' && (jest as any).fn
+    ? (jest as any).fn(() => ({ top: 0, bottom: 0, left: 0, right: 0 }))
+    : () => ({ top: 0, bottom: 0, left: 0, right: 0 })) as any,
   SafeAreaView: (props: { children?: ReactNode } & Record<string, unknown>) =>
-    React.createElement(jest.requireActual('react-native').View, props, props.children),
+    React.createElement(getRNView() as any, props, props.children),
 };
 
 // ---------------------------------------------------------------------------
@@ -66,9 +99,9 @@ export const safeAreaContextMock = {
 interface MockSecureStore {
   /** Vacía el almacén en memoria entre tests. */
   __reset: () => void;
-  setItemAsync: jest.Mock;
-  getItemAsync: jest.Mock;
-  deleteItemAsync: jest.Mock;
+  setItemAsync: any;
+  getItemAsync: any;
+  deleteItemAsync: any;
 }
 
 /**
@@ -78,17 +111,31 @@ interface MockSecureStore {
  */
 export function crearMockSecureStore(): MockSecureStore {
   const store = new Map<string, string>();
-
-  return {
-    __reset: () => store.clear(),
-    setItemAsync: jest.fn(async (key: string, value: string) => {
-      store.set(key, value);
-    }),
-    getItemAsync: jest.fn(async (key: string) => store.get(key) ?? null),
-    deleteItemAsync: jest.fn(async (key: string) => {
-      store.delete(key);
-    }),
+  const mk = () => {
+    if (typeof jest !== 'undefined' && typeof (jest as any).fn === 'function') {
+      return (jest as any).fn();
+    }
+    const fn: any = () => fn;
+    fn.mockClear = () => fn;
+    fn.mockReset = () => fn;
+    fn.mockImplementation = () => fn;
+    return fn;
   };
+
+  const mock: any = {
+    __reset: () => store.clear(),
+    setItemAsync: mk(),
+    getItemAsync: mk(),
+    deleteItemAsync: mk(),
+  };
+  mock.setItemAsync.mockImplementation?.(async (key: string, value: string) => {
+    store.set(key, value);
+  });
+  mock.getItemAsync.mockImplementation?.(async (key: string) => store.get(key) ?? null);
+  mock.deleteItemAsync.mockImplementation?.(async (key: string) => {
+    store.delete(key);
+  });
+  return mock;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,12 +147,19 @@ export function crearMockSecureStore(): MockSecureStore {
  * guardado); la suite que lo necesite lo ajusta con `mockResolvedValue`.
  */
 export const asyncStorageMock = {
-  getItem: jest.fn(async () => null as string | null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
-  clear: jest.fn(async () => undefined),
-  getAllKeys: jest.fn(async () => [] as string[]),
-};
+  getItem: createMockFn(),
+  setItem: createMockFn(),
+  removeItem: createMockFn(),
+  clear: createMockFn(),
+  getAllKeys: createMockFn(),
+} as any;
+(async () => {
+  (asyncStorageMock as any).getItem.mockImplementation?.(async () => null as string | null);
+  (asyncStorageMock as any).setItem.mockImplementation?.(async () => undefined);
+  (asyncStorageMock as any).removeItem.mockImplementation?.(async () => undefined);
+  (asyncStorageMock as any).clear.mockImplementation?.(async () => undefined);
+  (asyncStorageMock as any).getAllKeys.mockImplementation?.(async () => [] as string[]);
+})();
 
 // ---------------------------------------------------------------------------
 // Promesas controladas

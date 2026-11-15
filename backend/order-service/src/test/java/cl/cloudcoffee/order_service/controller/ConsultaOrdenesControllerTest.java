@@ -150,7 +150,7 @@ class ConsultaOrdenesControllerTest extends JwtTestSupport {
         Orden lista = compra(FECHA).getOrdenes().getFirst();
         compra(FECHA.plusSeconds(1));
         jdbc.update("UPDATE ordenes SET estado='LISTO_PARA_RETIRO', retiro_hasta=?, version=2 WHERE id=?",
-                java.sql.Timestamp.from(FECHA.plusSeconds(7200)), lista.getId());
+                cl.cloudcoffee.order_service.persistence.JdbcInstants.utc(FECHA.plusSeconds(7200)), lista.getId());
         var antes = jdbc.queryForMap("SELECT * FROM ordenes WHERE id=?", lista.getId());
 
         for (String ruta : List.of("/orders?estado=listo_para_retiro",

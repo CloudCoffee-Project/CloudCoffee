@@ -152,6 +152,11 @@ public class JwtSecurityAutoConfiguration {
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/actuator/info").permitAll()
                         // SockJS necesita negociar HTTP antes del STOMP CONNECT, que autentica el JWT.
                         .requestMatchers("/notifications/ws", "/notifications/ws/**").permitAll()
+                        // El registro de dispositivo es propio del sub autenticado, no historial operacional.
+                        .requestMatchers(HttpMethod.POST, "/notifications/device-token")
+                            .authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/notifications/device-token")
+                            .authenticated()
                         // Solo servicios con el token interno; un JWT de usuario recibe 403.
                         .requestMatchers(InternalServiceAuthenticationFilter.PATH_PREFIX + "**")
                             .hasRole(InternalServiceAuthenticationFilter.ROLE)

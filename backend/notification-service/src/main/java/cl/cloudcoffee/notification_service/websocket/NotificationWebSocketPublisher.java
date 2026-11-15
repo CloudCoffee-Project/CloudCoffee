@@ -27,6 +27,7 @@ public class NotificationWebSocketPublisher {
     }
 
     public void publish(CloudCoffeeEvent event) {
+        validateEnvelope(event);
         switch (event.eventType()) {
             case "order.compra.creada.v1",
                     "order.compra.estado-cambiado.v1",
@@ -59,6 +60,36 @@ public class NotificationWebSocketPublisher {
     private void publishStockEvent(CloudCoffeeEvent event) {
         UUID cafeteriaId = requiredUuid(event, "cafeteriaId");
         messagingTemplate.convertAndSend("/topic/cafeteria/" + cafeteriaId + "/stock", event);
+    }
+
+    private static void validateEnvelope(CloudCoffeeEvent event) {
+        if (event == null || event.eventId() == null) {
+            throw new IllegalArgumentException("El evento WebSocket requiere eventId.");
+        }
+        if (event.traceId() == null || event.traceId().isBlank()) {
+            throw new IllegalArgumentException("El evento WebSocket requiere traceId.");
+        }
+        if (event.payload() == null) {
+            throw new IllegalArgumentException("El evento WebSocket requiere payload.");
+        }
+        Object version = event.payload().get("version");
+        if (version != null && extractPositiveVersion(version) < 1) {
+            throw new IllegalArgumentException("El campo version del evento debe ser positivo.");
+        }
+    }
+
+    private static long extractPositiveVersion(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.parseLong(text);
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("Campo version inválido en evento.", exception);
+            }
+        }
+        throw new IllegalArgumentException("Campo version inválido en evento.");
     }
 
     private static UUID requiredUuid(CloudCoffeeEvent event, String key) {

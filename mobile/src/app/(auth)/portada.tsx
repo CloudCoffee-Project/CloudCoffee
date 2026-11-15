@@ -4,7 +4,8 @@
 // (cloudcoffee-react/App → vista "inicio"): marca turquesa, ilustración,
 // subtítulo y dos acciones: Crear cuenta / Iniciar sesión.
 
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -33,19 +34,21 @@ export default function PortadaScreen() {
         </Text>
 
         <View style={styles.actions}>
-          <Pressable
+          <Presionable
             onPress={() => router.push('/(auth)/registro')}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryPressed]}
+            style={styles.primaryButton}
+            accessibilityRole="button"
           >
             <Text style={styles.primaryText}>Crear cuenta</Text>
-          </Pressable>
+          </Presionable>
 
-          <Pressable
+          <Presionable
             onPress={() => router.push('/(auth)/login')}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryPressed]}
+            style={styles.secondaryButton}
+            accessibilityRole="button"
           >
             <Text style={styles.secondaryText}>Iniciar sesión</Text>
-          </Pressable>
+          </Presionable>
         </View>
       </View>
     </ScrollView>
@@ -107,11 +110,10 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: tokens.colores.tinta,
     borderRadius: tokens.radios.xl,
+    minHeight: tokens.tamanos.areaTactil,
     paddingVertical: tokens.espaciado['15'],
     alignItems: 'center',
-  },
-  primaryPressed: {
-    backgroundColor: tokens.colores.tintaPresionada,
+    justifyContent: 'center',
   },
   primaryText: {
     ...tokens.tipografia.texto.boton,
@@ -120,13 +122,12 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: tokens.colores.crema,
     borderWidth: tokens.grosores.fino,
-    borderColor: tokens.colores.bordeAuth,
+    borderColor: tokens.colores.bordeControl,
     borderRadius: tokens.radios.xl,
+    minHeight: tokens.tamanos.areaTactil,
     paddingVertical: tokens.espaciado['15'],
     alignItems: 'center',
-  },
-  secondaryPressed: {
-    backgroundColor: tokens.colores.cremaPresionada,
+    justifyContent: 'center',
   },
   secondaryText: {
     ...tokens.tipografia.texto.botonSecundario,

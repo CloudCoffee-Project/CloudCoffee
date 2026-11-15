@@ -8,6 +8,7 @@ export default function CajeroLayout() {
       <Tabs.Screen name="escaner" options={{ title: 'Escanear QR' }} />
       <Tabs.Screen name="stock" options={{ title: 'Stock' }} />
       <Tabs.Screen name="no-retirados" options={{ title: 'No Retirados' }} />
+      <Tabs.Screen name="perfil" options={{ title: 'Perfil' }} />
     </Tabs>
   );
 }

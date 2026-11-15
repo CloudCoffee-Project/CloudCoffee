@@ -16,7 +16,8 @@
 //     utils/avisarAdministrador).
 
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../Presionable';
 
 import { useAuth } from '../../context/AuthContext';
 import { ADMIN_EMAIL } from '../../config/soporte';
@@ -67,7 +68,7 @@ export default function SinCafeteriaAsignada() {
         </Text>
       </View>
 
-      <Pressable
+      <Presionable
         style={[styles.botonPrincipal, cerrandoSesion && styles.botonDeshabilitado]}
         onPress={() => void manejarCerrarSesion()}
         disabled={cerrandoSesion}
@@ -78,15 +79,15 @@ export default function SinCafeteriaAsignada() {
         ) : (
           <Text style={styles.botonPrincipalTexto}>Cerrar sesión</Text>
         )}
-      </Pressable>
+      </Presionable>
 
-      <Pressable
+      <Presionable
         style={styles.botonSecundario}
         onPress={() => void manejarAvisar()}
         testID="cajero-sin-cafeteria-avisar-admin"
       >
         <Text style={styles.botonSecundarioTexto}>✉️ Avisar al administrador</Text>
-      </Pressable>
+      </Presionable>
 
       {mensajeAviso ? (
         <View style={styles.avisoError} testID="cajero-sin-cafeteria-aviso-error">

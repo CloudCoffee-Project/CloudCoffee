@@ -8,7 +8,8 @@
 // mapea al union EstadoOrden de src/types/domain.ts con el helper
 // pasoDelEstado (sin índices mágicos). No hay timers ni datos mockeados.
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -92,9 +93,9 @@ export default function SeguimientosScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+        <Presionable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
         <Text style={styles.headerTitle}>Seguimiento</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -173,15 +174,9 @@ export default function SeguimientosScreen() {
             </View>
 
             {puedeVerQr && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                ]}
-                onPress={abrirQrRetiro}
-              >
+              <Presionable style={styles.primaryButton} onPress={abrirQrRetiro}>
                 <Text style={styles.primaryButtonText}>Ver código de retiro</Text>
-              </Pressable>
+              </Presionable>
             )}
           </>
         )}
@@ -389,10 +384,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 4,
-  },
-  primaryButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
   },
   primaryButtonText: {
     color: '#FFFFFF',

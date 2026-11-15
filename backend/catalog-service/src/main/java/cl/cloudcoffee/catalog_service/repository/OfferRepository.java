@@ -58,4 +58,11 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         ORDER BY p.name ASC
     """)
     List<Offer> findInventoryByCafeteria(@Param("cafeteriaId") UUID cafeteriaId);
+
+    // INT2-116: un seguimiento puntual exige que la cafetería ofrezca el producto, en cualquier estado.
+    @Query("""
+        SELECT COUNT(o) > 0 FROM Offer o
+        WHERE o.cafeteria.id = :cafeteriaId AND o.product.id = :productId
+    """)
+    boolean existsOffer(@Param("cafeteriaId") UUID cafeteriaId, @Param("productId") UUID productId);
 }

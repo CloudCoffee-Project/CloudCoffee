@@ -48,7 +48,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
             "auth", new BackendStub("auth"),
             "catalog", new BackendStub("catalog"),
             "notifications", new BackendStub("notifications"),
-            "orders", new BackendStub("orders"));
+            "orders", new BackendStub("orders"),
+            "payments", new BackendStub("payments"));
 
     @DynamicPropertySource
     static void backendUrls(DynamicPropertyRegistry registry) {
@@ -56,6 +57,7 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         registry.add("CATALOG_SERVICE_URL", () -> BACKENDS.get("catalog").url());
         registry.add("NOTIFICATION_SERVICE_URL", () -> BACKENDS.get("notifications").url());
         registry.add("ORDER_SERVICE_URL", () -> BACKENDS.get("orders").url());
+        registry.add("PAYMENT_SERVICE_URL", () -> BACKENDS.get("payments").url());
     }
 
     @Autowired
@@ -248,6 +250,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
             "POST, /v1/catalog/productos",
             "PUT, /v1/catalog/productos/33333333-3333-4333-8333-333333333333",
             "DELETE, /v1/catalog/productos/33333333-3333-4333-8333-333333333333/ofertas",
+            "POST, /v1/notifications/device-token",
+            "DELETE, /v1/notifications/device-token",
             "GET, /v1/auth/login",
             "POST, /v1/auth/login/extra",
             "GET, /v1/catalog/campus/extra",
@@ -298,6 +302,37 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertThat(forwarded.path()).isEqualTo("/notifications");
         assertThat(forwarded.query()).isEqualTo("page=0&size=5");
         assertThat(forwarded.authorization()).isEqualTo("Bearer " + jwt);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CLIENTE", "CAJERO", "ADMIN_CAFETERIA", "SUPER_ADMIN"})
+    void authenticatedUsersCanRegisterAndDeleteTheirDeviceToken(String role) throws Exception {
+        String authorization = "Bearer " + sign(
+                claims().subject(java.util.UUID.randomUUID().toString()).claim("role", role).build(),
+                KEYS, com.nimbusds.jose.JWSAlgorithm.RS256);
+        String body = "{\"token\":\"fcm-test-token\",\"plataforma\":\"android\"}";
+
+        mvc.perform(post("/v1/notifications/device-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("notifications"));
+        RecordedRequest post = BACKENDS.get("notifications").take();
+        assertThat(post.method()).isEqualTo("POST");
+        assertThat(post.path()).isEqualTo("/notifications/device-token");
+        assertThat(post.authorization()).isEqualTo(authorization);
+        assertThat(post.body()).isEqualTo(body);
+
+        mvc.perform(delete("/v1/notifications/device-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("notifications"));
+        RecordedRequest delete = BACKENDS.get("notifications").take();
+        assertThat(delete.method()).isEqualTo("DELETE");
+        assertThat(delete.path()).isEqualTo("/notifications/device-token");
+        assertThat(delete.authorization()).isEqualTo(authorization);
+        assertThat(delete.body()).isEqualTo(body);
     }
 
     @ParameterizedTest
@@ -500,9 +535,52 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertNoBackendRequests();
     }
 
+    @Test
+    void onlyExactWebhookPostIsProxiedWithoutJwtAndPreservesSignatureInputs() throws Exception {
+        String payload = "{\"id\":\"notification-1\",\"type\":\"payment\",\"data\":{\"id\":\"123\"}}";
+        mvc.perform(post("/v1/payments/webhooks/mercadopago?data.id=123&type=payment")
+                        .header("x-signature", "ts=123,v1=example-signature")
+                        .header("x-request-id", "provider-request-1")
+                        .contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.service").value("payments"));
+        RecordedRequest request = BACKENDS.get("payments").take();
+        assertThat(request.path()).isEqualTo("/payments/webhooks/mercadopago");
+        assertThat(request.query()).isEqualTo("data.id=123&type=payment");
+        assertThat(request.body()).isEqualTo(payload);
+        assertThat(request.signature()).isEqualTo("ts=123,v1=example-signature");
+        assertThat(request.providerRequestId()).isEqualTo("provider-request-1");
+        assertThat(request.authorization()).isNull();
+        assertNoBackendRequests();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/v1/payments/preferencias", "/v1/payments/webhooks/mercadopago/extra",
+            "/v1/payments/internal/servicios/payments/preferencias"})
+    void internalCredentialsAndUserJwtCannotTurnGatewayIntoAPaymentProxy(String path) throws Exception {
+        mvc.perform(post(path).header("X-Internal-Service-Token", INTERNAL_TOKEN)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isForbidden());
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void webhookGetDoesNotUseThePublicPostException() throws Exception {
+        for (String path : new String[]{"/internal/servicios/payments/preferencias",
+                "/v1/internal/servicios/payments/preferencias"}) {
+            mvc.perform(post(path).header("X-Internal-Service-Token", INTERNAL_TOKEN)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                    .andExpect(status().isNotFound());
+        }
+        mvc.perform(get("/v1/payments/webhooks/mercadopago")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/v1/payments/webhooks/mercadopago")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token()))
+                .andExpect(status().isForbidden());
+        assertNoBackendRequests();
+    }
+
     private record RecordedRequest(String method, String path, String query,
             String body, String authorization, String contentType, String userAgent,
-            String idempotencyKey) {
+            String idempotencyKey, String signature, String providerRequestId) {
     }
 
     private static final class BackendStub {
@@ -527,7 +605,8 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                                 body, exchange.getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION),
                                 exchange.getRequestHeaders().getFirst(HttpHeaders.CONTENT_TYPE),
                                 exchange.getRequestHeaders().getFirst(HttpHeaders.USER_AGENT),
-                                idempotencyKey));
+                                idempotencyKey, exchange.getRequestHeaders().getFirst("x-signature"),
+                                exchange.getRequestHeaders().getFirst("x-request-id")));
                         boolean reject = body.equals("{\"reject\":true}");
                         byte[] response = (reject ? PROBLEM : "{\"service\":\"" + name + "\"}")
                                 .getBytes(StandardCharsets.UTF_8);

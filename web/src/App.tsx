@@ -11,6 +11,11 @@ import { PasswordResetPage } from './pages/PasswordResetPage';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { ProfilePage } from './pages/ProfilePage';
 import { PasswordChangePage } from './pages/PasswordChangePage';
+import { ProductDetailPage } from './pages/ProductDetailPage';
+import { CartPage } from './pages/CartPage';
+import { CheckoutPage } from './pages/CheckoutPage';
+import { CashierOrdersPage } from './pages/CashierOrdersPage';
+
 
 export function App() {
   return (
@@ -21,6 +26,8 @@ export function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<HomePage />} />
         <Route path="/catalogo" element={<CatalogPage />} />
+        <Route path="/catalogo/productos/:id" element={<ProductDetailPage />} />
+        <Route path="/carrito" element={<CartPage />} />
         <Route path="/registro" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/verificar-correo" element={<VerificationPage />} />
@@ -35,6 +42,7 @@ export function App() {
 
         {/* Rutas exclusivas de comprador (CLIENTE) */}
         <Route element={<ProtectedRoute allowedRoles={['CLIENTE']} />}>
+          <Route path="/checkout" element={<CheckoutPage />} />
           <Route
             path="/compras"
             element={
@@ -48,15 +56,7 @@ export function App() {
 
         {/* Rutas exclusivas de personal de cafetería (CAJERO) */}
         <Route element={<ProtectedRoute allowedRoles={['CAJERO']} />}>
-          <Route
-            path="/cajero"
-            element={
-              <section style={{ padding: '2rem' }}>
-                <h1>Panel de Cajero</h1>
-                <p>Gestión de pedidos y validación de retiro en cafetería.</p>
-              </section>
-            }
-          />
+          <Route path="/cajero" element={<CashierOrdersPage />} />
         </Route>
 
         {/* Pagina 404 para rutas inexistentes */}

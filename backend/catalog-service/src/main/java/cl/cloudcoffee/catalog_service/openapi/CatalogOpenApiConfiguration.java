@@ -39,11 +39,18 @@ public class CatalogOpenApiConfiguration {
     OpenApiCustomizer catalogErrors() {
         return api -> {
             api.getComponents().addSchemas("Problem", problemSchema());
-            api.getPaths().forEach((path, item) -> item.readOperations().forEach(operation -> {
+            api.getPaths().forEach((path, item) -> item.readOperationsMap().forEach((method, operation) -> {
                 // Mantener el schema inferido de List/Page y precisar el formato que devuelve MVC.
-                var successContent = operation.getResponses().get("200").getContent();
-                if (successContent != null && successContent.containsKey("*/*")) {
-                    successContent.addMediaType("application/json", successContent.remove("*/*"));
+                // No todas las operaciones tienen 200 (p. ej. 201 o 204 en seguimientos).
+                operation.getResponses().values().forEach(response -> {
+                    var successContent = response.getContent();
+                    if (successContent != null && successContent.containsKey("*/*")) {
+                        successContent.addMediaType("application/json", successContent.remove("*/*"));
+                    }
+                });
+                if (path.startsWith("/catalog/seguimientos")) {
+                    seguimientoErrors(operation, method.name(), path);
+                    return;
                 }
                 if (path.startsWith("/catalog/productos")) {
                     operation.getResponses().addApiResponse("400", problem("Falta campusId o un UUID/parámetro tiene formato inválido", 400, path));
@@ -66,6 +73,25 @@ public class CatalogOpenApiConfiguration {
                 operation.getResponses().addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
             }));
         };
+    }
+
+    // INT2-116: rutas que siempre exigen un JWT de CLIENTE.
+    private static void seguimientoErrors(io.swagger.v3.oas.models.Operation operation, String method, String path) {
+        var responses = operation.getResponses();
+        responses.addApiResponse("400", problem("Paginación, JSON, productoId o UUID inválido", 400, path));
+        responses.addApiResponse("401", problem("JWT ausente, inválido o vencido", 401, path));
+        responses.addApiResponse("403", problem("Rol distinto de CLIENTE (ROL_NO_PERMITIDO)", 403, path));
+        if ("POST".equals(method)) {
+            responses.addApiResponse("404", problem(
+                    "Producto inexistente o cafetería que no ofrece el producto (PRODUCTO_NO_ENCONTRADO, OFERTA_NO_ENCONTRADA)",
+                    404, path));
+            responses.addApiResponse("409", problem("El producto no está activo (PRODUCTO_INACTIVO)", 409, path));
+        }
+        if ("DELETE".equals(method)) {
+            responses.addApiResponse("404", problem(
+                    "Seguimiento inexistente o de otro usuario (SEGUIMIENTO_NO_ENCONTRADO)", 404, path));
+        }
+        responses.addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
     }
 
     private static ObjectSchema problemSchema() {

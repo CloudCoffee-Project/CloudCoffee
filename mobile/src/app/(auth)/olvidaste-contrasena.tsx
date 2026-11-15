@@ -10,13 +10,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -88,9 +88,9 @@ export default function OlvidasteContrasenaScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Pressable onPress={handleVolver} style={styles.backButton} hitSlop={8}>
+          <Presionable onPress={handleVolver} style={styles.backButton} hitSlop={8}>
             <Text style={styles.backText}>← Volver</Text>
-          </Pressable>
+          </Presionable>
 
           <View style={styles.resetContent}>
             <Text style={styles.resetIcon}>📩</Text>
@@ -121,15 +121,15 @@ export default function OlvidasteContrasenaScreen() {
             )}
 
             <View style={styles.actionsColumn}>
-              <Pressable onPress={handleRestaurar} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Volver a Iniciar Sesión</Text>
-              </Pressable>
+              <Presionable onPress={handleRestaurar} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Recuperar Acceso con Token</Text>
+              </Presionable>
 
-              <Pressable onPress={() => void handleReenviar()} disabled={reenviando}>
+              <Presionable onPress={() => void handleReenviar()} disabled={reenviando}>
                 <Text style={styles.resendLink}>
                   {reenviando ? 'Reenviando…' : '¿No recibiste el correo? Reenviar enlace'}
                 </Text>
-              </Pressable>
+              </Presionable>
             </View>
           </View>
         </ScrollView>
@@ -147,13 +147,13 @@ export default function OlvidasteContrasenaScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
+        <Presionable
           onPress={() => router.replace('/(auth)/portada')}
           style={styles.backButton}
           hitSlop={8}
         >
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
 
         <View style={styles.resetContent}>
           <View style={styles.header}>
@@ -188,7 +188,7 @@ export default function OlvidasteContrasenaScreen() {
               />
             </View>
 
-            <Pressable
+            <Presionable
               onPress={() => void handleEnviar()}
               disabled={cargando}
               style={[styles.primaryButton, cargando && styles.primaryButtonDisabled]}
@@ -198,15 +198,15 @@ export default function OlvidasteContrasenaScreen() {
               ) : (
                 <Text style={styles.primaryButtonText}>Enviar Enlace</Text>
               )}
-            </Pressable>
+            </Presionable>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               ¿Recordaste tu contraseña?{' '}
-              <Pressable onPress={() => router.replace('/(auth)/login')} hitSlop={8}>
+              <Presionable onPress={() => router.replace('/(auth)/login')} hitSlop={8}>
                 <Text style={styles.footerLink}>Inicia sesión aquí</Text>
-              </Pressable>
+              </Presionable>
             </Text>
           </View>
         </View>

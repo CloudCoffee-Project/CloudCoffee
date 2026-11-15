@@ -8,7 +8,8 @@
 // componente solo recibe la notificación nueva y administra su propio timer.
 
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Presionable } from './Presionable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { NotificacionRecibida } from '../hooks/useNotificacionesPush';
@@ -53,7 +54,7 @@ export default function BannerNotificacionPush({
   const cerrar = (): void => setVisible(false);
 
   return (
-    <Pressable
+    <Presionable
       testID="banner-notificacion"
       accessibilityRole="button"
       accessibilityLabel={`Notificación: ${notificacion.titulo ?? 'nuevo aviso'}`}
@@ -78,7 +79,7 @@ export default function BannerNotificacionPush({
           </Text>
         ) : null}
       </View>
-    </Pressable>
+    </Presionable>
   );
 }
 

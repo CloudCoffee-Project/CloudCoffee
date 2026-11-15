@@ -1,9 +1,26 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
+import { CART_UPDATED_EVENT, readCartItems } from '../../services/catalog';
 
 export function Navbar() {
   const { isLoggedIn, role, logout } = useAuth();
   const navigate = useNavigate();
+  const [cartQuantity, setCartQuantity] = useState(() => (
+    readCartItems().reduce((total, item) => total + item.quantity, 0)
+  ));
+
+  useEffect(() => {
+    const refreshCartQuantity = () => {
+      setCartQuantity(readCartItems().reduce((total, item) => total + item.quantity, 0));
+    };
+    window.addEventListener(CART_UPDATED_EVENT, refreshCartQuantity);
+    window.addEventListener('storage', refreshCartQuantity);
+    return () => {
+      window.removeEventListener(CART_UPDATED_EVENT, refreshCartQuantity);
+      window.removeEventListener('storage', refreshCartQuantity);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -35,6 +52,13 @@ export function Navbar() {
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
         >
           Catálogo
+        </NavLink>
+        <NavLink
+          to="/carrito"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+          aria-label={`Carrito, ${cartQuantity} ${cartQuantity === 1 ? 'producto' : 'productos'}`}
+        >
+          Carrito ({cartQuantity})
         </NavLink>
       </div>
 

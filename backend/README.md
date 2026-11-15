@@ -2,6 +2,22 @@
 
 Backend de CloudCoffee construido con arquitectura de microservicios.
 
+La [guía de eventos durables (INT2-64)](docs/eventos-durables.md) documenta las
+transacciones y publicadores de Order/Catalog, recuperación, configuración y pruebas.
+
+El contrato objetivo de Sprint 3 para Payment y Mercado Pago sandbox está en
+[Payment (INT2-108)](docs/payment-service.md), con OpenAPI, eventos y decisión de
+arquitectura. El contrato del simulador de INT2-50 se conserva como historial;
+consultar el estado de implementación antes de integrar un cliente.
+
+El contrato objetivo de administración para los cuatro roles (cuentas, catálogo,
+stock, ventas y comprobantes) está en [Administración (INT2-109)](docs/administracion.md),
+con matriz de permisos, OpenAPI, eventos y decisión de arquitectura.
+
+INT2-110 incorpora el [módulo base Payment](payment-service/README.md), su esquema
+propio, ejecución Compose y CI. El proveedor permanece deshabilitado y el webhook
+falla cerrado hasta INT2-111/112; Order conserva su flujo actual hasta INT2-113.
+
 ## Stack
 
 - Java 21 LTS
@@ -35,6 +51,32 @@ La respuesta conserva la paginación de Spring Data (`page` y `size`). El payloa
 elimina recursivamente campos de tokens y credenciales, y los detalles de error
 se saneán antes de persistirse y de responder.
 
+### Tokens de dispositivos para notificaciones push (INT2-114)
+
+`POST /v1/notifications/device-token` registra y
+`DELETE /v1/notifications/device-token` elimina el token del cuerpo
+`{ "token": "...", "plataforma": "android" | "ios" }`. Ambas rutas requieren un
+JWT y el propietario siempre se toma de `sub`; no aceptan un usuario indicado
+por el cliente. `tipoToken` es opcional: por omisión se asigna `FCM` a Android y
+`APNS` a iOS, de acuerdo con `getDevicePushTokenAsync()` de Expo. Puede enviarse
+`"tipoToken": "FCM"` en iOS si el token proporcionado es una registration token
+FCM válido; Android solo acepta FCM y APNs exige un token hexadecimal de 64
+caracteres.
+
+Los tokens son únicos globalmente mediante su hash. Repetir el alta es idempotente;
+si el mismo token se registra con otra sesión, se transfiere al usuario del último
+JWT autenticado. Cada dispositivo es independiente: una rotación crea el token
+nuevo y el cliente debe dar de baja el anterior explícitamente; otros dispositivos
+del usuario permanecen registrados. La baja repetida o de un token que no
+pertenece a ese usuario responde `204` sin revelar su propietario. El historial
+operacional `GET /v1/notifications` continúa siendo exclusivo de `SUPER_ADMIN`.
+
+Expo entrega actualmente un token APNs en iOS. Ese registro queda distinguido de
+FCM, pero no puede usarse para enviar mediante Firebase Cloud Messaging: las
+notificaciones FCM a iOS dependen de que el cliente registre un token FCM válido.
+Esta limitación no abre ni modifica el historial global y no cambia el cliente
+mobile en esta entrega.
+
 ### Eventos WebSocket autorizados (INT2-80)
 
 `/v1/notifications/ws` expone STOMP sobre SockJS a través del Gateway. El cliente
@@ -54,6 +96,17 @@ destinos de negocio se rechazan. La conexión se cierra al vencer el JWT.
 se admiten `http://localhost:3000` y `http://127.0.0.1:3000`. La autorización del comprador se alimenta
 de los eventos de órdenes consumidos por notification-service y queda persistida
 para poder validar suscripciones después de reinicios.
+
+### Reconciliación de eventos tras reconexión WebSocket (INT2-81)
+
+Al recuperar una sesión STOMP en `/v1/notifications/ws`, el cliente vuelve a
+suscribirse a los destinos autorizados y ejecuta la consulta HTTP correspondiente
+(`/v1/compras/{compraId}`, `/v1/orders/{ordenId}` o `/v1/orders`) para recuperar
+transiciones ocurridas durante la desconexión. La combinación se realiza mediante
+el campo monotónico `version`: los eventos con `eventId` ya procesado o `version`
+anterior se descartan sin retroceder el estado, los saltos (`version > actual + 1`)
+disparan una relectura HTTP y `notification-service` deduplica reentregas de
+RabbitMQ por `eventId` preservando el `traceId` original en `notification_history`.
 
 ## Requisitos
 
@@ -159,6 +212,38 @@ defecto). Las reservas vencidas liberan stock mediante un proceso periódico y a
 volver a operar sobre su oferta. Configuración opcional: `CATALOG_RESERVATION_TTL`
 (duración ISO-8601, por ejemplo `PT5M`) y
 `CATALOG_RESERVATION_EXPIRATION_SCAN_MS` (intervalo de revisión en milisegundos).
+
+### Seguimientos de productos (INT2-116)
+
+Persisten los productos que sigue un cliente para avisarle cuando vuelven a tener
+stock. Requieren JWT de `CLIENTE`: el dueño se toma del `sub` y cualquier otro rol
+recibe `403 ROL_NO_PERMITIDO`. El contrato coincide con el que ya consume la app
+(`mobile/src/services/seguimientos.ts`).
+
+| Endpoint (Gateway) | Respuesta |
+|---|---|
+| `GET /v1/catalog/seguimientos?page=0&size=100` | `200`, **arreglo** de seguimientos activos propios, del más reciente al más antiguo; total en `X-Total-Count` |
+| `POST /v1/catalog/seguimientos` `{productoId, cafeteriaId}` | `201` con `Location` si se crea o reactiva; `200` con el mismo seguimiento si ya existía |
+| `DELETE /v1/catalog/seguimientos/{id}` | `204`, también al repetirlo; `404` si es ajeno o no existe |
+
+Cada seguimiento devuelve `{id, productoId, productoNombre, cafeteriaId,
+cafeteriaNombre, creadoAt}`. Respuestas con `Cache-Control: no-store`.
+
+- **Alcance:** sin `cafeteriaId` (o `null`) sigue el producto en cualquier cafetería;
+  con `cafeteriaId`, esa cafetería debe ofrecerlo, aunque esté agotado.
+- **Validaciones:** producto inexistente `404 PRODUCTO_NO_ENCONTRADO`; inactivo
+  `409 PRODUCTO_INACTIVO`; cafetería que no lo ofrece o inexistente
+  `404 OFERTA_NO_ENCONTRADA`; sin `productoId` `400 SOLICITUD_INVALIDA`; `page < 0` o
+  `size` fuera de 1–100 `400 PAGINACION_INVALIDA`.
+- **Unicidad:** un seguimiento por usuario, producto y cafetería. Repetir el alta,
+  incluso en paralelo, devuelve el mismo registro. El general usa el UUID nulo en
+  `cafeteria_key`, porque dos `NULL` no chocan en un índice único.
+- **Baja lógica:** `deleted_at` hace idempotente el `DELETE`, y volver a seguir
+  reactiva la misma fila (`V5__create_product_follow.sql`).
+
+La app pide el listado sin `page` ni `size`; el tamaño por defecto de 100 entrega sus
+seguimientos más recientes en una sola respuesta. Enviar los avisos de reposición
+queda fuera de esta API.
 
 ### Personal por cafetería y cuentas de prueba (INT2-65)
 
@@ -310,14 +395,14 @@ cualquier otro campo (tarjeta, importe, estado) o valor responde `400`. Requiere
 
 | Escenario | `estado` | `motivo` |
 |---|---|---|
-| `aprobar` | `aprobado` | `aprobacion_simulada` |
+| `aprobar` | `aprobado` (o `pendiente` si Catalog no responde) | `aprobacion_simulada` (o `procesando_stock`) |
 | `rechazar` | `rechazado` | `rechazo_simulado` |
 | `pendiente` | `pendiente` | `escenario_pendiente` |
 
 `Pago`: `pagoId, compraId, estado, motivo, montoTotal` (CLP entero)`, moneda: CLP,
-simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`. El escenario
-se aplica antes de insertar el pago, así que la respuesta de creación trae
-`version: 1` en los tres escenarios.
+simulado: true, proveedor: simulado, creadoAt, actualizadoAt, version`. Un resultado
+inmediato se aplica antes de insertar el pago, con `version: 1`. Aprobar una compra
+con reservas guarda primero la decisión, así que su resultado final trae `version: 2`.
 
 - **Solo el CLIENTE propietario:** el dueño se toma del `sub` del JWT. Una compra
   ajena o inexistente responde `404`; otro rol, `403 ROL_NO_PERMITIDO`.
@@ -330,6 +415,36 @@ se aplica antes de insertar el pago, así que la respuesta de creación trae
   termina al vencer su reserva (INT2-77). Reintentar tras un rechazo exige otra compra.
 - Los errores de dominio llevan las extensiones `code` y `traceId` del contrato.
 
+### Resultado del pago sobre órdenes y reservas (INT2-77)
+
+| Resultado | Pago | Compra y órdenes activas | Reservas |
+|---|---|---|---|
+| Aprobación | `aprobado` | `pagado`, con `retiroHasta` a 2 horas | Confirmadas antes de declarar la aprobación |
+| Rechazo | `rechazado` | `cancelado`, compra con total 0 | Liberadas, con reintentos durables |
+| Pendiente | `pendiente` | Sin cambios | Se conservan hasta `reservaExpiraAt` (15 minutos desde la creación) |
+| Vencimiento | `rechazado`, motivo `reserva_vencida` | `cancelado`, compra con total 0 | Liberadas |
+
+- **Aprobación durable:** el pago se guarda `pendiente` con motivo `procesando_stock`
+  antes de llamar a Catalog. Si Catalog no responde, el comando devuelve ese `201` y
+  `RecuperacionPagos` lo reanuda, también tras un reinicio.
+- **Eventos:** `order.pago.resultado.v1`, `order.compra.estado-cambiado.v1` y
+  `order.orden.estado-cambiado.v1` se guardan en `order_outbox` en la transacción del
+  cambio, con `eventId` propio y el `traceId` de la operación original. El pago emite
+  un evento al quedar pendiente y otro al resolverse. El vencimiento abre su propia traza.
+- **Plazo:** pagar una compra con reservas vencidas responde `409 RESERVA_VENCIDA`.
+  Las compras mínimas sin órdenes no tienen reservas, así que no vencen.
+- **Configuración:** `cloudcoffee.pagos.scan-ms` (2000 por defecto) y
+  `cloudcoffee.pagos.recovery-enabled`.
+
+**Limitación conocida:** Catalog aún no ofrece la confirmación atómica por lote del
+contrato de INT2-50, por lo que Order confirma las reservas de a una. Si el plazo se
+cumple a mitad del recorrido, el pago se rechaza pero las reservas ya confirmadas no se
+pueden liberar: Order lo registra como error para revisión manual. Las reservas comparten
+vencimiento, así que el caso se limita a ese instante. Cerrarlo requiere el lote en Catalog.
+
+`PagoService.registrarResultado` no tiene llamadores en producción y solo cambia el pago;
+los flujos reales pasan por `ResultadoPagoService`.
+
 Con `ORDER_SPRING_PROFILES=docker,dev` (valor de `.env.example`), order-service carga
 compras de prueba para las cuentas de INT2-65:
 
@@ -338,6 +453,25 @@ compras de prueba para las cuentas de INT2-65:
 | `77777777-7777-4777-8777-777777777701` | `comprador@cloudcoffee.dev` | 3700 |
 | `77777777-7777-4777-8777-777777777702` | `comprador@cloudcoffee.dev` | 900 |
 | `77777777-7777-4777-8777-777777777703` | `cajero.central@cloudcoffee.dev` (ajena al comprador) | 1500 |
+
+## Creación idempotente de compra (INT2-71)
+
+`POST /v1/compras` crea una compra y una orden por cafetería, con importes del
+Catálogo y propietario del JWT. Requiere `Idempotency-Key` UUID. Si una cafetería
+no consigue reservar todos sus ítems, compensa esa orden y la deja en revisión;
+mantiene las reservas de las demás. Los reintentos y la recuperación tras reinicio
+conservan las mismas identidades y no duplican compras ni descuentos de stock.
+
+Consultar [ejemplos HTTP, errores, recuperación y configuración](docs/creacion-compras.md).
+
+## Confirmar/cancelar compras sin pago (INT2-73)
+
+Order implementa las acciones `confirmar` y `cancelar` por compra y orden para el
+CLIENTE propietario, con `Idempotency-Key`. La confirmación revalida precios y
+reservas; la cancelación libera stock y recalcula el total. Si ya hay un pago,
+responde `409 ESTADO_INVALIDO`; actuar sobre pagos queda para INT2-77.
+
+Consultar [alcance, ejemplos, recuperación y eventos](docs/revision-compras.md).
 
 ## Consultas del comprador (INT2-72)
 
@@ -399,7 +533,7 @@ El contrato objetivo del Sprint 2 está en
 [Compra, pago simulado y retiro (INT2-50)](docs/compra-pago-retiro.md), con
 [OpenAPI importable](docs/compra-pago-retiro.openapi.json) y
 [ejemplos de eventos](docs/compra-pago-retiro.eventos.json). Define rutas, estados,
-idempotencia, permisos y QR. Order implementa las consultas del comprador y el pago
+idempotencia, permisos y QR. Order implementa la creación, las consultas del comprador y el pago
 simulado documentados arriba; estas rutas aún no se incorporan al Swagger de Sprint 1.
 
 El backend mantiene el contrato para los equipos web y mobile. SpringDoc 3.1.1

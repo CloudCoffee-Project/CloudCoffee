@@ -25,11 +25,14 @@ public class PagoService {
     private final CompraRepository compraRepository;
     private final PagoRepository pagoRepository;
     private final PasarelaPago pasarela;
+    private final OperacionCompraGuard operaciones;
 
-    public PagoService(CompraRepository compraRepository, PagoRepository pagoRepository, PasarelaPago pasarela) {
+    public PagoService(CompraRepository compraRepository, PagoRepository pagoRepository, PasarelaPago pasarela,
+            OperacionCompraGuard operaciones) {
         this.compraRepository = compraRepository;
         this.pagoRepository = pagoRepository;
         this.pasarela = pasarela;
+        this.operaciones = operaciones;
     }
 
     /**
@@ -55,6 +58,12 @@ public class PagoService {
      */
     @Transactional
     public Pago iniciarPago(UUID compraId, MotivoPago motivo, EstadoPago resultado) {
+        return iniciarPago(compraId, motivo, resultado, null);
+    }
+
+    /** Igual que el anterior, guardando la traza que heredarán sus eventos y reintentos. */
+    @Transactional
+    public Pago iniciarPago(UUID compraId, MotivoPago motivo, EstadoPago resultado, String trace) {
         Compra compra = compraRepository.findForUpdate(compraId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND,
                         URI.create("/problems/compra-no-encontrada"), "Compra no encontrada",
@@ -68,11 +77,13 @@ public class PagoService {
                     "PAGO_YA_INICIADO");
         }
 
+        operaciones.verificarInicioPago(compra);
         RegistroPasarela registro = pasarela.registrar(new SolicitudPago(compra.getId(), compra.getMontoTotal()));
         Pago pago = new Pago(compra, pasarela.proveedor(), registro.referencia());
         if (motivo != null) {
             pago.registrarMotivo(motivo);
         }
+        pago.registrarTrace(trace);
         if (resultado != null && resultado != EstadoPago.PENDIENTE) {
             pago.aplicarResultado(resultado, null);
         }

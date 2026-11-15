@@ -24,13 +24,14 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Presionable } from '../../components/Presionable';
 
 import { fetchPedidosEntrantes, resolverOrdenNoRetirada } from '../../services/ordenes';
 import { getAccessToken, toApiError } from '../../services/httpClient';
@@ -107,7 +108,7 @@ function FilaNoRetirado({
             </View>
             {pendienteRevision && (
               <View style={styles.itemAcciones}>
-                <Pressable
+                <Presionable
                   onPress={() => onCambiarDecision(item.ordenItemId, 'reingresar')}
                   style={[
                     styles.btnAccion,
@@ -124,8 +125,8 @@ function FilaNoRetirado({
                   >
                     ♻️ Reingresar Stock
                   </Text>
-                </Pressable>
-                <Pressable
+                </Presionable>
+                <Presionable
                   onPress={() => onCambiarDecision(item.ordenItemId, 'descartar')}
                   style={[
                     styles.btnAccion,
@@ -141,7 +142,7 @@ function FilaNoRetirado({
                   >
                     🗑️ Descartar
                   </Text>
-                </Pressable>
+                </Presionable>
               </View>
             )}
           </View>
@@ -150,7 +151,7 @@ function FilaNoRetirado({
 
       {pendienteRevision && (
         <View style={styles.accionesOrden}>
-          <Pressable
+          <Presionable
             onPress={onConfirmar}
             disabled={resolviendo}
             style={[styles.btnConfirmar, resolviendo && styles.btnDeshabilitado]}
@@ -161,7 +162,7 @@ function FilaNoRetirado({
             ) : (
               <Text style={styles.btnConfirmarText}>✓ Confirmar Revisión de Orden</Text>
             )}
-          </Pressable>
+          </Presionable>
           {error && (
             <View style={styles.errorBanner} testID={`cajero-nr-error-${orden.ordenId}`}>
               <Text style={styles.errorText}>{error}</Text>
@@ -203,14 +204,14 @@ interface PropsChipFiltro {
 
 function ChipFiltro({ activo, etiqueta, onPress, testID }: PropsChipFiltro) {
   return (
-    <Pressable
+    <Presionable
       onPress={onPress}
       style={[styles.chip, activo && styles.chipActivo]}
       hitSlop={6}
       testID={testID ?? `cajero-nr-chip-${etiqueta}`}
     >
       <Text style={[styles.chipText, activo && styles.chipTextActivo]}>{etiqueta}</Text>
-    </Pressable>
+    </Presionable>
   );
 }
 
@@ -356,14 +357,14 @@ export default function NoRetiradosScreen() {
 
   if (cargando && pedidos.length === 0) {
     return (
-      <View style={styles.centrado} testID="cajero-nr-cargando">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-nr-cargando">
         <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.contenedor}>
+    <SafeAreaView style={styles.contenedor} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <Text style={styles.rolePill}>POS Cajero</Text>
@@ -403,18 +404,19 @@ export default function NoRetiradosScreen() {
       {mensajeExito && (
         <View style={styles.exitoBanner} testID="cajero-nr-exito">
           <Text style={styles.exitoText}>{mensajeExito}</Text>
-          <Pressable
+          <Presionable
             onPress={() => setMensajeExito(null)}
             hitSlop={8}
             testID="cajero-nr-cerrar-exito"
           >
             <Text style={styles.exitoCerrar}>✕</Text>
-          </Pressable>
+          </Presionable>
         </View>
       )}
 
       <FlatList
         data={pedidosFiltrados}
+        style={styles.lista}
         keyExtractor={(item) => item.ordenId}
         renderItem={({ item }) => (
           <FilaNoRetirado
@@ -436,7 +438,7 @@ export default function NoRetiradosScreen() {
           )
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -489,6 +491,7 @@ const styles = StyleSheet.create({
   },
   chipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 12,
   },
   chips: {
@@ -556,6 +559,10 @@ const styles = StyleSheet.create({
   listaContenido: {
     paddingBottom: 24,
     gap: 12,
+  },
+  lista: {
+    flex: 1,
+    minHeight: 0,
   },
   card: {
     backgroundColor: '#FFFFFF',

@@ -1,5 +1,7 @@
 // src/app/(cliente)/resultado-pago.tsx
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Presionable } from '../../components/Presionable';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { EstadoPagoVisual } from '../../services/pagos';
 
@@ -52,7 +54,7 @@ export default function ResultadoPagoScreen() {
   const contenido = CONTENIDO_POR_ESTADO[estado] ?? CONTENIDO_POR_ESTADO.desconocido;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.emoji}>{contenido.emoji}</Text>
 
       <Text style={[styles.titulo, { color: contenido.color }]}>{contenido.titulo}</Text>
@@ -65,43 +67,43 @@ export default function ResultadoPagoScreen() {
       <View style={styles.acciones}>
         {estado === 'rechazado' ? (
           <>
-            <Pressable
+            <Presionable
               style={[styles.boton, { backgroundColor: contenido.color }]}
               onPress={() => router.replace('/carrito')}
             >
               <Text style={styles.botonTexto}>Reintentar compra</Text>
-            </Pressable>
+            </Presionable>
 
-            <Pressable
+            <Presionable
               style={[styles.boton, styles.botonSecundario]}
               onPress={() => router.replace('/mis-compras')}
             >
               <Text style={[styles.botonTexto, styles.botonSecundarioTexto]}>Ver mis compras</Text>
-            </Pressable>
+            </Presionable>
           </>
         ) : (
           <>
-            <Pressable
+            <Presionable
               style={[styles.boton, { backgroundColor: contenido.color }]}
               onPress={() => router.replace('/mis-compras')}
             >
               <Text style={styles.botonTexto}>
                 {estado === 'exitoso' ? 'Ver mi compra' : 'Ver mis compras'}
               </Text>
-            </Pressable>
+            </Presionable>
 
-            <Pressable
+            <Presionable
               style={[styles.boton, styles.botonSecundario]}
               onPress={() => router.replace('/')}
             >
               <Text style={[styles.botonTexto, styles.botonSecundarioTexto]}>
                 Volver al catálogo
               </Text>
-            </Pressable>
+            </Presionable>
           </>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

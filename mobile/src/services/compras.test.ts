@@ -28,7 +28,7 @@ describe('listarCompras', () => {
 
   it('llama a GET /v1/compras y devuelve el historial del cliente', async () => {
     const getSpy = jest.spyOn(httpClient, 'get').mockResolvedValue({
-      data: [compraMock],
+      data: { content: [compraMock] },
     });
 
     const resultado = await listarCompras();
@@ -56,7 +56,13 @@ describe('confirmarCompra y cancelarCompra', () => {
 
     const resultado = await confirmarCompra('compra-1');
 
-    expect(postSpy).toHaveBeenCalledWith(`${COMPRAS_ENDPOINT}/compra-1/confirmar`);
+    expect(postSpy).toHaveBeenCalledWith(
+      `${COMPRAS_ENDPOINT}/compra-1/confirmar`,
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual(confirmada);
   });
 
@@ -66,7 +72,13 @@ describe('confirmarCompra y cancelarCompra', () => {
 
     const resultado = await cancelarCompra('compra-1');
 
-    expect(postSpy).toHaveBeenCalledWith(`${COMPRAS_ENDPOINT}/compra-1/cancelar`);
+    expect(postSpy).toHaveBeenCalledWith(
+      `${COMPRAS_ENDPOINT}/compra-1/cancelar`,
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      })
+    );
     expect(resultado).toEqual(cancelada);
   });
 

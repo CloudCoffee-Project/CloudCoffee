@@ -14,7 +14,8 @@
 //
 // El botón de descarga conserva su TODO (expo-sharing / expo-media-library).
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
@@ -58,9 +59,9 @@ export default function QrRetiroScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+        <Presionable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
           <Text style={styles.backText}>← Volver</Text>
-        </Pressable>
+        </Presionable>
         <Text style={styles.headerTitle}>Código de Retiro</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -109,20 +110,13 @@ export default function QrRetiroScreen() {
               </View>
             </View>
 
-            <Pressable
-              style={({ pressed }) => [styles.downloadButton, pressed && styles.buttonPressed]}
-              onPress={handleDescargar}
-            >
+            <Presionable style={styles.downloadButton} onPress={handleDescargar}>
               <Text style={styles.downloadButtonText}>↓ Descargar QR</Text>
-            </Pressable>
+            </Presionable>
 
-            <Pressable
-              style={({ pressed }) => [styles.boletaButton, pressed && styles.buttonPressed]}
-              onPress={abrirBoleta}
-              testID="abrir-boleta"
-            >
+            <Presionable style={styles.boletaButton} onPress={abrirBoleta} testID="abrir-boleta">
               <Text style={styles.boletaButtonText}>📄 Ver Boleta en PDF</Text>
-            </Pressable>
+            </Presionable>
           </>
         )}
       </ScrollView>
@@ -289,10 +283,6 @@ const styles = StyleSheet.create({
     color: '#0052CC',
     fontSize: 15,
     fontWeight: '700',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
   },
   downloadButtonText: {
     color: '#FFFFFF',

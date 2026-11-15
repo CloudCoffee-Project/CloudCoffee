@@ -1,9 +1,24 @@
 spring:
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   application:
     name: order-service
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
   flyway:
     enabled: true
     locations: classpath:db/migration

@@ -26,7 +26,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -34,6 +33,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Presionable } from '../../components/Presionable';
 import { useRouter } from 'expo-router';
 
 import { fetchPedidosEntrantes } from '../../services/ordenes';
@@ -177,14 +178,14 @@ interface PropsChipFiltro {
 
 function ChipFiltro({ activo, etiqueta, onPress, testID }: PropsChipFiltro) {
   return (
-    <Pressable
+    <Presionable
       onPress={onPress}
       style={[styles.chip, activo && styles.chipActivo]}
       hitSlop={6}
       testID={testID ?? `cajero-chip-${etiqueta}`}
     >
       <Text style={[styles.chipText, activo && styles.chipTextActivo]}>{etiqueta}</Text>
-    </Pressable>
+    </Presionable>
   );
 }
 
@@ -300,14 +301,14 @@ export default function PedidosEntrantesScreen() {
 
   if (cargando && pedidos.length === 0) {
     return (
-      <View style={styles.centrado} testID="cajero-cargando">
+      <SafeAreaView style={styles.centrado} edges={['top']} testID="cajero-cargando">
         <ActivityIndicator size="large" color="#0052CC" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.contenedor}>
+    <SafeAreaView style={styles.contenedor} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <Text style={styles.rolePill}>POS Cajero</Text>
@@ -340,14 +341,14 @@ export default function PedidosEntrantesScreen() {
             onSubmitEditing={validarFolio}
             testID="cajero-folio-input"
           />
-          <Pressable
+          <Presionable
             style={styles.folioBoton}
             onPress={validarFolio}
             hitSlop={6}
             testID="cajero-folio-validar"
           >
             <Text style={styles.folioBotonTexto}>Validar</Text>
-          </Pressable>
+          </Presionable>
         </View>
         {mensajeManual ? (
           <View style={styles.folioError} testID="cajero-folio-error">
@@ -369,9 +370,9 @@ export default function PedidosEntrantesScreen() {
           testID="cajero-buscador"
         />
         {busqueda.length > 0 && (
-          <Pressable onPress={() => setBusqueda('')} style={styles.clearButton} hitSlop={6}>
+          <Presionable onPress={() => setBusqueda('')} style={styles.clearButton} hitSlop={6}>
             <Text style={styles.clearButtonText}>✕</Text>
-          </Pressable>
+          </Presionable>
         )}
       </View>
 
@@ -411,14 +412,14 @@ export default function PedidosEntrantesScreen() {
       {error && (
         <View style={styles.errorBanner} testID="cajero-error">
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable
+          <Presionable
             style={styles.errorBoton}
             onPress={cargarPedidos}
             hitSlop={6}
             testID="cajero-error-reintentar"
           >
             <Text style={styles.errorBotonTexto}>Reintentar</Text>
-          </Pressable>
+          </Presionable>
         </View>
       )}
 
@@ -426,6 +427,7 @@ export default function PedidosEntrantesScreen() {
         data={pedidosFiltrados}
         keyExtractor={(item) => item.ordenId}
         renderItem={({ item }) => <FilaPedido orden={item} />}
+        style={styles.lista}
         contentContainerStyle={styles.listaContenido}
         refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargarPedidos} />}
         ListEmptyComponent={
@@ -436,7 +438,7 @@ export default function PedidosEntrantesScreen() {
           )
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -513,6 +515,7 @@ const styles = StyleSheet.create({
   },
   chipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 12,
   },
   chips: {
@@ -732,5 +735,9 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     fontSize: 12,
     fontWeight: '600',
+  },
+  lista: {
+    flex: 1,
+    minHeight: 0,
   },
 });

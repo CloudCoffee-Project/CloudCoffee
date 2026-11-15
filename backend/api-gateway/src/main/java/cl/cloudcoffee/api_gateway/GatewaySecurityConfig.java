@@ -77,8 +77,15 @@ public class GatewaySecurityConfig {
                                 "/v1/catalog/campus", "/v1/catalog/categorias",
                                 "/v1/catalog/productos", "/v1/catalog/productos/*",
                                 "/v1/catalog/productos/*/ofertas").permitAll()
+                        // INT2-110: Payment valida la firma del proveedor; el módulo base falla con 503.
+                        .requestMatchers(HttpMethod.POST, "/v1/payments/webhooks/mercadopago").permitAll()
+                        // No exponer APIs internas ni admitir un proxy Payment genérico.
+                        .requestMatchers("/v1/payments", "/v1/payments/**").denyAll()
                         // SockJS handshake is anonymous; STOMP CONNECT authenticates its JWT.
                         .requestMatchers("/v1/notifications/ws", "/v1/notifications/ws/**").permitAll()
+                        // El registro de dispositivo pertenece al sub autenticado; el historial sigue siendo global.
+                        .requestMatchers(HttpMethod.POST, "/v1/notifications/device-token").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/v1/notifications/device-token").authenticated()
                         // El historial global de notificaciones es operacional y solo para SUPER_ADMIN.
                         .requestMatchers("/v1/notifications", "/v1/notifications/**").hasRole("SUPER_ADMIN")
                         // Solo un JWT validado con la llave publica autentica estas rutas.
