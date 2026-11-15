@@ -88,8 +88,10 @@ class PagosMigrationTests extends JwtTestSupport {
 
     private UUID insertarCompra(String monto) {
         UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO compras (id, usuario_id, monto_total, created_at) VALUES (?, ?, ?, ?)",
-                id, UUID.randomUUID(), new java.math.BigDecimal(monto), Timestamp.from(Instant.now()));
+        jdbc.update("""
+                INSERT INTO compras (id, usuario_id, monto_total, estado, created_at)
+                VALUES (?, ?, ?, 'PENDIENTE_PAGO', ?)
+                """, id, UUID.randomUUID(), new java.math.BigDecimal(monto), Timestamp.from(Instant.now()));
         return id;
     }
 
