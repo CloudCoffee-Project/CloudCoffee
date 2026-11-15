@@ -18,6 +18,9 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
 
     Optional<StockReservation> findByOrderIdAndOfferIdAndAttemptId(UUID orderId, UUID offerId, UUID attemptId);
 
+    @Query("SELECT COALESCE(SUM(r.quantity), 0) FROM StockReservation r WHERE r.offer.id = :offerId AND r.status = :status")
+    long sumQuantityByOfferAndStatus(@Param("offerId") UUID offerId, @Param("status") StockReservationStatus status);
+
     boolean existsByOrderIdAndOfferIdAndStatusIn(UUID orderId, UUID offerId,
             List<StockReservationStatus> statuses);
 

@@ -16,6 +16,11 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
     @Query("SELECT o FROM Offer o WHERE o.id = :offerId")
     java.util.Optional<Offer> findByIdForUpdate(@Param("offerId") UUID offerId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Offer o WHERE o.id = :offerId AND o.cafeteria.id = :cafeteriaId")
+    java.util.Optional<Offer> findForUpdateInCafeteria(
+            @Param("offerId") UUID offerId, @Param("cafeteriaId") UUID cafeteriaId);
+
     @Modifying
     @Query(value = """
         UPDATE offer
