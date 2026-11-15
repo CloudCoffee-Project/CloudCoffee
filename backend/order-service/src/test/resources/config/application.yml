@@ -3,3 +3,5 @@
 cloudcoffee:
   pagos:
     recovery-enabled: false
+    # Sin broker en las pruebas: el consumidor de Payment se invoca directamente.
+    consumer-enabled: false

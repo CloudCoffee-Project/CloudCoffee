@@ -18,10 +18,12 @@ public class RecuperacionPagos {
     private static final Logger LOG = LoggerFactory.getLogger(RecuperacionPagos.class);
     private final JdbcTemplate jdbc;
     private final ResultadoPagoService resultados;
+    private final ReconciliacionPagosExternos externos;
     private final Clock clock;
 
-    public RecuperacionPagos(JdbcTemplate jdbc, ResultadoPagoService resultados, Clock clock) {
-        this.jdbc = jdbc; this.resultados = resultados; this.clock = clock;
+    public RecuperacionPagos(JdbcTemplate jdbc, ResultadoPagoService resultados, ReconciliacionPagosExternos externos,
+            Clock clock) {
+        this.jdbc = jdbc; this.resultados = resultados; this.externos = externos; this.clock = clock;
     }
 
     @Scheduled(fixedDelayString = "${cloudcoffee.pagos.scan-ms:2000}", initialDelayString = "${cloudcoffee.pagos.scan-ms:2000}")
@@ -34,6 +36,9 @@ public class RecuperacionPagos {
             try { resultados.resolverAprobacion(id); }
             catch (RuntimeException error) { LOG.error("No se pudo reanudar la aprobación del pago {}", id, error); }
         }
+        // INT2-113: antes de vencer localmente, se consulta a Payment (una aprobación en plazo no se pierde).
+        try { externos.conciliar(); }
+        catch (RuntimeException error) { LOG.error("No se pudo conciliar los pagos externos", error); }
         for (UUID id : jdbc.queryForList("""
                 SELECT p.id FROM pagos p JOIN compras c ON c.id = p.compra_id
                 WHERE p.estado='PENDIENTE' AND (p.motivo IS NULL OR p.motivo<>'PROCESANDO_STOCK')
