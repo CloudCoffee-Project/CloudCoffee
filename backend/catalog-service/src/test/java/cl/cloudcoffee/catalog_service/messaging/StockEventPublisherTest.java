@@ -1,7 +1,6 @@
 package cl.cloudcoffee.catalog_service.messaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 import java.util.UUID;
@@ -9,7 +8,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import cl.cloudcoffee.catalog_service.model.entity.Cafeteria;
 import cl.cloudcoffee.catalog_service.model.entity.Campus;
@@ -18,8 +16,8 @@ import cl.cloudcoffee.catalog_service.model.entity.Product;
 
 class StockEventPublisherTest {
 
-    private final RabbitTemplate rabbitTemplate = org.mockito.Mockito.mock(RabbitTemplate.class);
-    private final StockEventPublisher publisher = new StockEventPublisher(rabbitTemplate);
+    private final CatalogEventJournal journal = org.mockito.Mockito.mock(CatalogEventJournal.class);
+    private final StockEventPublisher publisher = new StockEventPublisher(journal);
 
     @AfterEach
     void clearTraceContext() {
@@ -53,10 +51,7 @@ class StockEventPublisherTest {
 
         org.mockito.ArgumentCaptor<CloudCoffeeEvent> eventCaptor =
                 org.mockito.ArgumentCaptor.forClass(CloudCoffeeEvent.class);
-        verify(rabbitTemplate).convertAndSend(
-                eq(RabbitTopologyConfig.EVENTS_EXCHANGE),
-                eq(StockEventPublisher.STOCK_UPDATED_EVENT),
-                eventCaptor.capture());
+        verify(journal).append(eventCaptor.capture());
         CloudCoffeeEvent event = eventCaptor.getValue();
         assertThat(event.traceId()).isEqualTo(traceId);
         assertThat(event.eventType()).isEqualTo(StockEventPublisher.STOCK_UPDATED_EVENT);

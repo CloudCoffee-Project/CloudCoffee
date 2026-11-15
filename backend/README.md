@@ -2,6 +2,9 @@
 
 Backend de CloudCoffee construido con arquitectura de microservicios.
 
+La [guía de eventos durables (INT2-64)](docs/eventos-durables.md) documenta las
+transacciones y publicadores de Order/Catalog, recuperación, configuración y pruebas.
+
 El contrato objetivo de Sprint 3 para Payment y Mercado Pago sandbox está en
 [Payment (INT2-108)](docs/payment-service.md), con OpenAPI, eventos y decisión de
 arquitectura. El contrato del simulador de INT2-50 se conserva como historial;
