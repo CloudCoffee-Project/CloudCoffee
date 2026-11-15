@@ -31,6 +31,8 @@ public class OrderEventOutbox {
     OrderEventOutbox(JdbcTemplate jdbc, RabbitTemplate rabbit, PlatformTransactionManager manager, String exchange) {
         this.jdbc = jdbc; this.rabbit = rabbit; this.tx = new TransactionTemplate(manager);
         this.exchange = exchange;
+        // Always publish committed rows in a transaction independent of the caller.
+        this.tx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
     @Bean
     TopicExchange orderEventsExchange() { return new TopicExchange(exchange, true, false); }

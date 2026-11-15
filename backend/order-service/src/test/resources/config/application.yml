@@ -10,6 +10,9 @@ spring:
       idle-timeout: 10000
 # El job de pagos cambiaría datos de otras pruebas; ResultadoPagoIntegrationTests lo activa e invoca a mano.
 cloudcoffee:
+  creation:
+    # Publicación controlada explícitamente por los tests de outbox.
+    publish-enabled: false
   pagos:
     recovery-enabled: false
     # Sin broker en las pruebas: el consumidor de Payment se invoca directamente.
