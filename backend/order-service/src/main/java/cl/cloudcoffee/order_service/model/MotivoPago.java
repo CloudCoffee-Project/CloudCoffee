@@ -9,7 +9,13 @@ public enum MotivoPago {
     ESCENARIO_PENDIENTE,
     PROCESANDO_STOCK,
     RESERVA_VENCIDA,
-    COMPRA_CANCELADA;
+    COMPRA_CANCELADA,
+    // INT2-113: pagos con payment-service (Mercado Pago sandbox).
+    ESPERANDO_PROVEEDOR,
+    PROVEEDOR_CONFIRMADO,
+    PROVEEDOR_RECHAZADO,
+    PROVEEDOR_CANCELADO,
+    CONCILIACION_REQUERIDA;
 
     public String codigo() {
         return name().toLowerCase(Locale.ROOT);
