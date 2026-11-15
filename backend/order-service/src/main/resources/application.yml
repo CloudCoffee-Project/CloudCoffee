@@ -8,6 +8,17 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+    # INT2-113: consumidor de payment.pago.resultado.v1. Un fallo no se reencola indefinidamente: tras los
+    # reintentos va a order.payment-results.dlq (la conciliación con Payment cubre ese resultado).
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 5
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
   application:
     name: order-service
   jpa:
@@ -54,3 +65,15 @@ info:
   app:
     name: ${spring.application.name}
     description: Servicio de pedidos de CloudCoffee
+
+cloudcoffee:
+  pagos:
+    # INT2-113: "simulado" (por defecto, contrato INT2-50 con escenarios) o "mercadopago_sandbox"
+    # (checkout de payment-service; sin escenarios ni otro proveedor de respaldo).
+    provider: ${ORDER_PAYMENT_PROVIDER:simulado}
+    payment-url: ${PAYMENT_SERVICE_URL:http://localhost:18085}
+    payment-timeout: ${ORDER_PAYMENT_TIMEOUT:PT5S}
+    # Consulta a Payment de pagos externos abiertos aunque se pierdan eventos.
+    reconciliation-interval: ${ORDER_PAYMENT_RECONCILIATION_INTERVAL:PT2M}
+    late-approval-window: ${ORDER_PAYMENT_LATE_APPROVAL_WINDOW:P3D}
+    consumer-enabled: ${ORDER_PAYMENT_CONSUMER_ENABLED:true}

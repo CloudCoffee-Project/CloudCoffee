@@ -3,6 +3,7 @@ package cl.cloudcoffee.order_service.controller;
 import java.net.URI;
 import java.util.UUID;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -27,9 +28,11 @@ import jakarta.validation.Valid;
 
 /**
  * Pago simulado de una compra (contrato INT2-50, #112). Gateway publica estas rutas
- * como {@code /v1/compras/{compraId}/pago}.
+ * como {@code /v1/compras/{compraId}/pago}. Solo existe con {@code ORDER_PAYMENT_PROVIDER=simulado}: en el
+ * flujo sandbox (INT2-113) ningún comando permite al cliente elegir el resultado de su pago.
  */
 @RestController
+@ConditionalOnProperty(name = "cloudcoffee.pagos.provider", havingValue = "simulado", matchIfMissing = true)
 @RequestMapping("/compras/{compraId}/pago")
 public class PagoSimuladoController {
 
