@@ -1,6 +1,7 @@
 package cl.cloudcoffee.order_service.creacion;
 
 import cl.cloudcoffee.order_service.dto.*;
+import cl.cloudcoffee.order_service.messaging.OrderEventJournal;
 import static cl.cloudcoffee.order_service.persistence.JdbcInstants.utc;
 import java.time.Instant;
 import java.util.*;
@@ -13,7 +14,10 @@ import tools.jackson.databind.json.JsonMapper;
 public class DiarioCreacion {
     private final JdbcTemplate jdbc;
     private final JsonMapper json;
-    public DiarioCreacion(JdbcTemplate jdbc, JsonMapper json) { this.jdbc = jdbc; this.json = json; }
+    private final OrderEventJournal events;
+    public DiarioCreacion(JdbcTemplate jdbc, JsonMapper json, OrderEventJournal events) {
+        this.jdbc = jdbc; this.json = json; this.events = events;
+    }
     public JdbcTemplate jdbc() { return jdbc; }
     public JsonMapper json() { return json; }
 
@@ -106,10 +110,6 @@ public class DiarioCreacion {
     }
 
     private void evento(Registro registro, String tipo, Map<String, Object> payload) {
-        UUID id = UUID.randomUUID();
-        var envelope = Map.of("eventId", id, "timestamp", registro.creadoAt(), "traceId", registro.trace(),
-                "eventType", tipo, "payload", payload);
-        jdbc.update("INSERT INTO order_outbox (event_id, event_type, cuerpo, created_at) VALUES (?, ?, ?, ?)",
-                id, tipo, json.writeValueAsString(envelope), utc(registro.creadoAt()));
+        events.append(tipo, payload, registro.trace(), registro.creadoAt());
     }
 }

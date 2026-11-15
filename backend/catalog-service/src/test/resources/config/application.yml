@@ -1,0 +1,4 @@
+# Broker publication is driven explicitly by outbox integration tests, never by a background scheduler.
+catalog:
+  outbox:
+    publish-enabled: false
