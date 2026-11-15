@@ -102,14 +102,20 @@ public class ResultadoPagoService {
             Pago pago = pagos.findById(pagoId).orElseThrow();
             // Otro worker pudo resolverlo mientras se llamaba a Catalog.
             if (pago.getEstado() != EstadoPago.PENDIENTE || pago.getMotivo() != MotivoPago.PROCESANDO_STOCK) return false;
-            if (rechazar) {
+            if (rechazar && pago.esExterno()) {
+                // INT2-113: el proveedor ya cobró pero el stock no se pudo confirmar. No se reintegra ni se
+                // recrean reservas: la compra se cancela y el pago queda para conciliación manual.
+                pago.requiereConciliacion("stock_no_confirmado");
+                LOG.error("Compra {} con pago externo aprobado sin stock confirmable ({} reservas confirmadas): requiere conciliación",
+                        compraId, confirmadas.size());
+            } else if (rechazar) {
                 pago.aplicarResultado(EstadoPago.RECHAZADO, null);
                 pago.registrarMotivo(MotivoPago.RESERVA_VENCIDA);
                 if (!confirmadas.isEmpty()) LOG.error("Compra {} rechazada por vencimiento con {} reservas ya confirmadas: requieren revisión manual",
                         compraId, confirmadas.size());
             } else {
                 pago.aplicarResultado(EstadoPago.APROBADO, null);
-                pago.registrarMotivo(MotivoPago.APROBACION_SIMULADA);
+                pago.registrarMotivo(pago.esExterno() ? MotivoPago.PROVEEDOR_CONFIRMADO : MotivoPago.APROBACION_SIMULADA);
             }
             aplicar(pago, compra.getUsuarioId(), pago.getTraceId() == null ? traceNuevo() : pago.getTraceId(), confirmadas);
             return rechazar;

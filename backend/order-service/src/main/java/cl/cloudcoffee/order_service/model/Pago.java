@@ -20,7 +20,7 @@ public class Pago {
     private Compra compra;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 32)
     private EstadoPago estado;
 
     @Column(nullable = false, precision = 12, scale = 2, updatable = false)
@@ -43,6 +43,34 @@ public class Pago {
     // Traza de la operación original: un reintento la conserva en sus eventos.
     @Column(name = "trace_id", length = 32)
     private String traceId;
+
+    // INT2-113: correlación con payment-service. Nulos para pagos simulados.
+    @Column(name = "payment_id")
+    private UUID paymentId;
+
+    @Column(name = "preferencia_id", length = 255)
+    private String preferenciaId;
+
+    @Column(name = "init_point", length = 2048)
+    private String initPoint;
+
+    @Column(name = "canal_retorno", length = 16, updatable = false)
+    private String canalRetorno;
+
+    // Carga exacta enviada a Payment: los reintentos no pueden cambiarla.
+    @Column(name = "solicitud_payment", updatable = false)
+    private String solicitudPayment;
+
+    // Escrito solo por SQL condicionado (ResultadoExternoService): JPA nunca lo pisa con un valor viejo.
+    @Column(name = "payment_version", nullable = false, insertable = false, updatable = false)
+    private long paymentVersion;
+
+    @Column(name = "motivo_proveedor", length = 64)
+    private String motivoProveedor;
+
+    // Escrito solo por la conciliación periódica (ReconciliacionPagosExternos).
+    @Column(name = "consultado_at", insertable = false, updatable = false)
+    private Instant consultadoAt;
 
     // Bloqueo optimista: dos resultados concurrentes no pueden sobrescribirse.
     @Version
@@ -98,6 +126,46 @@ public class Pago {
     public void registrarTrace(String traceId) {
         this.traceId = traceId;
     }
+
+    /** Proveedor de pagos de payment-service (Mercado Pago sandbox). */
+    public static final String PROVEEDOR_SANDBOX = "MERCADOPAGO_SANDBOX";
+
+    /** Pago que se inicia en payment-service: guarda canal y la solicitud congelada antes de llamar. */
+    public static Pago externo(Compra compra, String canalRetorno, String solicitudPayment) {
+        Pago pago = new Pago(compra, PROVEEDOR_SANDBOX, null);
+        pago.canalRetorno = Objects.requireNonNull(canalRetorno);
+        pago.solicitudPayment = Objects.requireNonNull(solicitudPayment);
+        pago.motivo = MotivoPago.ESPERANDO_PROVEEDOR;
+        return pago;
+    }
+
+    public boolean esExterno() {
+        return PROVEEDOR_SANDBOX.equals(proveedor);
+    }
+
+    /** Correlación devuelta por Payment; la referencia del proveedor es el paymentId. */
+    public void registrarCheckout(UUID paymentId, String preferenciaId, String initPoint) {
+        this.paymentId = Objects.requireNonNull(paymentId);
+        this.referenciaProveedor = paymentId.toString();
+        if (preferenciaId != null) this.preferenciaId = preferenciaId;
+        if (initPoint != null) this.initPoint = initPoint;
+        this.updatedAt = ahora();
+    }
+
+    /** Resultado externo que no se aplica automáticamente: conserva evidencia y bloquea el cumplimiento. */
+    public void requiereConciliacion(String motivoProveedor) {
+        aplicarResultado(EstadoPago.REQUIERE_CONCILIACION, null);
+        this.motivo = MotivoPago.CONCILIACION_REQUERIDA;
+        this.motivoProveedor = motivoProveedor;
+    }
+
+    public UUID getPaymentId() { return paymentId; }
+    public String getPreferenciaId() { return preferenciaId; }
+    public String getInitPoint() { return initPoint; }
+    public String getCanalRetorno() { return canalRetorno; }
+    public String getSolicitudPayment() { return solicitudPayment; }
+    public long getPaymentVersion() { return paymentVersion; }
+    public String getMotivoProveedor() { return motivoProveedor; }
 
     public String getTraceId() { return traceId; }
     public UUID getId() { return id; }

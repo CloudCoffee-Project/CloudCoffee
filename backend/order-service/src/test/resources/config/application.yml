@@ -1,4 +1,13 @@
 # Solo para pruebas: Spring Boot carga este archivo además de classpath:/application.yml.
+spring:
+  datasource:
+    hikari:
+      # Spring cachea cada contexto de prueba distinto junto con su pool. Con el pool por defecto (10 fijas)
+      # una docena de contextos agota los 100 clientes de PostgreSQL en CI ("too many clients already").
+      # 6 cubre las pruebas de concurrencia (hasta 6 hilos) y los pools inactivos bajan a 1 conexión.
+      maximum-pool-size: 6
+      minimum-idle: 1
+      idle-timeout: 10000
 # El job de pagos cambiaría datos de otras pruebas; ResultadoPagoIntegrationTests lo activa e invoca a mano.
 cloudcoffee:
   creation:
@@ -6,3 +15,5 @@ cloudcoffee:
     publish-enabled: false
   pagos:
     recovery-enabled: false
+    # Sin broker en las pruebas: el consumidor de Payment se invoca directamente.
+    consumer-enabled: false

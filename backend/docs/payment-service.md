@@ -7,8 +7,9 @@ Este documento define la integración que implementarán INT2-111/112/113; no af
 que esos endpoints estén disponibles al incorporar el módulo base de INT2-110.
 **Estado:** INT2-111 implementa las dos rutas internas de preferencias e INT2-112 el
 webhook firmado, la conciliación de pagos y el outbox de `payment.pago.resultado.v1`, con
-`PAYMENT_PROVIDER=mercadopago_sandbox` ([detalle](../payment-service/README.md)); la
-integración con Order (INT2-113) sigue pendiente.
+`PAYMENT_PROVIDER=mercadopago_sandbox` ([detalle](../payment-service/README.md)). INT2-113
+integra Order con `ORDER_PAYMENT_PROVIDER=mercadopago_sandbox`: comando público, consumidor
+del evento y conciliación (ver [Integración en Order](#integración-en-order-int2-113)).
 
 ## Límites e identidad
 
@@ -138,6 +139,33 @@ reintentos conservar evidencia y enviar a DLQ según topología compartida. Cons
 periódicamente pagos pendientes/ambiguos y aprobaciones tardías; un broker o correo
 caído no pierde ni revierte el hecho de pago.
 
+## Integración en Order (INT2-113)
+
+Con `ORDER_PAYMENT_PROVIDER=mercadopago_sandbox`, Order carga `PagoSandboxController` en vez
+del simulador: `POST /v1/compras/{compraId}/pago` solo admite `{"canalRetorno":"web"|"mobile"}`
+(un `escenario`, monto o URL es 400 `SOLICITUD_INVALIDA`) y no existe ningún comando para que el
+cliente elija el resultado. El adaptador `PasarelaPagoPayment` implementa `PasarelaPago` sobre la
+API interna de Payment.
+
+* **Inicio:** con la compra bloqueada se verifican propietario, idempotencia pública, revisión
+  resuelta (409 `REVISION_REQUERIDA`) y reservas vigentes (409 `RESERVA_VENCIDA`). Se crea el único
+  pago (`pendiente`, `esperando_proveedor`) y se congela la solicitud `CrearPreferencia` desde los
+  snapshots de Order. Fuera de la transacción se llama a Payment con `Idempotency-Key` derivada del
+  pago: reintentos, réplicas concurrentes y la recuperación tras un reinicio repiten clave y carga.
+  `paymentId`, `preferenciaId` e `initPoint` se guardan en `pagos` y se devuelven al repetir la clave
+  y en `GET`. Payment ambiguo o caído: 503 `PAGO_EN_CONCILIACION` con `Retry-After: 2`.
+* **Resultados:** cola `order.payment-results` (DLQ `order.payment-results.dlq`). Cada evento se
+  aplica una vez por `(order.payment-results, eventId)` en la transacción de la decisión y solo si su
+  `version` supera la última aplicada. `aprobado` deja el pago en `procesando_stock` y reutiliza la
+  confirmación durable de INT2-77; solo tras confirmar todas las reservas el pago queda `aprobado` y la
+  compra `pagado`. `rechazado`/`cancelado`/`vencido` cancelan y liberan una sola vez.
+* **Conciliación:** aprobación sobre un pago ya vencido o rechazado (`aprobacion_con_stock_liberado`),
+  aprobación cuyo stock Catalog ya no confirma (`stock_no_confirmado`) o `requiere_conciliacion` de
+  Payment dejan el pago `requiere_conciliacion`: no se recrean reservas, no se reintegra stock ni se
+  revierte una compra pagada, y nada habilita retiro. La recuperación periódica reintenta checkouts
+  no obtenidos y consulta a Payment los pagos abiertos (y, antes de vencer, una última vez), de modo
+  que un evento perdido o en DLQ no pierde el resultado.
+
 ## Configuración y transición
 
 * `PAYMENT_SERVICE_URL`, base/usuario/password propios y token interno común.
@@ -145,9 +173,9 @@ caído no pierde ni revierte el hecho de pago.
   implementar y validar INT2-111/112. Credencial `MERCADOPAGO_ACCESS_TOKEN`, secreto
   `MERCADOPAGO_WEBHOOK_SECRET`, URL HTTPS `PAYMENT_WEBHOOK_PUBLIC_URL`, URLs de retorno
   web/móvil, timeouts y tolerancia de firma configurables. Nunca en frontend/Git.
-* Order mantiene el simulador actual hasta INT2-113. Esa issue incorporará selección
-  explícita `ORDER_PAYMENT_PROVIDER=simulado|mercadopago_sandbox`; el modo sandbox
-  rechaza `escenario` y no cambia de proveedor ante fallos.
+* Order selecciona el proveedor con `ORDER_PAYMENT_PROVIDER=simulado|mercadopago_sandbox`
+  (INT2-113; por defecto `simulado`). El modo sandbox rechaza `escenario` y no cambia de
+  proveedor ante fallos. Order necesita `PAYMENT_SERVICE_URL` y el token interno común.
 * Mantener pagos simulados históricos con su proveedor; no convertirlos ni
   acreditarlos como externos. Completar/conciliar operaciones abiertas antes del
   cambio. Migraciones aditivas, sin editar las ya aplicadas.
