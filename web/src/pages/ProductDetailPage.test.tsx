@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { act ,waitFor , cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductDetailPage } from './ProductDetailPage';
 import { ApiRequestError, request, AUTH_SESSION_EVENT } from '../services/httpClient';
-import { CART_STORAGE_KEY, readCartItems } from '../services/catalog';
+import { CART_STORAGE_KEY, readCartItems, type ProductOffer } from '../services/catalog';
 
 vi.mock('../services/httpClient', async (importOriginal) => ({
   ...await importOriginal<typeof import('../services/httpClient')>(),
@@ -14,6 +14,7 @@ vi.mock('../services/httpClient', async (importOriginal) => ({
 const productId = '33333333-3333-4333-8333-333333333333';
 const campusA = '11111111-1111-4111-8111-111111111111';
 const campusB = '11111111-1111-4111-8111-222222222222';
+const offersPath = (campusId: string) => `/v1/catalog/productos/${productId}/ofertas?campusId=${campusId}`;
 
 const sampleProduct = {
   id: productId,
@@ -50,6 +51,16 @@ const sampleOffers = [
   },
 ];
 
+function pendingOffers() {
+  let resolve!: (offers: ProductOffer[]) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<ProductOffer[]>((resolveRequest, rejectRequest) => {
+    resolve = resolveRequest;
+    reject = rejectRequest;
+  });
+  return { promise, resolve, reject };
+}
+
 function renderDetail(initialEntry = `/catalogo/productos/${productId}?campusId=${campusA}`) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -84,7 +95,7 @@ afterEach(() => {
 });
 
 describe('detalle de producto en web (INT2-102)', () => {
-  it('muestra descripción, imagen, categoría y ofertas del campus seleccionado', async () => {
+  it('muestra el detalle y conserva el orden de las ofertas recibido del backend', async () => {
     renderDetail();
 
     expect(screen.getByRole('heading', { name: 'Cargando producto…' })).toBeTruthy();
@@ -96,10 +107,16 @@ describe('detalle de producto en web (INT2-102)', () => {
       'https://cloudcoffee.example/latte.png',
     );
 
-    expect(await screen.findByRole('heading', { name: 'Cafetería Central' })).toBeTruthy();
-    expect(screen.getByText('Stock disponible: 5')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Kiosco Norte' })).toBeTruthy();
-    expect(screen.getByText('Sin stock disponible')).toBeTruthy();
+    const comparisons = within(screen.getByRole('region', { name: 'Ofertas disponibles por cafetería' }));
+    const items = await comparisons.findAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    const [first, second] = items;
+    expect(within(first).getByRole('heading', { name: 'Cafetería Central' })).toBeTruthy();
+    expect(within(first).getByText('$2.200')).toBeTruthy();
+    expect(within(first).getByText('Stock disponible: 5')).toBeTruthy();
+    expect(within(second).getByRole('heading', { name: 'Kiosco Norte' })).toBeTruthy();
+    expect(within(second).getByText('$2.000')).toBeTruthy();
+    expect(within(second).getByText('Sin stock disponible')).toBeTruthy();
 
     expect(vi.mocked(request).mock.calls.every(([, options]) => options?.omitAccessToken === true)).toBe(true);
   });
@@ -140,7 +157,7 @@ describe('detalle de producto en web (INT2-102)', () => {
     expect(JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? '[]')[0].quantity).toBe(5);
   });
 
-  it('muestra estado de producto inexistente (404) y permite retornar al catálogo', async () => {
+  it('muestra el 404 de un producto inexistente o inactivo sin consultar sus ofertas', async () => {
     vi.mocked(request).mockImplementation((path: string) => {
       if (path === `/v1/catalog/productos/${productId}`) {
         return Promise.reject(
@@ -162,6 +179,7 @@ describe('detalle de producto en web (INT2-102)', () => {
 
     expect(await screen.findByRole('heading', { name: 'Producto no encontrado' })).toBeTruthy();
     expect(screen.getByText('No existe un producto activo con el identificador indicado.')).toBeTruthy();
+    expect(vi.mocked(request).mock.calls.some(([path]) => path.includes('/ofertas?'))).toBe(false);
 
     fireEvent.click(screen.getByRole('link', { name: 'Volver al catálogo' }));
     expect(await screen.findByRole('heading', { name: 'Catálogo Principal' })).toBeTruthy();
@@ -180,6 +198,85 @@ describe('detalle de producto en web (INT2-102)', () => {
     expect(await screen.findByRole('heading', { name: 'Café Latte Artesanal' })).toBeTruthy();
   });
 });
+
+describe('comparación de ofertas en el detalle web (INT2-49)', () => {
+  it('muestra la carga y el error de ofertas, y reintenta en el mismo campus', async () => {
+    const pending = pendingOffers();
+    vi.mocked(request)
+      .mockResolvedValueOnce(sampleProduct)
+      .mockResolvedValueOnce(sampleCampus)
+      .mockReturnValueOnce(pending.promise);
+
+    renderDetail();
+
+    expect(await screen.findByText('Cargando ofertas…')).toBeTruthy();
+    await act(async () => {
+      pending.reject(new ApiRequestError(503, 'Servicio no disponible', 'Las ofertas no responden.'));
+    });
+    expect(screen.getByText('Las ofertas no responden.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar ofertas' }));
+
+    expect(await screen.findByRole('heading', { name: 'Cafetería Central' })).toBeTruthy();
+    expect(screen.queryByText('Las ofertas no responden.')).toBeNull();
+    expect(vi.mocked(request).mock.calls.filter(([path]) => path === offersPath(campusA))).toHaveLength(2);
+  });
+
+  it('consulta el campus nuevo y descarta una respuesta tardía del campus anterior', async () => {
+    const pending = pendingOffers();
+    const campusBOffer = {
+      ...sampleOffers[0],
+      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      cafeteriaId: '66666666-6666-4666-8666-666666666666',
+      cafeteriaName: 'Cafetería Patio Norte',
+      price: 1600,
+    };
+    vi.mocked(request)
+      .mockResolvedValueOnce(sampleProduct)
+      .mockResolvedValueOnce(sampleCampus)
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce([campusBOffer]);
+
+    renderDetail();
+    expect(await screen.findByText('Cargando ofertas…')).toBeTruthy();
+    const oldRequest = vi.mocked(request).mock.calls.find(([path]) => path === offersPath(campusA));
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Campus' }), { target: { value: campusB } });
+
+    expect(await screen.findByRole('heading', { name: 'Cafetería Patio Norte' })).toBeTruthy();
+    expect(screen.getByText('$1.600')).toBeTruthy();
+    expect(request).toHaveBeenCalledWith(offersPath(campusB), expect.objectContaining({ omitAccessToken: true }));
+    expect(oldRequest?.[1]?.signal?.aborted).toBe(true);
+
+    await act(async () => {
+      pending.resolve(sampleOffers);
+    });
+
+    expect(screen.getByRole('heading', { name: 'Cafetería Patio Norte' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Cafetería Central' })).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('muestra el estado vacío al cambiar a un campus sin ofertas públicas', async () => {
+    vi.mocked(request)
+      .mockResolvedValueOnce(sampleProduct)
+      .mockResolvedValueOnce(sampleCampus)
+      .mockResolvedValueOnce(sampleOffers)
+      .mockResolvedValueOnce([]);
+
+    renderDetail();
+    expect(await screen.findByRole('heading', { name: 'Cafetería Central' })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Campus' }), { target: { value: campusB } });
+
+    expect(
+      await screen.findByText('No hay ofertas disponibles para este producto en el campus seleccionado.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Cafetería Central' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Agregar al carrito' })).toBeNull();
+  });
+});
+
 vi.mock('../config/env', () => ({
   env: {
     appTitle: 'CloudCoffee Test',
