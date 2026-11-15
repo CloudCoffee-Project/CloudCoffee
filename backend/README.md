@@ -49,7 +49,9 @@ antes de enrutar y el servicio la vuelve a aplicar como defensa en profundidad;
 `CLIENTE`, `CAJERO` y `ADMIN_CAFETERIA` no pueden consultar registros globales.
 La respuesta conserva la paginación de Spring Data (`page` y `size`). El payload
 elimina recursivamente campos de tokens y credenciales, y los detalles de error
-se saneán antes de persistirse y de responder.
+se saneán antes de persistirse y de responder. Los tokens de verificación y
+recuperación no se escriben en el historial global ni en los mensajes de log;
+los fallos SMTP se registran sin propagar el detalle del proveedor.
 
 ### Tokens de dispositivos para notificaciones push (INT2-114)
 

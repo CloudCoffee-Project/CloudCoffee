@@ -3,14 +3,13 @@ package cl.cloudcoffee.notification_service.messaging;
 import cl.cloudcoffee.notification_service.email.EmailService;
 import cl.cloudcoffee.notification_service.history.NotificationHistoryService;
 import cl.cloudcoffee.notification_service.websocket.NotificationWebSocketPublisher;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.thymeleaf.context.Context;
 
 @Component
@@ -22,10 +21,10 @@ public class NotificationEventConsumer {
     private final EmailService emailService;
     private final NotificationWebSocketPublisher webSocketPublisher;
 
-    @Value("${app.frontend.url:http://localhost:8081}")
+    @Value("${app.frontend.url}")
     private String frontendUrl;
 
-    @Value("${app.password-reset.url:mobile://restaurar-contrasena}")
+    @Value("${app.password-reset.url}")
     private String passwordResetUrl;
 
     public NotificationEventConsumer(
@@ -92,8 +91,14 @@ public class NotificationEventConsumer {
         LOGGER.info("Enviando correo de verificación a {}", email);
 
         Context context = new Context();
-        String verificacionUrl = frontendUrl + "/verificar-correo?token=" + token;
+        String verificacionUrl = UriComponentsBuilder.fromUriString(frontendUrl)
+                .pathSegment("verificar-correo")
+                .queryParam("token", "{token}")
+                .encode()
+                .buildAndExpand(token)
+                .toUriString();
         context.setVariable("verificacionUrl", verificacionUrl);
+        context.setVariable("token", token);
 
         emailService.enviarCorreo(email, "Verifica tu cuenta en CloudCoffee", "verificacion", context);
     }
@@ -105,8 +110,11 @@ public class NotificationEventConsumer {
         LOGGER.info("Enviando correo de recuperación a {}", email);
 
         Context context = new Context();
-        String recuperacionUrl = passwordResetUrl + "?token="
-                + URLEncoder.encode(token, StandardCharsets.UTF_8);
+        String recuperacionUrl = UriComponentsBuilder.fromUriString(passwordResetUrl)
+                .queryParam("token", "{token}")
+                .encode()
+                .buildAndExpand(token)
+                .toUriString();
         context.setVariable("recuperacionUrl", recuperacionUrl);
         context.setVariable("token", token);
 

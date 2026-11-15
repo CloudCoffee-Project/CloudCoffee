@@ -6,12 +6,14 @@
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <h2>¡Bienvenido a CloudCoffee!</h2>
-    <p>Gracias por registrarte. Para completar tu registro y activar tu cuenta, por favor verifica tu correo electrónico haciendo clic en el siguiente enlace:</p>
+    <p>Gracias por registrarte. Abre este enlace para verificar tu correo. Si la app CloudCoffee está instalada y el dominio tiene habilitados los enlaces asociados, se abrirá la app; de lo contrario, continuarás en el navegador.</p>
     <p>
         <a th:href="${verificacionUrl}" style="display: inline-block; padding: 10px 20px; color: #fff; background-color: #007bff; text-decoration: none; border-radius: 5px;">Verificar Correo</a>
     </p>
     <p>Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
     <p><a th:href="${verificacionUrl}" th:text="${verificacionUrl}"></a></p>
+    <p>También puedes abrir CloudCoffee y pegar este token en la pantalla de verificación:</p>
+    <p><strong th:text="${token}"></strong></p>
     <p>Este enlace expirará en 24 horas.</p>
     <p>Saludos,<br>El equipo de CloudCoffee</p>
 </body>

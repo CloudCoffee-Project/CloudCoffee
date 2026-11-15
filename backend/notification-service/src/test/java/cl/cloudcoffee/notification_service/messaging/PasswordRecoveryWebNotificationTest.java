@@ -20,6 +20,7 @@ import static org.mockito.Mockito.verify;
 
 @SpringBootTest(properties = {
         "spring.rabbitmq.listener.simple.auto-startup=false",
+        "app.frontend.url=https://web.cloudcoffee.example",
         "app.password-reset.url=https://web.cloudcoffee.example/restablecer-contrasena",
         "management.health.rabbit.enabled=false",
         "management.health.mail.enabled=false"
@@ -49,5 +50,26 @@ class PasswordRecoveryWebNotificationTest extends ServiceJwtTests {
         assertThat(context.getValue().getVariable("recuperacionUrl")).isEqualTo(expectedUrl);
         assertThat(templateEngine.process("recuperacion", context.getValue()))
                 .contains("href=\"" + expectedUrl + "\"");
+    }
+
+    @Test
+    void verificacionAbreLaUrlWebYCodificaElToken() {
+        CloudCoffeeEvent event = new CloudCoffeeEvent(UUID.randomUUID(), Instant.now(), "trace-web-verification",
+                "auth.verificacion.solicitud-correo.v1", Map.of(
+                        "userId", "user-web",
+                        "email", "web@cloudcoffee.cl",
+                        "token", "verificacion+con/simbolos=",
+                        "expiresAt", Instant.now().plusSeconds(86400).toString()));
+
+        consumer.consume(event);
+
+        ArgumentCaptor<Context> context = ArgumentCaptor.forClass(Context.class);
+        verify(emailService).enviarCorreo(eq("web@cloudcoffee.cl"),
+                eq("Verifica tu cuenta en CloudCoffee"), eq("verificacion"), context.capture());
+        String expectedUrl = "https://web.cloudcoffee.example/verificar-correo"
+                + "?token=verificacion%2Bcon%2Fsimbolos%3D";
+        assertThat(context.getValue().getVariable("verificacionUrl")).isEqualTo(expectedUrl);
+        assertThat(templateEngine.process("verificacion", context.getValue()))
+                .contains("href=\"" + expectedUrl + "\"", "verificacion+con/simbolos=");
     }
 }
