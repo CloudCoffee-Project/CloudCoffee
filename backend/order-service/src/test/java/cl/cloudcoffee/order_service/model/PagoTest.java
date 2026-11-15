@@ -24,7 +24,15 @@ class PagoTest {
             "APROBADO,  RECHAZADO, false",
             "RECHAZADO, PENDIENTE, false",
             "RECHAZADO, APROBADO,  false",
-            "RECHAZADO, RECHAZADO, false"
+            "RECHAZADO, RECHAZADO, false",
+            // INT2-113: un resultado externo posterior puede exigir conciliación, nunca revertirla.
+            "PENDIENTE, REQUIERE_CONCILIACION, true",
+            "APROBADO,  REQUIERE_CONCILIACION, true",
+            "RECHAZADO, REQUIERE_CONCILIACION, true",
+            "REQUIERE_CONCILIACION, PENDIENTE, false",
+            "REQUIERE_CONCILIACION, APROBADO,  false",
+            "REQUIERE_CONCILIACION, RECHAZADO, false",
+            "REQUIERE_CONCILIACION, REQUIERE_CONCILIACION, false"
     })
     void matrizDeTransiciones(EstadoPago origen, EstadoPago destino, boolean permitida) {
         assertThat(origen.puedeTransicionarA(destino)).isEqualTo(permitida);
