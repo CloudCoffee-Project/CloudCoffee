@@ -121,6 +121,45 @@ class ComprasUpgradeMigrationTests {
         assertThat(texto("SELECT COUNT(*) FROM compras")).isEqualTo("3");
     }
 
+    @Test
+    void conservaVentaHistoricaConFechaDelPagoYCampusDeLaCotizacionOriginal() throws SQLException {
+        flyway = Flyway.configure().configuration(flyway.getConfiguration()).target("7").load();
+        flyway.migrate();
+
+        UUID idCompra = compra("3900");
+        UUID orden = UUID.randomUUID();
+        UUID cancelada = UUID.randomUUID();
+        UUID cafeteria = UUID.randomUUID();
+        UUID campus = UUID.randomUUID();
+        insertarOrden(orden, idCompra, cafeteria, "CC-PAGADA");
+        insertarOrden(cancelada, idCompra, UUID.randomUUID(), "CC-CANCELADA");
+        pago(idCompra, "APROBADO", "3900");
+        ejecutar("UPDATE pagos SET updated_at = TIMESTAMP '2026-04-04 03:00:00' WHERE compra_id='" + idCompra + "'");
+        ejecutar("UPDATE ordenes SET estado='ENTREGADO' WHERE id='" + orden + "'");
+        ejecutar("UPDATE ordenes SET estado='CANCELADO' WHERE id='" + cancelada + "'");
+
+        try (var insert = connection.prepareStatement("""
+                INSERT INTO creacion_compras
+                    (id, usuario_id, clave, hash_cuerpo, solicitud, plan, fase, respuesta, status, trace_id, created_at, updated_at)
+                VALUES (?, ?, ?, 'hash', '[]', ?, 'TERMINADA', '{}', 201, 'trace', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """)) {
+            insert.setObject(1, UUID.randomUUID());
+            insert.setObject(2, UUID.randomUUID());
+            insert.setObject(3, UUID.randomUUID());
+            insert.setString(4, """
+                    {"compraId":"%s","grupos":[{"ordenId":"%s","cafeteriaId":"%s","items":[{"oferta":{"campusId":"%s"}}]}]}
+                    """.formatted(idCompra, orden, cafeteria, campus));
+            insert.executeUpdate();
+        }
+
+        migrarV4();
+
+        assertThat(texto("SELECT COUNT(*) FROM ordenes WHERE id='" + orden
+                + "' AND pagado_at=TIMESTAMP '2026-04-04 03:00:00' AND campus_id='" + campus + "'")).isEqualTo("1");
+        assertThat(texto("SELECT COUNT(*) FROM ordenes WHERE id='" + cancelada
+                + "' AND pagado_at IS NULL AND campus_id IS NULL")).isEqualTo("1");
+    }
+
     private void migrarV4() {
         flyway = Flyway.configure().configuration(flyway.getConfiguration()).target(MigrationVersion.LATEST).load();
         flyway.migrate();

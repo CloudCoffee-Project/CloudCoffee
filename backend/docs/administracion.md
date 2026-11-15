@@ -72,7 +72,7 @@ Reglas comunes:
 | --- | --- | --- | --- | --- | --- |
 | Compras propias, pago | `/v1/compras/**` (existe, INT2-50) | 👤 | ❌ | ❌ | ❌ |
 | Pedidos y retiro | `/v1/orders/**` (existe, INT2-50) | 👤 lectura | 🏪 | ❌ | ❌ |
-| Ventas y resumen | `GET /v1/orders/ventas` y `/ventas/resumen` | ❌ | ❌ | 🏪 | ✅ |
+| Ventas, resumen y detalle | `GET /v1/orders/ventas`, `/ventas/resumen`, `/ventas/{ordenId}` | ❌ | ❌ | 🏪 | ✅ objetivo INT2-109 |
 | Comprobante interno de una orden | `GET /v1/orders/{ordenId}/comprobante` | 👤 | 🏪 | 🏪 | ✅ |
 | Historial de notificaciones | `GET /v1/notifications` (existe) | ❌ | ❌ | ❌ | ✅ |
 
@@ -209,17 +209,36 @@ Efectos comunes:
 
 ## Ventas y comprobante interno
 
-**Ventas** (`ADMIN_CAFETERIA` de su cafetería y `SUPER_ADMIN`):
+**Ventas (INT2-125).** `ADMIN_CAFETERIA` consulta la cafetería que Auth le tiene
+asignada al momento de la solicitud. Un `cafeteriaId` explícito debe coincidir con
+esa asignación. Otra cafetería, una asignación revocada o Auth caído devuelven
+`403 ASIGNACION_NO_AUTORIZADA`. Las respuestas de ventas llevan
+`Cache-Control: no-store`.
 
-* Cuentan las órdenes de compras con pago aprobado: estados `pagado`,
-  `listo_para_retiro`, `entregado`, `no_retirado_pendiente_revision` y
-  `no_retirado_final`.
-* Filtros `desde` y `hasta` (fechas inclusivas en `America/Santiago`, por defecto
-  los últimos 30 días, máximo 92 días) y `estado`. `SUPER_ADMIN` también filtra por
-  `cafeteriaId` y `campusId`. Si `ADMIN_CAFETERIA` pide otra cafetería: `403`.
-* Cada venta incluye código, cafetería, campus, estado, monto, cantidad de ítems y
-  fechas de pago y entrega. **No incluye datos personales del comprador.**
-* `/ventas/resumen` entrega totales del periodo, por estado y por cafetería.
+* `GET /v1/orders/ventas` lista órdenes pagadas, con paginación y orden fijo por
+  `pagadoAt DESC, ordenId DESC`. Cada venta incluye código, snapshots de
+  cafetería y campus, estado, monto CLP, cantidad de líneas de ítems y fechas de
+  pago y entrega. En órdenes antiguas el campus puede ser `null` si no se conserva
+  el plan de creación.
+* `GET /v1/orders/ventas/resumen` usa los mismos filtros y calcula los totales del
+  periodo completo, por estado y por cafetería. Una consulta vacía devuelve
+  `ordenes: 0`, `montoTotal: 0` y desgloses vacíos.
+* `GET /v1/orders/ventas/{ordenId}` devuelve `venta` y los `items` históricos con
+  sus cantidades, precios y subtotales. Una orden ajena, inexistente o sin venta
+  devuelve `404 ORDEN_NO_ENCONTRADA`. Las tres rutas omiten datos del comprador.
+* `desde` y `hasta` filtran por fecha de aprobación del pago en
+  `America/Santiago`. Ambos días son inclusivos, desde el comienzo de `desde`
+  hasta el comienzo del día siguiente a `hasta`, exclusivo. `hasta` toma hoy
+  por defecto y `desde` toma 29 días antes de `hasta`. El rango máximo es de 92
+  días inclusivos.
+* El filtro opcional `estado` admite `pagado`, `listo_para_retiro`, `entregado`,
+  `no_retirado_pendiente_revision` y `no_retirado_final`. Una orden no retirada
+  sigue contando si su pago se aprobó. Las órdenes canceladas, impagas o en
+  revisión se excluyen. Cada orden contribuye una vez con su monto persistido a
+  su propia cafetería, incluso si la compra abarca varias cafeterías.
+
+El contrato objetivo INT2-109 contempla ventas globales de `SUPER_ADMIN` con
+filtros por cafetería y campus.
 
 **Comprobante interno** (`GET /v1/orders/{ordenId}/comprobante`):
 

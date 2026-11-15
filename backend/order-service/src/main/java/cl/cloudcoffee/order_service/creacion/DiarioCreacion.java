@@ -64,11 +64,11 @@ public class DiarioCreacion {
             String estado = grupo.fase.equals("REVISION") ? "revision_requerida" : "pendiente_pago";
             String codigo = "CC-" + grupo.ordenId.toString().replace("-", "").toUpperCase(Locale.ROOT);
             jdbc.update("""
-                    INSERT INTO ordenes (id, compra_id, codigo_orden, cafeteria_id, cafeteria_nombre, estado,
+                    INSERT INTO ordenes (id, compra_id, codigo_orden, cafeteria_id, cafeteria_nombre, campus_id, estado,
                         monto_total, moneda, reserva_expira_at, created_at, updated_at, version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'CLP', ?, ?, ?, 0)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CLP', ?, ?, ?, 0)
                     """, grupo.ordenId, plan.compraId, codigo, grupo.cafeteriaId, grupo.cafeteriaNombre,
-                    estado.toUpperCase(Locale.ROOT), monto, utc(plan.venceAt),
+                    grupo.items.getFirst().oferta.campusId(), estado.toUpperCase(Locale.ROOT), monto, utc(plan.venceAt),
                     utc(plan.creadoAt), utc(plan.creadoAt));
             List<OrdenItemResponse> items = new ArrayList<>();
             for (var item : grupo.items) {
