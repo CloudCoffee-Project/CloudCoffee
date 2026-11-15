@@ -40,6 +40,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         SELECT o FROM Offer o
         JOIN FETCH o.cafeteria c
         WHERE o.product.id = :productId
+          AND o.product.status = cl.cloudcoffee.catalog_service.model.enums.ProductStatus.ACTIVE
           AND c.campus.id = :campusId
           AND c.status = cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus.OPEN
           AND o.status = cl.cloudcoffee.catalog_service.model.enums.OfferStatus.AVAILABLE

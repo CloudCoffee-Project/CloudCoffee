@@ -76,7 +76,23 @@ La paginación solicita 12 productos por página con índices desde cero y orden
 
 Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos` a través del Gateway. Como son consultas públicas, no se adjunta el token almacenado: explorar el catálogo no requiere iniciar sesión ni depende de que una sesión previa siga vigente. El catálogo contempla resultados vacíos, carga y errores con reintento.
 
-INT2-48 cubre la exploración pública del catálogo; INT2-96 añade búsqueda y paginación. La comparación de ofertas y el carrito quedan en sus respectivos issues.
+INT2-48 cubre la exploración pública del catálogo e INT2-96 añade búsqueda y paginación.
+
+### Verificación de la comparación de ofertas (INT2-49)
+
+Con los datos de desarrollo, `DevCatalogSeedIntegrationTests` comprueba que la
+API devuelve estas ofertas de **Café americano** en San Francisco, de menor a mayor precio.
+
+| Cafetería | Precio | Stock disponible |
+| --- | ---: | ---: |
+| Cafetería Biblioteca | $1.300 | 3 |
+| Cafetería Central | $1.500 | 40 |
+
+Al cambiar a San Juan Pablo II aparece Cafetería Patio Norte a $1.600.
+La prueba de integración también cubre stock agotado, cafeterías cerradas,
+productos inactivos y ausencia de ofertas. `ProductDetailPage.test.tsx` verifica
+que la web conserva el orden de la API, deshabilita las ofertas sin stock, permite
+reintentar una carga fallida y descarta respuestas tardías al cambiar de campus.
 
 ## Carrito web (INT2-60)
 
