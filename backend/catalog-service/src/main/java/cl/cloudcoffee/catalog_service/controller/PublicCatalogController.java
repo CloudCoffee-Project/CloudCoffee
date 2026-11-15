@@ -84,7 +84,10 @@ public class PublicCatalogController {
     }
 
     @Operation(operationId = "compararOfertas", summary = "Comparar ofertas de un producto por cafetería",
-            description = "Consulta pública. Filtra ofertas AVAILABLE de cafeterías OPEN por producto y campus, ordenadas por precio ascendente; disponible indica stock mayor que cero. Si no hay ofertas coincidentes devuelve una lista vacía, incluso para identificadores inexistentes. Si se envía un JWT, debe ser válido.")
+            description = "Consulta pública. Filtra ofertas AVAILABLE de un producto ACTIVE en cafeterías OPEN del campus, "
+                    + "ordenadas por precio ascendente. Disponible indica stock mayor que cero. "
+                    + "Si no hay ofertas coincidentes devuelve una lista vacía, incluso para productos inactivos "
+                    + "o identificadores inexistentes. Si se envía un JWT, debe ser válido.")
     @ApiResponse(responseCode = "200", description = "Lista de ofertas")
     @GetMapping("/productos/{id}/ofertas")
     public List<ProductOfferResponse> findProductOffers(
