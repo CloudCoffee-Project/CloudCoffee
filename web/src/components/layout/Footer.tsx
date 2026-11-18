@@ -10,6 +10,7 @@ export function Footer() {
       </div>
 
       <div className="footer-links">
+        <a href="/creditos-imagenes.html" className="footer-link">Créditos de imágenes</a>
         <Link to="/terminos" className="footer-link">Términos de servicio</Link>
         <Link to="/privacidad" className="footer-link">Privacidad</Link>
         <Link to="/contacto" className="footer-link">Contacto</Link>

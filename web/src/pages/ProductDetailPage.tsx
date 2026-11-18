@@ -1,3 +1,4 @@
+import { productImageUrl } from '../services/productImages';
 import { selectedCampusId as savedCampusId, selectCampus } from '../services/selectedCampus';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
@@ -316,7 +317,7 @@ export function ProductDetailPage() {
             {productState.product.imagenUrl && (
               <img
                 className="product-detail-image"
-                src={productState.product.imagenUrl}
+                src={productImageUrl(productState.product.imagenUrl)}
                 alt={productState.product.nombre}
               />
             )}

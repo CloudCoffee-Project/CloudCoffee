@@ -260,6 +260,14 @@ input,select,textarea { color:var(--color-text-main); accent-color:var(--color-p
 }
 @media(max-width:440px) { .navbar-actions { justify-content:flex-start; width:100%; gap:.8rem; } .navbar-links { order:0; width:auto; gap:.8rem; } .nav-link { font-size:.8rem; } .main-content .catalog-products { grid-template-columns:1fr; } .main-content .catalog-product img,.product-image-placeholder { height:220px; } }
 @media(prefers-reduced-motion:reduce) { *,*:before,*:after { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
+/* INT2-145 — carga y previsualización de la imagen del catálogo maestro. */
+.image-manager { margin-top:2rem; padding:1.5rem; background:white; border:1px solid var(--color-border); border-radius:20px; }
+.image-manager>p { color:var(--color-text-muted); margin:1rem 0; }
+.image-manager form { display:grid; gap:1rem; max-width:600px; }
+.image-manager label { display:grid; gap:.5rem; font-weight:600; }
+.image-manager select,.image-manager input { width:100%; padding:.75rem; border:1px solid var(--color-border); border-radius:12px; }
+.image-manager-preview { max-width:100%; width:280px; height:190px; object-fit:cover; border-radius:16px; }
+.image-manager [role=alert] { color:#991b1b; }
 
 /* Product photos and full-card navigation (INT2-141). */
 .product-thumbnail { display:block; width:84px; height:84px; object-fit:cover; border-radius:15px; flex:0 0 84px; }
