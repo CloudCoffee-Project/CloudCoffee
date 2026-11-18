@@ -315,6 +315,7 @@ export function CheckoutPage() {
       {purchase ? (
         <section className="checkout-result" aria-live="polite">
           <h2>Compra {purchase.compraId}</h2>
+          <Link to={`/compras/${encodeURIComponent(purchase.compraId)}`}>Ver detalle de la compra</Link>
           <p className="checkout-status">Estado: <strong>{purchase.estado.replaceAll('_', ' ')}</strong></p>
           <p className="checkout-server-total">
             Total informado por el servidor: <strong>{formatPrice(purchase.montoTotal)}</strong>

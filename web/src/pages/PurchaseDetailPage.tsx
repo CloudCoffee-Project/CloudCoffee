@@ -19,6 +19,8 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const refresh = useRef<() => void>(() => {});
+  const orderIds = purchase?.ordenes.map(order => order.ordenId).sort().join(',') ?? '';
   useEffect(() => {
     const controller = new AbortController();
     let sequence = 0;
@@ -33,11 +35,13 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
         if (!controller.signal.aborted && current === sequence) { setPurchase(null); setError(purchaseError(cause)); }
       }
     }
+    refresh.current = () => void load();
     void load();
-    const disconnect = connectPurchaseRealtimeStream({ compraId, onEvent: () => void load(), onReconnect: () => void load() });
     const focus = () => void load(); window.addEventListener('focus', focus);
-    return () => { controller.abort(); disconnect(); window.removeEventListener('focus', focus); };
+    return () => { controller.abort(); window.removeEventListener('focus', focus); };
   }, [compraId, attempt]);
+  useEffect(() => connectPurchaseRealtimeStream({ compraId, ordenIds: orderIds.split(',').filter(Boolean),
+    onEvent: () => refresh.current(), onReconnect: () => refresh.current() }), [compraId, orderIds]);
 
   // Evitar que una respuesta tardía sobreviva al cambio de usuario/compra.
   const active = useRef(true);

@@ -273,3 +273,20 @@ Configurar `ORDER_PAYMENT_PROVIDER=simulado` y `PAYMENT_PROVIDER=disabled`.
 El simulador de Order ya existe; no se reconstruye. El escenario pendiente se
 consulta y vence según las reglas existentes: no se transforma localmente en
 aprobado. Una compra conserva un único pago, incluso al reabrir o reintentar.
+
+## Historial y detalle de compras (INT2-90)
+
+`/compras?page=0` consulta veinte compras propias por página con el cliente
+HTTP común. Usa totales, fechas y paginación del servidor; incluye carga, vacío
+y reintento. `/compras/:compraId` recarga el detalle al abrirse, recuperar foco,
+recibir eventos de compra/órdenes o reconectar. Un cambio de sesión desmonta
+los datos anteriores y cancela sus consultas.
+
+El detalle separa cafeterías, ítems y subtotales. Confirmar/cancelar reutiliza
+las claves idempotentes del checkout y solo aplica estados devueltos por el
+backend; un cambio de precio muestra la compra actualizada para revisar antes
+de confirmar otra vez. El pago enlaza al flujo simulado de INT2-61. El estado y
+plazo de retiro se muestran desde Order; la credencial QR depende de INT2-89 y
+su backend INT2-54. La descarga del comprobante se incorpora en INT2-138.
+
+Esta rama se apila sobre INT2-61: integrar primero el pago y luego el historial.
