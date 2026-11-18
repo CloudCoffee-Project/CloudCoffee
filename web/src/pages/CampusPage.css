@@ -166,7 +166,7 @@
   color: white;
 }
 
-.campus-continue {
+.campus-options .campus-continue {
   display: flex;
   width: fit-content;
   margin: 1.35rem 0 0 auto;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { BrandArt } from '../components/BrandArt';
 import { CatalogPage } from './CatalogPage';
@@ -38,6 +38,10 @@ export function CampusPage() {
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
+  useLayoutEffect(() => {
+    document.documentElement.scrollTop = 0;
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     setError(false);
@@ -58,6 +62,7 @@ export function CampusPage() {
     event.preventDefault();
     if (!choice) return;
     selectCampus(choice);
+    document.documentElement.scrollTop = 0;
     navigate(`/catalogo?campusId=${encodeURIComponent(choice.id)}`);
   }
 
