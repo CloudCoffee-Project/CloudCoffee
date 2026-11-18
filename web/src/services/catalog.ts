@@ -10,6 +10,8 @@ import { request } from './httpClient';
 export interface Campus {
   id: string;
   nombre: string;
+  direccion?: string | null;
+  cafeteriasActivas?: number;
 }
 
 export interface Category {

@@ -28,7 +28,7 @@ export function PopularProducts() {
     </header>
     {error ? <div role="alert"><p>No pudimos cargar los productos más pedidos.</p><button className="btn-outline" onClick={() => setAttempt(value => value + 1)}>Reintentar</button></div>
       : !products ? <p role="status">Cargando los favoritos…</p>
-      : !products.length ? <p role="status">Pronto encontrarás aquí los favoritos. <Link to="/catalogo">Explorar el catálogo →</Link></p>
+      : !products.length ? <p role="status">Pronto encontrarás aquí los favoritos. <Link to="/campus" state={{ fromHome: true }}>Explorar el catálogo →</Link></p>
       : <ul className="popular-track" ref={track}>{products.map((product, index) => <li key={product.id}>
         <Link className="popular-card" to={`/catalogo/productos/${encodeURIComponent(product.id)}${campusId ? `?campusId=${encodeURIComponent(campusId)}` : ''}`}>
           <div className="popular-photo"><ProductImage src={product.imagenUrl} name={product.nombre} /><span>#{index + 1}</span></div><h3>{product.nombre}</h3><p>{product.descripcion}</p><span className="popular-open">Ver producto →</span>

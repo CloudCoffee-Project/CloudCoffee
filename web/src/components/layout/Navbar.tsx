@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { CART_UPDATED_EVENT, readCartItems } from '../../services/catalog';
 
 export function Navbar() {
-  const { isLoggedIn, role, logout } = useAuth();
+  const { isLoggedIn, isLoading, role, logout } = useAuth();
   const navigate = useNavigate();
   const campusId = useSelectedCampusId();
   const [cartQuantity, setCartQuantity] = useState(() => (
@@ -101,7 +101,7 @@ export function Navbar() {
               Cerrar Sesión
             </button>
           </>
-        ) : (
+        ) : !isLoading && (
           <>
             <Link to="/registro" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
               Registrarse
