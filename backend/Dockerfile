@@ -25,6 +25,8 @@ COPY --from=build \
 COPY docker/jwt-public-entrypoint.sh /usr/local/bin/jwt-public-entrypoint.sh
 RUN chmod 0555 /usr/local/bin/jwt-public-entrypoint.sh
 
+RUN mkdir -p /var/lib/cloudcoffee/product-images && chown spring:spring /var/lib/cloudcoffee/product-images
+
 USER spring:spring
 
 ENTRYPOINT ["/usr/local/bin/jwt-public-entrypoint.sh"]

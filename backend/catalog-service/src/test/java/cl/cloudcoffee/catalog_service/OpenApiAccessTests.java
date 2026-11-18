@@ -27,7 +27,11 @@ class OpenApiAccessTests extends JwtTestSupport {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         // INT2-116 agrega /catalog/seguimientos y /catalog/seguimientos/{seguimientoId}.
-        assertThat(api.path("paths").size()).isEqualTo(8);
+        assertThat(api.path("paths").size()).isEqualTo(11);
+        assertThat(api.at("/paths/~1catalog~1imagenes~1{key}/get/security").isMissingNode()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1imagenes~1{key}/get/responses/200/content/image~1png").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1catalog~1productos~1{id}~1imagen/post/security/0/bearerAuth").isArray()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1admin~1imagenes~1productos/get/security/0/bearerAuth").isArray()).isTrue();
         for (String method : new String[]{"get", "post"}) {
             assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/security/0/bearerAuth").isArray()).isTrue();
             assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/responses/403/content/application~1problem+json/schema/$ref")

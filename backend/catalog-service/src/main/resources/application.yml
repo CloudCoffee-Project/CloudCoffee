@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
@@ -26,6 +30,8 @@ spring:
     ignore-migration-patterns: "*:future,repeatable:missing"
 
 catalog:
+  images:
+    directory: ${CATALOG_IMAGE_STORAGE_PATH:./data/product-images}
   outbox:
     publish-enabled: ${CATALOG_OUTBOX_PUBLISH_ENABLED:true}
     publish-ms: ${CATALOG_OUTBOX_PUBLISH_MS:2000}
