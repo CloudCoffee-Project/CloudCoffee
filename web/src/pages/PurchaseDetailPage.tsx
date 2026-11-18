@@ -50,7 +50,7 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
     if (busy) return; setBusy(true); setError('');
     try {
       const updated = await (action === 'confirmar' ? confirmPurchase : cancelPurchase)(compraId, getPurchaseActionKey(compraId, action));
-      if (active.current) { setPurchase(updated); clearPurchaseActionKey(compraId, action); }
+      if (active.current) { setPurchase(previous => reconcilePurchaseFromHttp(previous, updated)); clearPurchaseActionKey(compraId, action); }
     } catch (cause) {
       if (!active.current) return;
       if (cause instanceof ApiRequestError && cause.code === 'PRECIO_CAMBIO' && isPurchase(cause.extensions.compra)) setPurchase(cause.extensions.compra);
