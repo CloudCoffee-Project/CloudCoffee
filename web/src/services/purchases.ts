@@ -20,6 +20,9 @@ export interface PurchaseOrder {
   estado: string;
   montoTotal: number;
   version?: number;
+  codigoOrden?: string;
+  retiroHasta?: string | null;
+  items?: { ordenItemId: string; productoNombre: string; cantidad: number; precioUnitario: number; subtotal: number }[];
 }
 
 export interface Purchase {
@@ -32,6 +35,26 @@ export interface Purchase {
   reservaExpiraAt: string;
   pago: unknown | null;
   version?: number;
+  creadoAt?: string;
+}
+
+export interface PurchasePage {
+  content: Purchase[];
+  number: number;
+  totalPages: number;
+  totalElements: number;
+  first: boolean;
+  last: boolean;
+}
+
+export function listPurchases(page: number, signal?: AbortSignal): Promise<PurchasePage> {
+  return request(`/v1/compras?page=${page}&size=20`, { signal });
+}
+
+export function paymentState(purchase: Purchase): string {
+  const pago = purchase.pago;
+  return typeof pago === 'object' && pago !== null && 'estado' in pago && typeof pago.estado === 'string'
+    ? pago.estado : 'sin iniciar';
 }
 
 export interface PendingPurchaseCreation {

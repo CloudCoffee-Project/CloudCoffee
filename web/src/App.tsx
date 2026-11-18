@@ -15,6 +15,8 @@ import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { PaymentResultPage } from './pages/PaymentResultPage';
+import { PurchasesPage } from './pages/PurchasesPage';
+import { PurchaseDetailPage } from './pages/PurchaseDetailPage';
 import { CashierOrdersPage } from './pages/CashierOrdersPage';
 import { AdminPanelPage } from './pages/AdminPanelPage';
 
@@ -48,15 +50,8 @@ export function App() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/pago/resultado" element={<PaymentResultPage />} />
           <Route path="/pago/retorno" element={<PaymentResultPage />} />
-          <Route
-            path="/compras"
-            element={
-              <section style={{ padding: '2rem' }}>
-                <h1>Mis Compras</h1>
-                <p>Historial y seguimiento de pedidos del cliente.</p>
-              </section>
-            }
-          />
+          <Route path="/compras" element={<PurchasesPage />} />
+          <Route path="/compras/:compraId" element={<PurchaseDetailPage />} />
         </Route>
 
         {/* Rutas exclusivas de personal de cafetería (CAJERO) */}
