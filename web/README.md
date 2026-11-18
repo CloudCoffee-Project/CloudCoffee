@@ -254,3 +254,22 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 - `src/App.tsx`: definición de rutas. El layout y la navegación visual corresponden a INT2-42.
 
 Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`, `/restaurar-contrasena` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.
+
+## Pago simulado web (INT2-61)
+
+Tras resolver stock y revisión, la compra pendiente ofrece elegir aprobar,
+rechazar o dejar pendiente. El cliente envía solo `{ escenario }` a
+`POST /v1/compras/:compraId/pago`, con UUID de idempotencia. El monto y la
+aplicación del resultado los decide Order. Un timeout conserva clave y escenario;
+al reabrir se consulta primero el pago existente para evitar otro intento.
+
+`/pago/resultado?compraId=...` consulta compra y pago autenticados al abrir,
+recuperar foco y recibir eventos. Mientras espera vuelve a consultar cada cinco
+segundos. Los parámetros de la URL no aprueban pagos. La pantalla identifica la
+simulación y ausencia de cobros reales. No abre navegador de pago ni necesita
+credenciales, preferencias, deep links o webhooks de un proveedor externo.
+
+Configurar `ORDER_PAYMENT_PROVIDER=simulado` y `PAYMENT_PROVIDER=disabled`.
+El simulador de Order ya existe; no se reconstruye. El escenario pendiente se
+consulta y vence según las reglas existentes: no se transforma localmente en
+aprobado. Una compra conserva un único pago, incluso al reabrir o reintentar.
