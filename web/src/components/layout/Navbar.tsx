@@ -49,7 +49,9 @@ export function Navbar() {
       </div>
 
       <div className="navbar-links">
-        <NavLink to="/campus" className="nav-link campus-nav">📍 {campusId ? 'Cambiar campus' : 'Elegir campus'}</NavLink>
+        <NavLink to={campusId ? '/campus/cambiar' : '/campus'} end className="nav-link campus-nav">
+          <span aria-hidden="true">📍</span> {campusId ? 'Cambiar campus' : 'Elegir campus'}
+        </NavLink>
         <NavLink
           to="/catalogo"
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}

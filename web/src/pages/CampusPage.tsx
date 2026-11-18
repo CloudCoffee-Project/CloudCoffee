@@ -29,7 +29,7 @@ function campusIcon(name: string) {
   return '🏛️';
 }
 
-export function CampusPage() {
+export function CampusPage({ mode = 'select' }: { mode?: 'select' | 'change' }) {
   const navigate = useNavigate();
   const { state } = useLocation();
   const [savedCampus] = useState(selectedCampusId);
@@ -55,15 +55,18 @@ export function CampusPage() {
     return () => controller.abort();
   }, [attempt]);
 
+  const currentCampus = campus?.find(value => value.id === savedCampus);
   const choice = campus?.find(value => value.id === selected);
-  const returnToCatalog = !state?.fromHome && campus?.some(value => value.id === savedCampus);
+  const isChanging = mode === 'change' && Boolean(savedCampus) && (!campus || Boolean(currentCampus));
+  const canContinue = Boolean(choice) && (!isChanging || selected !== savedCampus);
+  const returnToCatalog = !state?.fromHome && Boolean(currentCampus);
 
   function continueToCatalog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!choice) return;
+    if (!choice || !canContinue) return;
     selectCampus(choice);
     document.documentElement.scrollTop = 0;
-    navigate(`/catalogo?campusId=${encodeURIComponent(choice.id)}`);
+    navigate(`/catalogo?campusId=${encodeURIComponent(choice.id)}`, { replace: isChanging });
   }
 
   return (
@@ -73,8 +76,10 @@ export function CampusPage() {
           {returnToCatalog ? '← Volver al catálogo' : '← Volver al inicio'}
         </Link>
         <span className="eyebrow">📍 Selección de sede</span>
-        <h1 id="campus-title">¿En qué campus estás?</h1>
-        <p>Elige tu sede actual para ver el stock y las cafeterías disponibles.</p>
+        <h1 id="campus-title">{isChanging ? 'Cambiar campus' : '¿En qué campus estás?'}</h1>
+        <p>{isChanging
+          ? 'Elige otra sede para ver su catálogo y las cafeterías disponibles.'
+          : 'Elige tu sede actual para ver el stock y las cafeterías disponibles.'}</p>
         <BrandArt className="campus-art" />
       </div>
 
@@ -107,6 +112,7 @@ export function CampusPage() {
                   <span className="campus-card-copy">
                     <strong id={`campus-name-${id}`}>{nombre}</strong>
                     <span className="campus-card-details" id={`campus-details-${id}`}>
+                      {isChanging && id === savedCampus && <span className="campus-current">Campus actual</span>}
                       {direccion && <span>{direccion}</span>}
                       {typeof cafeteriasActivas === 'number' && (
                         <span className="campus-active-count">
@@ -120,8 +126,8 @@ export function CampusPage() {
                 </label>
               ))}
             </fieldset>
-            <button className="btn-primary campus-continue" type="submit" disabled={!choice}>
-              Continuar al catálogo →
+            <button className="btn-primary campus-continue" type="submit" disabled={!canContinue}>
+              {isChanging ? 'Confirmar cambio →' : 'Continuar al catálogo →'}
             </button>
           </form>
         )}

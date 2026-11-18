@@ -29,7 +29,8 @@ export function App() {
 
         {/* Rutas públicas */}
         <Route path="/" element={<HomePage />} />
-        <Route path="/campus" element={<CampusPage />} />
+        <Route path="/campus" element={<CampusPage key="select" />} />
+        <Route path="/campus/cambiar" element={<CampusPage key="change" mode="change" />} />
         <Route path="/catalogo" element={<CatalogEntry />} />
         <Route path="/catalogo/productos/:id" element={<ProductDetailPage />} />
         <Route path="/carrito" element={<CartPage />} />

@@ -151,6 +151,17 @@
   font-weight: 650;
 }
 
+.campus-current {
+  width: fit-content;
+  margin-bottom: .2rem;
+  padding: .1rem .5rem;
+  border-radius: 999px;
+  background: #f1e4d5;
+  color: #774921;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
 .campus-check {
   display: grid;
   place-items: center;
