@@ -77,6 +77,8 @@ public class GatewaySecurityConfig {
                                 "/v1/catalog/campus", "/v1/catalog/categorias",
                                 "/v1/catalog/productos", "/v1/catalog/productos/*",
                                 "/v1/catalog/productos/*/ofertas").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/orders/productos-populares").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/v1/orders/productos-populares").permitAll()
                         // INT2-110: Payment valida la firma del proveedor; el módulo base falla con 503.
                         .requestMatchers(HttpMethod.POST, "/v1/payments/webhooks/mercadopago").permitAll()
                         // No exponer APIs internas ni admitir un proxy Payment genérico.
