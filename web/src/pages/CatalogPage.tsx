@@ -1,3 +1,4 @@
+import { BrandArt } from '../components/BrandArt';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useInRouterContext } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
@@ -81,8 +82,7 @@ export function CatalogPage() {
 
   return (
     <section className="catalog" aria-labelledby="catalog-title" aria-busy={options.status === 'loading'}>
-      <h1 id="catalog-title">Catálogo</h1>
-      <p>Encuentra productos disponibles en tu campus.</p>
+      <header className="catalog-banner"><div><span className="eyebrow">Una pausa en tu día</span><h1 id="catalog-title">Catálogo</h1><p>¿Qué se te antoja hoy? Encuentra productos disponibles en tu campus.</p></div><BrandArt /></header>
 
       {options.status === 'loading' && <div role="status"><LoadingSpinner />Cargando catálogo…</div>}
       {options.status === 'error' && (
@@ -143,7 +143,7 @@ export function CatalogPage() {
                       const detailUrl = `/catalogo/productos/${product.id}?campusId=${encodeURIComponent(filters.campusId)}`;
                       return (
                         <li className="catalog-product" key={product.id}>
-                          {product.imagenUrl && <img src={product.imagenUrl} alt="" loading="lazy" />}
+                          {product.imagenUrl ? <img src={product.imagenUrl} alt="" loading="lazy" /> : <div className="product-image-placeholder" aria-hidden="true">☕</div>}
                           <h2>
                             {inRouter ? (
                               <Link to={detailUrl} className="catalog-product-link">{product.nombre}</Link>

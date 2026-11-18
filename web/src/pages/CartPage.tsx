@@ -222,13 +222,13 @@ export function CartPage() {
               );
             })}
           </div>
-          <aside className="cart-total" aria-label="Estimación del carrito">
+          <aside className="cart-summary"><h2>Resumen de tu pedido</h2><div className="cart-total" aria-label="Estimación del carrito">
             <span>Estimación</span>
             <strong>{formatPrice(total)}</strong>
-          </aside>
+          </div>
           <Link className="btn-primary cart-checkout-link" to="/checkout">
             Continuar al checkout
-          </Link>
+          </Link><p>El total definitivo y la disponibilidad se validan al crear la compra.</p></aside>
         </>
       )}
     </section>

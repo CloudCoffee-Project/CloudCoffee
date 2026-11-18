@@ -316,7 +316,7 @@ export function ProductDetailPage() {
               />
             )}
             <div className="product-detail-info">
-              <span className="product-detail-category">
+              <span className="product-detail-category eyebrow">
                 {productState.product.categoria.nombre}
               </span>
               <h1 id="product-detail-title">{productState.product.nombre}</h1>

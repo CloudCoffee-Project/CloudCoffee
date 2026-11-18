@@ -1,3 +1,4 @@
+import { AuthShell } from '../components/AuthShell';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { request, ApiRequestError } from '../services/httpClient';
@@ -84,8 +85,8 @@ export function LoginPage() {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '0 auto', paddingTop: '2rem' }}>
-      <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Iniciar Sesión</h2>
+    <AuthShell>
+      <h2 style={{ marginBottom: '1.5rem', textAlign: 'left' }}>Iniciar Sesión</h2>
 
       {location.state?.passwordChanged === true && (
         <p className="profile-message profile-message--success" role="status">
@@ -150,6 +151,6 @@ export function LoginPage() {
           {isLoading ? <span style={{transform: 'scale(0.5)', height: '24px', margin: '-24px 0'}}><LoadingSpinner /></span> : 'Iniciar Sesión'}
         </button>
       </form>
-    </div>
+    </AuthShell>
   );
 }
