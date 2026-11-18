@@ -32,7 +32,7 @@ it('pagina desde backend y navega a detalle con una orden por cafetería', async
   view(); fireEvent.click(await screen.findByRole('button', { name: 'Siguiente' }));
   await waitFor(() => expect(listPurchases).toHaveBeenCalledWith(1, expect.any(AbortSignal)));
   fireEvent.click(await screen.findByRole('link', { name: 'Compra compra-1' }));
-  expect(await screen.findByText('Central')).toBeTruthy(); expect(screen.getByRole('button', { name: /b · Norte/ })).toBeTruthy(); expect(screen.getByText(/2 × Café/)).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Central' })).toBeTruthy(); expect(screen.getByRole('button', { name: /b · Norte/ })).toBeTruthy(); expect(screen.getByText(/2 × Café/)).toBeTruthy();
 });
 it('muestra vacío y permite reintentar un error de red', async () => {
   vi.mocked(listPurchases).mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce({ content: [], number: 0, totalPages: 0, totalElements: 0, first: true, last: true });

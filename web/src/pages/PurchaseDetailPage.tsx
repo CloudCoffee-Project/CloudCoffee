@@ -80,8 +80,8 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
           <div className="order-tabs" role="group" aria-label="Órdenes de la compra">
             {purchase.ordenes.map(order => <button type="button" key={order.ordenId}
               className={`order-tab${selectedOrder?.ordenId === order.ordenId ? ' selected' : ''}`}
-              aria-pressed={selectedOrder?.ordenId === order.ordenId} onClick={() => setSelectedOrderId(order.ordenId)}>
-              <strong>{order.codigoOrden ?? order.ordenId} · {order.cafeteriaNombre}</strong>
+              aria-label={`${order.codigoOrden ?? order.ordenId} · ${order.cafeteriaNombre}`} aria-pressed={selectedOrder?.ordenId === order.ordenId} onClick={() => setSelectedOrderId(order.ordenId)}>
+              <strong>{order.cafeteriaNombre}</strong><span className="order-code" title={order.codigoOrden ?? order.ordenId}>{order.codigoOrden ?? order.ordenId}</span>
               <span className={`order-status status-${order.estado}`}>{statusLabel(order.estado)}</span>
               <span>{purchaseMoney(order.montoTotal)}</span>
             </button>)}

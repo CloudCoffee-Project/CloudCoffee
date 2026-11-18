@@ -43,6 +43,7 @@ INT2-145. La presentación usa las URL públicas que devuelve el catálogo, sin 
   táctil, enlaces por teclado y respeto a movimiento reducido; sin avance automático.
   Incluye carga, vacío, error y reintento.
 
-Validación: Vitest completo (197 pruebas), build web, pruebas de consultas de compras
+Validación: Vitest completo (198 pruebas), build web, pruebas de consultas de compras
 (25), ranking real (2) y routing/seguridad del Gateway (141). La integración con
-INT2-145 conserva sus pruebas adicionales de subida de imágenes.
+INT2-145 pasa 203 pruebas web en conjunto y build; revisión en navegador a 1280/390 px,
+sin desbordamiento horizontal.
