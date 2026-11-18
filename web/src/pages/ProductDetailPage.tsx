@@ -1,3 +1,4 @@
+import { selectedCampusId as savedCampusId, selectCampus } from '../services/selectedCampus';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
@@ -45,7 +46,7 @@ function formatPrice(price: number): string {
 export function ProductDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialCampusId = searchParams.get('campusId') ?? '';
+  const initialCampusId = searchParams.get('campusId') ?? savedCampusId();
 
   const [productState, setProductState] = useState<ProductLoadState>({ status: 'loading' });
   const [selectedCampusId, setSelectedCampusId] = useState<string>(initialCampusId);
@@ -237,6 +238,10 @@ export function ProductDetailPage() {
   }, [sessionUserId, selectedCampusId, offerCafeteriaIdsKey]);
 
   function handleCampusChange(campusId: string) {
+    if (productState.status === 'success') {
+      const campus = productState.campusList.find(campus => campus.id === campusId);
+      if (campus) selectCampus(campus);
+    }
     setSelectedCampusId(campusId);
     setCartFeedback('');
     if (campusId) {

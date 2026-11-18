@@ -48,6 +48,7 @@ export interface CartItem {
   offerId: string;
   productId: string;
   productName: string;
+  productImageUrl?: string | null;
   cafeteriaId: string;
   cafeteriaName: string;
   price: number;
@@ -139,6 +140,7 @@ export function addOfferToCart(product: ProductDetail, offer: ProductOffer, quan
     offerId: offer.id,
     productId: product.id,
     productName: product.nombre,
+    productImageUrl: product.imagenUrl,
     cafeteriaId: offer.cafeteriaId,
     cafeteriaName: offer.cafeteriaName,
     price: Number(offer.price),

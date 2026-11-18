@@ -1,3 +1,5 @@
+import { selectedCampusId, selectCampus } from '../services/selectedCampus';
+import { ProductImage } from '../components/ProductImage';
 import { BrandArt } from '../components/BrandArt';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useInRouterContext } from 'react-router';
@@ -19,10 +21,10 @@ function errorMessage(error: unknown): string {
   return error instanceof ApiRequestError ? error.detail : 'No se pudo cargar el catálogo.';
 }
 
-export function CatalogPage() {
+export function CatalogPage({ initialCampusId = selectedCampusId(), onCampusChange }: { initialCampusId?: string; onCampusChange?: (id: string) => void } = {}) {
   const inRouter = useInRouterContext();
   const [options, setOptions] = useState<LoadState<{ campus: Campus[]; categories: Category[] }>>({ status: 'loading' });
-  const [filters, setFilters] = useState<ProductFilters>({ campusId: '', categoriaId: '', q: '', page: 0 });
+  const [filters, setFilters] = useState<ProductFilters>(() => ({ campusId: initialCampusId, categoriaId: '', q: '', page: 0 }));
   const [searchText, setSearchText] = useState('');
   const [products, setProducts] = useState<{ filters: ProductFilters; result: LoadState<ProductPage> }>();
   const [optionsRetry, setOptionsRetry] = useState(0);
@@ -99,6 +101,9 @@ export function CatalogPage() {
             <label>
               Campus
               <select value={filters.campusId} onChange={(event) => {
+                const campus = options.data.campus.find(campus => campus.id === event.target.value);
+                if (campus) selectCampus(campus);
+                onCampusChange?.(event.target.value);
                 setSearchText('');
                 setFilters({ campusId: event.target.value, categoriaId: '', q: '', page: 0 });
               }}>
@@ -143,15 +148,15 @@ export function CatalogPage() {
                       const detailUrl = `/catalogo/productos/${product.id}?campusId=${encodeURIComponent(filters.campusId)}`;
                       return (
                         <li className="catalog-product" key={product.id}>
-                          {product.imagenUrl ? <img src={product.imagenUrl} alt="" loading="lazy" /> : <div className="product-image-placeholder" aria-hidden="true">☕</div>}
-                          <h2>
-                            {inRouter ? (
-                              <Link to={detailUrl} className="catalog-product-link">{product.nombre}</Link>
-                            ) : (
-                              <a href={detailUrl} className="catalog-product-link">{product.nombre}</a>
-                            )}
-                          </h2>
-                          {product.descripcion && <p>{product.descripcion}</p>}
+                          {inRouter ? <Link to={detailUrl} className="catalog-product-link">
+                            <ProductImage src={product.imagenUrl} name={product.nombre} />
+                            <h2>{product.nombre}</h2>
+                            {product.descripcion && <p>{product.descripcion}</p>}
+                          </Link> : <a href={detailUrl} className="catalog-product-link">
+                            <ProductImage src={product.imagenUrl} name={product.nombre} />
+                            <h2>{product.nombre}</h2>
+                            {product.descripcion && <p>{product.descripcion}</p>}
+                          </a>}
                         </li>
                       );
                     })}

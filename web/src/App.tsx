@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router';
-import { CatalogPage } from './pages/CatalogPage';
+import { CampusPage, CatalogEntry } from './pages/CampusPage';
 import { HomePage } from './pages/HomePage';
 import { MainLayout } from './components/layout/MainLayout';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -29,7 +29,8 @@ export function App() {
 
         {/* Rutas públicas */}
         <Route path="/" element={<HomePage />} />
-        <Route path="/catalogo" element={<CatalogPage />} />
+        <Route path="/campus" element={<CampusPage />} />
+        <Route path="/catalogo" element={<CatalogEntry />} />
         <Route path="/catalogo/productos/:id" element={<ProductDetailPage />} />
         <Route path="/carrito" element={<CartPage />} />
         <Route path="/registro" element={<RegisterPage />} />

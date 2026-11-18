@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { BrandArt } from '../components/BrandArt';
+import { ProductImage } from '../components/ProductImage';
+import './OrdersPage.css';
 import { useAuth } from '../hooks/useAuth';
 import { PaymentCheckout } from '../components/PaymentCheckout';
 import { ReceiptDownload } from '../components/ReceiptDownload';
@@ -20,6 +23,7 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState('');
   const [attempt, setAttempt] = useState(0);
   const refresh = useRef<() => void>(() => {});
   const orderIds = purchase?.ordenes.map(order => order.ordenId).sort().join(',') ?? '';
@@ -62,25 +66,51 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
     } finally { if (active.current) setBusy(false); }
   }
 
-  return <section className="checkout-page">
-    <Link to="/compras">Volver a mis compras</Link>
-    <h1>Detalle de compra</h1>
+  const selectedOrder = purchase?.ordenes.find(order => order.ordenId === selectedOrderId) ?? purchase?.ordenes[0];
+  const statusLabel = (status: string) => status.replaceAll('_', ' ');
+  return <section className="checkout-page orders-page" aria-labelledby="purchase-title">
+    <Link className="orders-back" to="/compras">← Volver a mis compras</Link>
+    <span className="eyebrow">☕ Seguimiento de tu pedido</span>
+    <h1 id="purchase-title">Detalle de compra</h1>
     {error && <p role="alert">{error}</p>}
-    {!purchase ? error ? <button onClick={() => setAttempt(v => v + 1)}>Reintentar</button> : <p role="status">Cargando compra…</p> : <>
-      <h2>Compra {purchase.compraId}</h2>
-      <p>{purchaseDate(purchase.creadoAt)} · {purchaseMoney(purchase.montoTotal)}</p>
-      <p>Estado: {purchase.estado.replaceAll('_', ' ')} · Pago: {paymentState(purchase).replaceAll('_', ' ')}</p>
-      {purchase.estado === 'revision_requerida' && <button className="checkout-primary" disabled={busy} onClick={() => void resolve('confirmar')}>Confirmar disponibilidad</button>}
-      {['revision_requerida', 'pendiente_pago'].includes(purchase.estado) && <button className="checkout-secondary" disabled={busy} onClick={() => void resolve('cancelar')}>Cancelar compra</button>}
-      {purchase.estado === 'pendiente_pago' && <PaymentCheckout compraId={compraId} />}
-      <ul className="purchase-history">{purchase.ordenes.map(order => <li className="checkout-result" key={order.ordenId} id={`orden-${order.ordenId}`}>
-        <h3>{order.cafeteriaNombre}</h3>
-        <p>Orden {order.codigoOrden ?? order.ordenId} · {order.estado.replaceAll('_', ' ')}</p>
-        <ul>{order.items?.map(item => <li key={item.ordenItemId}>{item.cantidad} × {item.productoNombre} · {purchaseMoney(item.precioUnitario)} · Subtotal {purchaseMoney(item.subtotal)}</li>)}</ul>
-        <p>Total de la orden: {purchaseMoney(order.montoTotal)}</p>
-        {order.retiroHasta && <p>Plazo de retiro: {purchaseDate(order.retiroHasta)}</p>}
-        {canDownloadReceipt(purchase, order) && <ReceiptDownload orderId={order.ordenId} />}
-      </li>)}</ul>
+    {!purchase ? error ? <button className="btn-primary" onClick={() => setAttempt(v => v + 1)}>Reintentar</button> : <p role="status">Cargando compra…</p> : <>
+      <p className="orders-intro">{purchaseDate(purchase.creadoAt)} · {purchase.ordenes.length} orden{purchase.ordenes.length === 1 ? '' : 'es'} por cafetería</p>
+      <div className="orders-layout">
+        <aside className="orders-sidebar"><h2>Selecciona una orden</h2>
+          <div className="order-tabs" role="group" aria-label="Órdenes de la compra">
+            {purchase.ordenes.map(order => <button type="button" key={order.ordenId}
+              className={`order-tab${selectedOrder?.ordenId === order.ordenId ? ' selected' : ''}`}
+              aria-pressed={selectedOrder?.ordenId === order.ordenId} onClick={() => setSelectedOrderId(order.ordenId)}>
+              <strong>{order.codigoOrden ?? order.ordenId} · {order.cafeteriaNombre}</strong>
+              <span className={`order-status status-${order.estado}`}>{statusLabel(order.estado)}</span>
+              <span>{purchaseMoney(order.montoTotal)}</span>
+            </button>)}
+          </div><BrandArt className="orders-art" />
+        </aside>
+        <div className="orders-content">
+          {selectedOrder && <article className="order-detail" id={`orden-${selectedOrder.ordenId}`} aria-label={`Detalle de orden ${selectedOrder.codigoOrden ?? selectedOrder.ordenId}`}>
+            <header className="order-detail-header"><div><span className="eyebrow">📍 Retiro en cafetería</span><h2>{selectedOrder.cafeteriaNombre}</h2></div><span className={`order-status status-${selectedOrder.estado}`}>{statusLabel(selectedOrder.estado)}</span></header>
+            <div className="order-folio"><span>Folio de tu orden</span><strong>{selectedOrder.codigoOrden ?? selectedOrder.ordenId}</strong></div>
+            <h3>Productos comprados</h3>
+            {selectedOrder.items?.length ? <ul className="order-products">{selectedOrder.items.map(item => <li key={item.ordenItemId}>
+              <ProductImage productId={item.productoId} name={item.productoNombre} />
+              <div><strong>{item.cantidad} × {item.productoNombre}</strong><span>{purchaseMoney(item.precioUnitario)} por unidad</span></div><strong>{purchaseMoney(item.subtotal)}</strong>
+            </li>)}</ul> : <p>El detalle de productos no está disponible.</p>}
+            <div className="order-total"><span>Total de la orden</span><strong>{purchaseMoney(selectedOrder.montoTotal)}</strong></div>
+            {selectedOrder.retiroHasta && <p className="order-pickup">Plazo de retiro: {purchaseDate(selectedOrder.retiroHasta)}</p>}
+            {canDownloadReceipt(purchase, selectedOrder) && <div className="order-receipt"><p>Comprobante de tu pedido</p><ReceiptDownload orderId={selectedOrder.ordenId} /></div>}
+          </article>}
+          <section className="purchase-summary" aria-label="Resumen de la compra">
+            <h2>Compra {purchase.compraId}</h2><p>Estado: {statusLabel(purchase.estado)} · Pago: {statusLabel(paymentState(purchase))}</p>
+            <div className="order-total"><span>Total de la compra</span><strong>{purchaseMoney(purchase.montoTotal)}</strong></div>
+            <div className="purchase-actions">
+              {purchase.estado === 'revision_requerida' && <button className="checkout-primary" disabled={busy} onClick={() => void resolve('confirmar')}>Confirmar disponibilidad</button>}
+              {['revision_requerida', 'pendiente_pago'].includes(purchase.estado) && <button className="checkout-secondary" disabled={busy} onClick={() => void resolve('cancelar')}>Cancelar compra</button>}
+            </div>
+            {purchase.estado === 'pendiente_pago' && <PaymentCheckout compraId={compraId} />}
+          </section>
+        </div>
+      </div>
     </>}
   </section>;
 }

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router';
+import { useSelectedCampusId } from '../../services/selectedCampus';
 import { useAuth } from '../../hooks/useAuth';
 import { CART_UPDATED_EVENT, readCartItems } from '../../services/catalog';
 
 export function Navbar() {
   const { isLoggedIn, role, logout } = useAuth();
   const navigate = useNavigate();
+  const campusId = useSelectedCampusId();
   const [cartQuantity, setCartQuantity] = useState(() => (
     readCartItems().reduce((total, item) => total + item.quantity, 0)
   ));
@@ -47,6 +49,7 @@ export function Navbar() {
       </div>
 
       <div className="navbar-links">
+        <NavLink to="/campus" className="nav-link campus-nav">📍 {campusId ? 'Cambiar campus' : 'Elegir campus'}</NavLink>
         <NavLink
           to="/catalogo"
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}

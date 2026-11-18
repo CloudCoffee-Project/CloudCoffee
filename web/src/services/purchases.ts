@@ -22,7 +22,7 @@ export interface PurchaseOrder {
   version?: number;
   codigoOrden?: string;
   retiroHasta?: string | null;
-  items?: { ordenItemId: string; productoNombre: string; cantidad: number; precioUnitario: number; subtotal: number }[];
+  items?: { productoId?: string; ordenItemId: string; productoNombre: string; cantidad: number; precioUnitario: number; subtotal: number }[];
 }
 
 export interface Purchase {
