@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
 import { PaymentCheckout } from '../components/PaymentCheckout';
+import { ReceiptDownload } from '../components/ReceiptDownload';
+import { canDownloadReceipt } from '../services/receipts';
 import { ApiRequestError } from '../services/httpClient';
 import { cancelPurchase, clearPurchaseActionKey, confirmPurchase, connectPurchaseRealtimeStream,
   getPurchase, getPurchaseActionKey, isPurchase, paymentState, reconcilePurchaseFromHttp,
@@ -77,6 +79,7 @@ function PurchaseDetail({ compraId }: { compraId: string }) {
         <ul>{order.items?.map(item => <li key={item.ordenItemId}>{item.cantidad} × {item.productoNombre} · {purchaseMoney(item.precioUnitario)} · Subtotal {purchaseMoney(item.subtotal)}</li>)}</ul>
         <p>Total de la orden: {purchaseMoney(order.montoTotal)}</p>
         {order.retiroHasta && <p>Plazo de retiro: {purchaseDate(order.retiroHasta)}</p>}
+        {canDownloadReceipt(purchase, order) && <ReceiptDownload orderId={order.ordenId} />}
       </li>)}</ul>
     </>}
   </section>;
