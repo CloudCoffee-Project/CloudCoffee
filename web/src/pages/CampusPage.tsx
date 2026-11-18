@@ -70,7 +70,7 @@ export function CampusPage({ mode = 'select' }: { mode?: 'select' | 'change' }) 
   }
 
   return (
-    <section className="campus-page" aria-labelledby="campus-title">
+    <section className={isChanging ? 'campus-page campus-page--change' : 'campus-page'} aria-labelledby="campus-title">
       <div className="campus-intro">
         <Link className="campus-back" to={returnToCatalog ? '/catalogo' : '/'}>
           {returnToCatalog ? '← Volver al catálogo' : '← Volver al inicio'}

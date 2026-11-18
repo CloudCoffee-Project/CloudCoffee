@@ -195,6 +195,21 @@
     display: none;
   }
 
+  .campus-page--change .campus-intro {
+    position: relative;
+    padding-right: clamp(90px, 24vw, 165px);
+  }
+
+  .campus-page--change .campus-art {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: block;
+    width: clamp(78px, 22vw, 150px);
+    min-height: clamp(95px, 25vw, 175px);
+    margin: 0;
+  }
+
   .campus-options {
     padding-top: 0;
   }
