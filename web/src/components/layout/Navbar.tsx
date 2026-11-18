@@ -71,6 +71,16 @@ export function Navbar() {
                 Panel Cajero
               </Link>
             )}
+            {role === 'ADMIN_CAFETERIA' && (
+              <Link to="/admin" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+                Panel Administración
+              </Link>
+            )}
+            {role === 'SUPER_ADMIN' && (
+              <Link to="/superadmin" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
+                Panel Superadministrador
+              </Link>
+            )}
             {role === 'CLIENTE' && (
               <Link to="/compras" className="nav-link" style={{ marginRight: '1rem', fontWeight: 600 }}>
                 Mis Compras

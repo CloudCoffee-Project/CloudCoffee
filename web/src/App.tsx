@@ -15,6 +15,7 @@ import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { CashierOrdersPage } from './pages/CashierOrdersPage';
+import { AdminPanelPage } from './pages/AdminPanelPage';
 
 
 export function App() {
@@ -58,6 +59,24 @@ export function App() {
         {/* Rutas exclusivas de personal de cafetería (CAJERO) */}
         <Route element={<ProtectedRoute allowedRoles={['CAJERO']} />}>
           <Route path="/cajero" element={<CashierOrdersPage />} />
+        </Route>
+        {/* Rutas exclusivas de administrador de cafetería (ADMIN_CAFETERIA) */}
+        <Route element={<ProtectedRoute allowedRoles={['ADMIN_CAFETERIA']} />}>
+          <Route path="/admin" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="resumen" />} />
+          <Route path="/admin/cafeteria" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="cafeteria" />} />
+          <Route path="/admin/personal" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="personal" />} />
+          <Route path="/admin/ofertas" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="ofertas" />} />
+          <Route path="/admin/inventario" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="inventario" />} />
+          <Route path="/admin/ventas" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="ventas" />} />
+        </Route>
+
+        {/* Rutas exclusivas de superadministrador (SUPER_ADMIN) */}
+        <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+          <Route path="/superadmin" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="resumen" />} />
+          <Route path="/superadmin/cafeterias" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="cafeterias" />} />
+          <Route path="/superadmin/usuarios" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="usuarios" />} />
+          <Route path="/superadmin/catalogo" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="catalogo" />} />
+          <Route path="/superadmin/ventas" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="ventas" />} />
         </Route>
 
         {/* Pagina 404 para rutas inexistentes */}

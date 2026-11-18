@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
+import { getDefaultHomePathForRole } from '../../services/adminAccess';
 import { UserRole } from '../../utils/jwt';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -23,9 +24,7 @@ export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) 
   }
 
   if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    const fallbackPath = role === 'CAJERO' ? '/cajero' : '/catalogo';
-    const fallbackLabel = role === 'CAJERO' ? 'Ir al panel de cajero' : 'Ir al catálogo';
-
+    const { path: fallbackPath, label: fallbackLabel } = getDefaultHomePathForRole(role);
     return (
       <section
         role="alert"
