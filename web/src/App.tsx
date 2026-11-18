@@ -14,6 +14,7 @@ import { PasswordChangePage } from './pages/PasswordChangePage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
+import { PaymentResultPage } from './pages/PaymentResultPage';
 import { CashierOrdersPage } from './pages/CashierOrdersPage';
 import { AdminPanelPage } from './pages/AdminPanelPage';
 
@@ -45,6 +46,8 @@ export function App() {
         {/* Rutas exclusivas de comprador (CLIENTE) */}
         <Route element={<ProtectedRoute allowedRoles={['CLIENTE']} />}>
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/pago/resultado" element={<PaymentResultPage />} />
+          <Route path="/pago/retorno" element={<PaymentResultPage />} />
           <Route
             path="/compras"
             element={
