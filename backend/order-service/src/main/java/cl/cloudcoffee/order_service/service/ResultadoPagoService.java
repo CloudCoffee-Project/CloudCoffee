@@ -192,6 +192,10 @@ public class ResultadoPagoService {
                 : "UPDATE compras SET estado='CANCELADO', monto_total=0, version=version+1, updated_at=? WHERE id=? AND estado='PENDIENTE_PAGO'",
                 utc(ahora), compraId);
         if (cambiadas != 1) throw new IllegalStateException("La compra cambió mientras se aplicaba el pago");
+        if (pago.getEstado() == EstadoPago.APROBADO || pago.getEstado() == EstadoPago.RECHAZADO) {
+            jdbc.update("UPDATE idempotencia SET completed_at=COALESCE(completed_at, ?) WHERE ruta=? AND metodo='POST'",
+                    utc(ahora), "/compras/" + compraId + "/pago");
+        }
         em.clear();
         CompraResponse despues = consultas.compra(clienteId, compraId);
         eventos.pago(resultado, clienteId, trace, ahora);
