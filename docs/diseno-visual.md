@@ -33,7 +33,7 @@ INT2-145. La presentación usa las URL públicas que devuelve el catálogo, sin 
   marcador y no bloquean compras. Los importes/nombres históricos siguen en Order.
 - El historial enlaza a una vista con selector de órdenes por cafetería, productos,
   folio, estado, total y comprobante de la orden seleccionada. Se conservan HTTP,
-  suscripciones, permisos, pago simulado e idempotencia de confirmación/cancelación.
+  suscripciones, permisos, pago con Mercado Pago Sandbox e idempotencia de confirmación/cancelación.
 - Inicio muestra hasta ocho productos de `/v1/orders/productos-populares`, ordenados
   por unidades de órdenes pagadas (incluye retiro/entregas). Excluye revisión,
   pendientes y cancelaciones. Empates por ID; no usa el carrito como estadística.
