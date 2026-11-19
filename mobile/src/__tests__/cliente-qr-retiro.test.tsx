@@ -56,4 +56,22 @@ describe('pantalla de Código de Retiro (enlace a boleta)', () => {
 
     desmontar(tree);
   });
+
+  it('avisa que el QR no registrará entrega mientras falte el código del backend', async () => {
+    const tree = await renderizar(<QrRetiroScreen />);
+
+    expect(texto(tree, 'cliente-qr-sin-codigo')).toContain('todavía no está disponible');
+
+    desmontar(tree);
+  });
+
+  it('no muestra el aviso cuando Order ya entregó el código del contrato', async () => {
+    mockUseLocalSearchParams.mockReturnValue({ ...PARAMS, codigo: 'f'.repeat(43) });
+
+    const tree = await renderizar(<QrRetiroScreen />);
+
+    expect(tree.root.findAllByProps({ testID: 'cliente-qr-sin-codigo' })).toHaveLength(0);
+
+    desmontar(tree);
+  });
 });

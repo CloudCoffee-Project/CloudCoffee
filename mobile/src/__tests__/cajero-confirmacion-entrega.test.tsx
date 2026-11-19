@@ -9,19 +9,23 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 import ConfirmacionEntregaScreen from '../app/(cajero)/confirmacion-entrega';
 import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../services/ordenes';
-import { getAccessToken } from '../services/httpClient';
+import { ApiError, getAccessToken } from '../services/httpClient';
 import { useLocalSearchParams } from 'expo-router';
 import { limpiarRouter, routerMock, textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
 
-const mockParams: { pedido?: string; estado?: string } = {
+const CODIGO_RETIRO = 'c'.repeat(43);
+
+const mockParams: { pedido?: string; estado?: string; codigo?: string } = {
   pedido: 'o-1',
   estado: 'listo_para_retiro',
+  codigo: CODIGO_RETIRO,
 };
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
   marcarOrdenEntregada: jest.fn(),
+  crearClaveIdempotencia: jest.fn(() => 'clave-idempotencia-test'),
 }));
 
 jest.mock('../services/httpClient', () => {
@@ -79,6 +83,7 @@ describe('Pantalla de confirmación de entrega (INT4-9)', () => {
     mockUseLocalSearchParams.mockReturnValue(mockParams);
     mockParams.pedido = 'o-1';
     mockParams.estado = 'listo_para_retiro';
+    mockParams.codigo = CODIGO_RETIRO;
   });
 
   it('muestra el detalle de ítems a entregar (cliente, checklist y total)', async () => {
@@ -112,9 +117,15 @@ describe('Pantalla de confirmación de entrega (INT4-9)', () => {
       await Promise.resolve();
     });
 
-    expect(mockMarcarEntregada).toHaveBeenCalledWith('o-1', 'token-real');
+    expect(mockMarcarEntregada).toHaveBeenCalledWith(
+      'o-1',
+      CODIGO_RETIRO,
+      'token-real',
+      expect.any(String)
+    );
     const entregada = tree.root.findByProps({ testID: 'cajero-confirmacion-entregada' });
     expect(textoDe(entregada)).toContain('Entrega registrada');
+    expect(textoDe(entregada)).toContain('CC-9801');
 
     act(() => tree.unmount());
   });
@@ -122,10 +133,15 @@ describe('Pantalla de confirmación de entrega (INT4-9)', () => {
   it('muestra el error normalizado si el endpoint de entrega falla', async () => {
     mockFetchPedidos.mockResolvedValue([ordenEntregable]);
     mockGetAccessToken.mockReturnValue('token-real');
-    mockMarcarEntregada.mockRejectedValue({
-      message: 'Request failed with status code 409',
-      response: { status: 409, data: { detail: 'La orden ya fue entregada.' } },
-    });
+    mockMarcarEntregada.mockRejectedValue(
+      new ApiError('Conflicto', 409, {
+        type: 'about:blank',
+        title: 'Conflict',
+        status: 409,
+        detail: 'Conflicto',
+        code: 'QR_UTILIZADO',
+      })
+    );
 
     const tree = await renderizarConfirmacion();
 
@@ -136,7 +152,69 @@ describe('Pantalla de confirmación de entrega (INT4-9)', () => {
     });
 
     const banner = tree.root.findByProps({ testID: 'cajero-confirmacion-error-entrega' });
-    expect(textoDe(banner)).toContain('La orden ya fue entregada.');
+    expect(textoDe(banner)).toContain('ya fue utilizado');
+    expect(textoDe(banner)).toContain('no se registró una nueva');
+    expect(tree.root.findAllByProps({ testID: 'cajero-confirmacion-entregada' })).toHaveLength(0);
+
+    act(() => tree.unmount());
+  });
+
+  it('degrada con mensaje claro si el backend no expone la ruta de entrega', async () => {
+    mockFetchPedidos.mockResolvedValue([ordenEntregable]);
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockMarcarEntregada.mockRejectedValue(
+      new ApiError('Not Found', 404, {
+        type: 'about:blank',
+        title: 'Not Found',
+        status: 404,
+        detail: 'Not Found',
+        code: 'RUTA_NO_DISPONIBLE',
+      })
+    );
+
+    const tree = await renderizarConfirmacion();
+
+    const confirmar = tree.root.findByProps({ testID: 'cajero-confirmacion-confirmar' });
+    await act(async () => {
+      confirmar.props.onPress();
+      await Promise.resolve();
+    });
+
+    const banner = tree.root.findByProps({ testID: 'cajero-confirmacion-error-entrega' });
+    expect(textoDe(banner)).toContain('todavía no está disponible en el backend');
+    expect(textoDe(banner)).toContain('No se registró ningún cambio');
+
+    act(() => tree.unmount());
+  });
+
+  it('no muestra éxito si la respuesta no confirma el estado entregado', async () => {
+    mockFetchPedidos.mockResolvedValue([ordenEntregable]);
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockMarcarEntregada.mockResolvedValue({ ...ordenEntregable, estado: 'pagado' });
+
+    const tree = await renderizarConfirmacion();
+
+    const confirmar = tree.root.findByProps({ testID: 'cajero-confirmacion-confirmar' });
+    await act(async () => {
+      confirmar.props.onPress();
+      await Promise.resolve();
+    });
+
+    const banner = tree.root.findByProps({ testID: 'cajero-confirmacion-error-entrega' });
+    expect(textoDe(banner)).toContain('backend no confirmó');
+    expect(tree.root.findAllByProps({ testID: 'cajero-confirmacion-entregada' })).toHaveLength(0);
+
+    act(() => tree.unmount());
+  });
+
+  it('rechaza un QR sin el código del contrato antes de confirmar', async () => {
+    delete mockParams.codigo;
+
+    const tree = await renderizarConfirmacion();
+
+    const invalida = tree.root.findByProps({ testID: 'cajero-confirmacion-invalida' });
+    expect(textoDe(invalida)).toContain('no trae el código de retiro');
+    expect(mockMarcarEntregada).not.toHaveBeenCalled();
 
     act(() => tree.unmount());
   });

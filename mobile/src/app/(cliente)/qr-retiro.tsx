@@ -20,7 +20,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
-import { esEstadoOrden } from '../../types/domain';
+import { esCodigoRetiroValido, esEstadoOrden } from '../../types/domain';
 import { serializarQrRetiro } from '../../services/qrRetiro';
 import { etiquetaEstadoOrden, visualEstadoOrden } from '../../utils/estadosOrden';
 import type { EstadoOrden, QrRetiro } from '../../types/domain';
@@ -37,8 +37,13 @@ export default function QrRetiroScreen() {
   const ordenId = textoUnico(params.id) ?? '';
   const estadoParam = textoUnico(params.estado);
   const estado: EstadoOrden = esEstadoOrden(estadoParam) ? estadoParam : 'listo_para_retiro';
+  // El token lo emite Order (GET /orders/{id}/qr, todavía no implementado). Si
+  // no viene en los params no se inventa: se muestra la degradación y el QR
+  // legacy del mockup queda solo como referencia visual, no como credencial.
+  const codigoParam = textoUnico(params.codigo);
+  const codigo = esCodigoRetiroValido(codigoParam) ? codigoParam : undefined;
 
-  const payload: QrRetiro = { pedido: ordenId, estado };
+  const payload: QrRetiro = { pedido: ordenId, estado, ...(codigo ? { codigo } : {}) };
   const qrValue = serializarQrRetiro(payload);
 
   const handleDescargar = () => {
@@ -84,6 +89,15 @@ export default function QrRetiroScreen() {
             <Text style={styles.subtitle}>
               Presenta este código QR en la barra de la cafetería para retirar tu compra.
             </Text>
+
+            {!codigo ? (
+              <View style={styles.sinCodigoBanner} testID="cliente-qr-sin-codigo">
+                <Text style={styles.sinCodigoTexto}>
+                  El código de retiro del backend todavía no está disponible. Este QR no permite
+                  registrar la entrega.
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.card}>
               <View style={styles.ticketTop}>
@@ -188,6 +202,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 20,
+  },
+  sinCodigoBanner: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F3DC87',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  sinCodigoTexto: {
+    color: '#92400E',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
   },
   card: {
     backgroundColor: '#FFFFFF',

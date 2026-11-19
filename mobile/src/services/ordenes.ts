@@ -8,8 +8,10 @@
 // del API Gateway (config/api.ts): el interceptor inyecta el token y los errores
 // llegan normalizados como ApiError (toApiError).
 
-import { httpClient } from './httpClient';
-import type { AccionNoRetirado, Orden, PaginaOrdenes } from '../types/domain';
+import { ApiError, httpClient } from './httpClient';
+import type { ApiProblem } from './httpClient';
+import type { AccionNoRetirado, CodigoRetiro, Orden, PaginaOrdenes } from '../types/domain';
+import { esCodigoRetiroValido } from '../types/domain';
 
 // Ruta del dominio de órdenes dentro del gateway.
 // El gateway sí rutea /v1/orders/** hacia order-service (StripPrefix=1), pero
@@ -60,17 +62,69 @@ export async function fetchPedidosEntrantes(accessToken: string): Promise<Orden[
   return ordenes;
 }
 
-// Marca una orden como entregada tras validar el QR de retiro (INT4-8).
-// Mismo contrato TODO que fetchPedidosEntrantes: el endpoint no existe aún en
-// el backend, pero el cajero ya consume el contrato real y muestra el error
-// normalizado si el gateway responde con problem+json.
-export async function marcarOrdenEntregada(ordenId: string, accessToken: string): Promise<Orden> {
+// Error de dominio armado en el cliente cuando la petición ni siquiera debe
+// salir (QR sin token) o cuando el backend no expone la ruta. Sigue siendo un
+// ApiError con problem+json para que todas las pantallas usen el mismo
+// normalizador; nunca se transforma en un éxito simulado.
+function errorLocal(status: number, code: string, detail: string, instance: string): ApiError {
+  const problem: ApiProblem = {
+    type: 'about:blank',
+    title: status === 400 ? 'Bad Request' : 'Not Found',
+    status,
+    detail,
+    instance,
+    timestamp: new Date().toISOString(),
+    code,
+  };
+  return new ApiError(detail, status, problem);
+}
+
+// Genera un UUID v4 para Idempotency-Key (exigido por el backend). Se exporta
+// para que la pantalla pueda reutilizar la MISMA clave en los reintentos de una
+// intención: el contrato reproduce el éxito previo con la misma tupla.
+export function crearClaveIdempotencia(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Marca una orden como entregada (INT4-8/INT4-103). Contrato real:
+// POST /v1/orders/{ordenId}/entregar con {codigo} y Idempotency-Key UUID.
+// El código es el token opaco que Order puso en el QR: no se inventa ni se
+// rellena con el folio de la orden.
+export async function marcarOrdenEntregada(
+  ordenId: string,
+  codigo: string,
+  accessToken: string,
+  idempotencyKey: string = crearClaveIdempotencia()
+): Promise<Orden> {
+  if (!ordenId.trim()) {
+    throw errorLocal(
+      400,
+      'QR_INVALIDO',
+      'El QR no identifica la orden que se quiere entregar.',
+      `${ORDENES_ENDPOINT}/entregar`
+    );
+  }
+  if (!esCodigoRetiroValido(codigo)) {
+    throw errorLocal(
+      400,
+      'QR_INVALIDO',
+      'El QR no contiene el código de retiro emitido por el backend.',
+      `${ORDENES_ENDPOINT}/${ordenId}/entregar`
+    );
+  }
+
+  const respuesta: CodigoRetiro = { codigo };
   const response = await httpClient.post<Orden>(
     `${ORDENES_ENDPOINT}/${ordenId}/entregar`,
-    undefined,
+    respuesta,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Idempotency-Key': idempotencyKey,
       },
     }
   );
@@ -91,36 +145,24 @@ export interface ResolverNoRetiradoRequest {
   items: DecisionItemNoRetirado[];
 }
 
-// Envía la resolución de una orden no retirada pendiente de revisión (INT4-12)
-// con la decisión ítem por ítem. Mismo contrato TODO que el resto de /orders:
-// el gateway ya rutea /v1/orders/**, pero order-service aún no expone este
-// endpoint; la pantalla consume el contrato real y muestra el error normalizado
-// si el gateway responde con problem+json.
+// INT4-103: no existe ruta documentada ni implementada para resolver no
+// retirados (el contrato dice que el reingreso/descarte por ítem se especificará
+// en una issue posterior). Antes se llamaba a /no-retirado/revisar, un endpoint
+// inventado que devolvía 404. Ahora la degradación es explícita y verificada:
+// error ApiError normalizado, sin petición falsa y sin resultado simulado.
 export async function resolverOrdenNoRetirada(
   ordenId: string,
   decisiones: DecisionItemNoRetirado[],
   accessToken: string
 ): Promise<Orden> {
-  const response = await httpClient.post<Orden>(
-    `${ORDENES_ENDPOINT}/${ordenId}/no-retirado/revisar`,
-    { items: decisiones } satisfies ResolverNoRetiradoRequest,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
+  void decisiones;
+  void accessToken;
+  throw errorLocal(
+    404,
+    'RUTA_NO_DISPONIBLE',
+    `La resolución de la orden ${ordenId} todavía no está disponible en el backend.`,
+    `${ORDENES_ENDPOINT}/${ordenId}/no-retirado/revisar`
   );
-
-  return response.data;
-}
-
-// Genera un UUID v4 para Idempotency-Key (exigido por el backend).
-function generarIdempotencyKey(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
 }
 
 // INT4-37: confirmar o cancelar UNA orden puntual de la compra del cliente (las
@@ -137,7 +179,7 @@ export async function confirmarOrden(ordenId: string): Promise<Orden> {
     undefined,
     {
       headers: {
-        'Idempotency-Key': generarIdempotencyKey(),
+        'Idempotency-Key': crearClaveIdempotencia(),
       },
     }
   );
@@ -151,7 +193,7 @@ export async function cancelarOrden(ordenId: string): Promise<Orden> {
     undefined,
     {
       headers: {
-        'Idempotency-Key': generarIdempotencyKey(),
+        'Idempotency-Key': crearClaveIdempotencia(),
       },
     }
   );

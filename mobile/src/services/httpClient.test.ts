@@ -68,6 +68,7 @@ describe('httpClient base (INT4-16)', () => {
         detail: 'El correo ya está registrado.',
         instance: '/v1/auth/register',
         timestamp: '2026-09-22T00:00:00Z',
+        code: 'ESTADO_INVALIDO',
       };
 
       const error = new Error('Request failed with status code 409') as any;
@@ -78,6 +79,7 @@ describe('httpClient base (INT4-16)', () => {
       expect(resultado.status).toBe(409);
       expect(resultado.message).toBe('El correo ya está registrado.');
       expect(resultado.problem?.instance).toBe('/v1/auth/register');
+      expect(resultado.problem?.code).toBe('ESTADO_INVALIDO');
     });
 
     it('sin respuesta (red caída) devuelve ApiError con status 0', () => {
