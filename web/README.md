@@ -254,3 +254,30 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 - `src/App.tsx`: definición de rutas. El layout y la navegación visual corresponden a INT2-42.
 
 Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`, `/restaurar-contrasena` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.
+
+## Mercado Pago Sandbox en web (INT2-61)
+
+Después de resolver el stock y la revisión, **Pagar con Mercado Pago** consulta
+la compra en Order. Si todavía no hay pago, la web envía
+`{"canalRetorno":"web"}` a `POST /v1/compras/:compraId/pago` con un UUID de
+idempotencia por compra. Order fija el total CLP y Payment crea la preferencia
+Checkout Pro. La web abre el `initPoint` HTTPS devuelto por el servidor, vuelve
+a usar el checkout vigente y muestra el estado de conciliación si todavía
+se está creando la preferencia.
+
+Configurar `ORDER_PAYMENT_PROVIDER=mercadopago_sandbox` y
+`PAYMENT_PROVIDER=mercadopago_sandbox` en el entorno de pruebas. Payment requiere
+credenciales de vendedor de prueba, `PAYMENT_CHECKOUT_MODE` coherente con ellas,
+`PAYMENT_WEB_RETURN_URL` apuntando al dominio HTTPS de pruebas con ruta
+`/pago/retorno`, `PAYMENT_MOBILE_RETURN_URL` HTTPS según el contrato y
+`PAYMENT_WEBHOOK_PUBLIC_URL` apuntando a Gateway en
+`/v1/payments/webhooks/mercadopago`. Guardar el token y el secreto de firma solo
+en el entorno de Payment. Ver [configuración de Payment](../backend/payment-service/README.md).
+
+El retorno y `/pago/resultado` recuperan la sesión cuando corresponde y
+consultan compra y pago autenticados. La vista vuelve a consultar los pagos
+pendientes y en conciliación cada cinco segundos o al recibir eventos.
+La aprobación se muestra a partir del estado de Order. Los parámetros del proveedor
+en la URL no cambian el estado de la compra. Para verificar el recorrido externo,
+usar [cuentas de prueba](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/test-accounts)
+y [tarjetas de prueba de Chile](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/integration-test/test-purchases).
