@@ -35,6 +35,16 @@ export async function listarCompras(): Promise<Compra[]> {
   return response.data.content;
 }
 
+// INT4-128: una compra puntual (GET /v1/compras/{compraId}) trae sus órdenes y
+// el pago embebido. Es la fuente de verdad para revalidar el recorrido al
+// recargar o reabrir resultado-pago, qr-retiro y seguimientos: ninguna pantalla
+// confía en un estado que viniera por params.
+export async function obtenerCompra(compraId: string): Promise<Compra> {
+  const response = await httpClient.get<Compra>(`${COMPRAS_ENDPOINT}/${compraId}`);
+
+  return response.data;
+}
+
 // INT4-37: confirmar o cancelar la compra COMPLETA (todas sus órdenes) desde
 // Mis Compras. Son dos endpoints distintos porque el backend tiene que decidir
 // qué pasa con las órdenes ya cobradas o entregadas: la app solo le pide la

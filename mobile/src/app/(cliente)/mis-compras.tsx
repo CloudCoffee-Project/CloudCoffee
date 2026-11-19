@@ -3,7 +3,8 @@
 // "Mis Compras" (INT4-50): historial de compras del cliente (tab propio del
 // layout (cliente)). Por cada compra muestra su N°, estado, monto total y las
 // órdenes que agrupa; desde una compra pagada se puede abrir la boleta en PDF
-// de cada orden (INT4-48, pantalla (cliente)/orden/[id]).
+// de cada orden (INT4-48, pantalla (cliente)/orden/[id]). Además, cada orden
+// tiene acceso a su seguimiento en vivo (INT4-128, pantalla seguimientos).
 //
 // INT4-37: la pantalla es también donde el cliente confirma o cancela, tanto la
 // compra completa como una orden puntual. Las acciones aparecen solo en los
@@ -197,6 +198,19 @@ export default function MisComprasScreen() {
     [router]
   );
 
+  // INT4-128: la orden en vivo también se abre desde el historial. Se pasan
+  // ambos ids para que seguimientos pueda consultar la compra/orden por HTTP y
+  // suscribirse al WebSocket sin depender de un estado guardado en params.
+  const abrirSeguimiento = useCallback(
+    (compra: Compra, orden: Orden): void => {
+      router.push({
+        pathname: '/(cliente)/seguimientos',
+        params: { compraId: compra.compraId, ordenId: orden.ordenId },
+      });
+    },
+    [router]
+  );
+
   let contenido: ReactNode;
   if (errorCarga !== null) {
     contenido = (
@@ -295,17 +309,26 @@ export default function MisComprasScreen() {
                           #{orden.codigoOrden}
                         </Text>
                       </View>
-                      {conBoleta ? (
+                      <View style={styles.ordenBotones}>
                         <Presionable
                           style={styles.btnBoleta}
-                          onPress={() => abrirBoleta(orden)}
-                          testID={`boleta-orden-${orden.ordenId}`}
+                          onPress={() => abrirSeguimiento(compra, orden)}
+                          testID={`seguir-orden-${orden.ordenId}`}
                         >
-                          <Text style={styles.btnBoletaTexto}>📄 Boleta</Text>
+                          <Text style={styles.btnBoletaTexto}>📡 En vivo</Text>
                         </Presionable>
-                      ) : (
-                        <Text style={styles.ordenMonto}>{formatoMonto(orden.montoTotal)}</Text>
-                      )}
+                        {conBoleta ? (
+                          <Presionable
+                            style={styles.btnBoleta}
+                            onPress={() => abrirBoleta(orden)}
+                            testID={`boleta-orden-${orden.ordenId}`}
+                          >
+                            <Text style={styles.btnBoletaTexto}>📄 Boleta</Text>
+                          </Presionable>
+                        ) : (
+                          <Text style={styles.ordenMonto}>{formatoMonto(orden.montoTotal)}</Text>
+                        )}
+                      </View>
                     </View>
 
                     {/* INT4-37: acciones sobre ESTA orden. Una orden pagada o ya
@@ -661,6 +684,11 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 13,
     fontWeight: '700',
+  },
+  ordenBotones: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   btnBoleta: {
     backgroundColor: '#EFF6FF',
