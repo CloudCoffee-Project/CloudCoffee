@@ -12,6 +12,7 @@ import { useCafeteriaActual } from '../hooks/useCafeteriaActual';
 import { useNotificacionesPush } from '../hooks/useNotificacionesPush';
 import type { NotificacionRecibida } from '../hooks/useNotificacionesPush';
 import { useNotificacionesStock } from '../hooks/useNotificacionesStock';
+import { leerCampusSeleccionado } from '../services/catalog';
 import { getAccessToken } from '../services/httpClient';
 import { connectWebSocket, disconnectWebSocket } from '../services/websocket';
 import { cajeroSinCafeteria } from '../utils/sesionCajero';
@@ -22,6 +23,47 @@ function RootNavigator() {
 
   const segments = useSegments();
   const router = useRouter();
+
+  // INT4-125: el campus es obligatorio para el rol cliente. Se relee al entrar
+  // y al cambiar de ruta: guardar la sede en la pantalla de campus cambia la
+  // ruta, así que una lectura vieja nunca puede devolver al usuario a campus.
+  const [lecturaCampus, setLecturaCampus] = useState<{
+    userId: string;
+    ruta: string;
+    tieneCampus: boolean;
+  } | null>(null);
+  const ruta = segments.join('/');
+  const userId = sesion?.userId;
+  const rol = sesion?.rol;
+
+  useEffect(() => {
+    if (bootstrapping || !userId || rol === 'cajero') {
+      return;
+    }
+
+    let activo = true;
+    leerCampusSeleccionado()
+      .then((campus) => {
+        if (activo) {
+          setLecturaCampus({ userId, ruta, tieneCampus: campus !== null });
+        }
+      })
+      .catch(() => {
+        if (activo) {
+          setLecturaCampus({ userId, ruta, tieneCampus: false });
+        }
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [bootstrapping, userId, rol, ruta]);
+
+  // null = todavía no se resolvió la lectura para esta ruta y esta sesión.
+  const tieneCampus =
+    lecturaCampus !== null && lecturaCampus.userId === userId && lecturaCampus.ruta === ruta
+      ? lecturaCampus.tieneCampus
+      : null;
 
   // Al tocar una notificación push, navega a la ruta interna que llegó en
   // data.url (ver urlDeNotificacion: solo rutas internas, nunca (auth)).
@@ -89,14 +131,34 @@ function RootNavigator() {
 
     if (!sesion && !inAuthGroup) {
       router.replace('/(auth)/portada');
-    } else if (sesion) {
-      if (sesion.rol === 'cajero' && segments[0] !== '(cajero)') {
-        router.replace('/(cajero)');
-      } else if (sesion.rol !== 'cajero' && segments[0] !== '(cliente)') {
-        router.replace('/(cliente)');
-      }
+      return;
     }
-  }, [sesion, bootstrapping, segments, router]);
+    if (!sesion) {
+      return;
+    }
+
+    if (sesion.rol === 'cajero') {
+      if (segments[0] !== '(cajero)') {
+        router.replace('/(cajero)');
+      }
+      return;
+    }
+
+    // Mientras no se resolvió la lectura no se decide nada: mandar al catálogo
+    // antes de leer la sede dejaría entrar a quien todavía no la eligió.
+    if (tieneCampus === null) {
+      return;
+    }
+
+    const enCampus = ruta === '(cliente)/campus';
+    if (!tieneCampus && !enCampus) {
+      router.replace('/(cliente)/campus');
+      return;
+    }
+    if (tieneCampus && segments[0] !== '(cliente)') {
+      router.replace('/(cliente)');
+    }
+  }, [sesion, bootstrapping, segments, ruta, router, tieneCampus]);
 
   // WebSocket de notificaciones: usa el accessToken real una vez autenticado.
   useEffect(() => {
