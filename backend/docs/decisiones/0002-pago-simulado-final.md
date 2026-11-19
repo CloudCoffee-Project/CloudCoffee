@@ -1,6 +1,8 @@
 # 0002 - Pago simulado como alcance final
 
-Estado: aceptado por instrucción del solicitante el 18-11-2026.
+Estado: decisión histórica del 18-11-2026, sustituida para la web el 19-11-2026.
+El flujo web vigente usa [Checkout Pro Sandbox](../payment-service.md) según INT2-61.
+El simulador sigue disponible para pruebas internas.
 
 El flujo final de web y móvil usa el simulador existente de Order. Se configura
 `ORDER_PAYMENT_PROVIDER=simulado` y `PAYMENT_PROVIDER=disabled`. El contrato de

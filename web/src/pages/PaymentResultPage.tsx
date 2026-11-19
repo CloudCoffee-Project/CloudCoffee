@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { PaymentCheckout } from '../components/PaymentCheckout';
 import { AUTH_SESSION_EVENT, ApiRequestError } from '../services/httpClient';
-import { getPayment, paymentSessionOwner, type Payment } from '../services/payments';
+import {
+  assertSandboxPayment, getPayment, isPaymentNotStarted, isPaymentReconciling, paymentSessionOwner, type Payment,
+} from '../services/payments';
 import { connectPurchaseRealtimeStream, getPurchase, type Purchase } from '../services/purchases';
 import './CheckoutPage.css';
 
@@ -15,7 +17,7 @@ export function PaymentResultPage() {
   const [params] = useSearchParams();
   // Ningún status/resultado del retorno sirve como confirmación del pago.
   const compraId = params.get('compraId') ?? '';
-  const [data, setData] = useState<{ payment: Payment | null; purchase: Purchase } | null>(null);
+  const [data, setData] = useState<{ payment: Payment | null; purchase: Purchase; reconciling: boolean } | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -40,15 +42,20 @@ export function PaymentResultPage() {
       try {
         const purchase = await getPurchase(compraId, controller.signal);
         let payment: Payment | null = null;
-        try { payment = await getPayment(compraId, controller.signal); }
-        catch (cause) { if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause; }
-        if (payment && (!payment.simulado || payment.proveedor !== 'simulado')) {
-          throw new Error('El servidor no está configurado para pago simulado.');
+        let reconciling = false;
+        try {
+          payment = await getPayment(compraId, controller.signal);
+          assertSandboxPayment(payment, compraId);
+        } catch (cause) {
+          if (isPaymentReconciling(cause)) reconciling = true;
+          else if (!isPaymentNotStarted(cause)) throw cause;
         }
         if (controller.signal.aborted) return;
-        setData({ payment, purchase });
+        setData({ payment, purchase, reconciling });
         setError('');
-        if (payment?.estado === 'pendiente' || payment?.estado === 'requiere_conciliacion') timer = setTimeout(() => void load(), 5000);
+        if (reconciling || payment?.estado === 'pendiente' || payment?.estado === 'requiere_conciliacion') {
+          timer = setTimeout(() => void load(), 5000);
+        }
       } catch (cause) {
         if (!controller.signal.aborted) {
           // Un error de autorización nunca conserva datos de la compra anterior.
@@ -69,13 +76,13 @@ export function PaymentResultPage() {
 
   return <section className="checkout-page checkout-result">
     <h1>Resultado del pago</h1>
-    <p>Pago simulado · no se realizan cobros reales</p>
+    <p>Mercado Pago Sandbox · entorno de pruebas</p>
     {error ? <><p role="alert">{error}</p><button onClick={() => setAttempt(value => value + 1)}>Reintentar consulta</button></>
       : !data ? <p role="status">Consultando estado en el servidor…</p> : <>
-        <h2>{data.payment ? labels[data.payment.estado] ?? 'Estado de pago desconocido' : 'Pago aún no iniciado'}</h2>
+        <h2>{data.payment ? labels[data.payment.estado] ?? 'Estado de pago desconocido' : data.reconciling ? 'Pago en conciliación' : 'Pago aún no iniciado'}</h2>
         <p>Compra {data.purchase.compraId}: {data.purchase.estado.replaceAll('_', ' ')}</p>
-        {data.payment?.estado === 'pendiente' && <p>Simulación pendiente. Puedes cerrar esta página y volver a consultar el estado del servidor.</p>}
-        {data.purchase.estado === 'pendiente_pago' && (!data.payment || data.payment.estado === 'pendiente') && <PaymentCheckout key={compraId} compraId={compraId} />}
+        {data.payment?.estado === 'pendiente' && <p>Estamos esperando la confirmación del pago. Puedes volver a consultarlo desde Mis compras.</p>}
+        {data.purchase.estado === 'pendiente_pago' && !data.reconciling && (!data.payment || (data.payment.estado === 'pendiente' && Boolean(data.payment.initPoint))) && <PaymentCheckout key={compraId} compraId={compraId} />}
       </>}
     <p><Link to="/compras">Mis compras</Link> · <Link to="/checkout">Volver al checkout</Link></p>
   </section>;

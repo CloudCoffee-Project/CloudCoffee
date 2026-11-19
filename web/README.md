@@ -255,21 +255,29 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`, `/restaurar-contrasena` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.
 
-## Pago simulado web (INT2-61)
+## Mercado Pago Sandbox en web (INT2-61)
 
-Tras resolver stock y revisión, la compra pendiente ofrece elegir aprobar,
-rechazar o dejar pendiente. El cliente envía solo `{ escenario }` a
-`POST /v1/compras/:compraId/pago`, con UUID de idempotencia. El monto y la
-aplicación del resultado los decide Order. Un timeout conserva clave y escenario;
-al reabrir se consulta primero el pago existente para evitar otro intento.
+Después de resolver el stock y la revisión, **Pagar con Mercado Pago** consulta
+la compra en Order. Si todavía no hay pago, la web envía
+`{"canalRetorno":"web"}` a `POST /v1/compras/:compraId/pago` con un UUID de
+idempotencia por compra. Order fija el total CLP y Payment crea la preferencia
+Checkout Pro. La web abre el `initPoint` HTTPS devuelto por el servidor, vuelve
+a usar el checkout vigente y muestra el estado de conciliación si todavía
+se está creando la preferencia.
 
-`/pago/resultado?compraId=...` consulta compra y pago autenticados al abrir,
-recuperar foco y recibir eventos. Mientras espera vuelve a consultar cada cinco
-segundos. Los parámetros de la URL no aprueban pagos. La pantalla identifica la
-simulación y ausencia de cobros reales. No abre navegador de pago ni necesita
-credenciales, preferencias, deep links o webhooks de un proveedor externo.
+Configurar `ORDER_PAYMENT_PROVIDER=mercadopago_sandbox` y
+`PAYMENT_PROVIDER=mercadopago_sandbox` en el entorno de pruebas. Payment requiere
+credenciales de vendedor de prueba, `PAYMENT_CHECKOUT_MODE` coherente con ellas,
+`PAYMENT_WEB_RETURN_URL` apuntando al dominio HTTPS de pruebas con ruta
+`/pago/retorno`, `PAYMENT_MOBILE_RETURN_URL` HTTPS según el contrato y
+`PAYMENT_WEBHOOK_PUBLIC_URL` apuntando a Gateway en
+`/v1/payments/webhooks/mercadopago`. Guardar el token y el secreto de firma solo
+en el entorno de Payment. Ver [configuración de Payment](../backend/payment-service/README.md).
 
-Configurar `ORDER_PAYMENT_PROVIDER=simulado` y `PAYMENT_PROVIDER=disabled`.
-El simulador de Order ya existe; no se reconstruye. El escenario pendiente se
-consulta y vence según las reglas existentes: no se transforma localmente en
-aprobado. Una compra conserva un único pago, incluso al reabrir o reintentar.
+El retorno y `/pago/resultado` recuperan la sesión cuando corresponde y
+consultan compra y pago autenticados. La vista vuelve a consultar los pagos
+pendientes y en conciliación cada cinco segundos o al recibir eventos.
+La aprobación se muestra a partir del estado de Order. Los parámetros del proveedor
+en la URL no cambian el estado de la compra. Para verificar el recorrido externo,
+usar [cuentas de prueba](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/test-accounts)
+y [tarjetas de prueba de Chile](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/integration-test/test-purchases).
