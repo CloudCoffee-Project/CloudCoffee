@@ -17,7 +17,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 
 /** INT2-53: la migración V2 impone estados, montos y vínculo con la compra en la base. */
-@SpringBootTest(properties = "management.tracing.enabled=false")
+@SpringBootTest(properties = {
+        "management.tracing.enabled=false",
+        // H2 conserva la sesión que compiló el CHECK. Mantenerla abierta durante estas pruebas.
+        "spring.datasource.hikari.idle-timeout=0"
+})
 class PagosMigrationTests extends JwtTestSupport {
 
     @Autowired JdbcTemplate jdbc;
