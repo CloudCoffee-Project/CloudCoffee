@@ -1,32 +1,42 @@
 // src/app/(cliente)/qr-retiro.tsx
 //
-// Código QR de retiro (INT4-47). Rediseñado siguiendo el mockup de CÓDIGO DE
-// RETIRO (cloudcoffee-react: Mi_Pedido): badge de seguimiento, tarjeta con el
-// QR, pill de estado y botón de descarga.
+// Código QR de retiro (INT4-47, adaptado a INT4-128). El QR YA NO se arma en la
+// app: Order lo genera (GET /v1/orders/{ordenId}/qr) y devuelve un código opaco.
+// Solo se muestra cuando el endpoint responde 200, es decir cuando el pago está
+// aprobado y la orden está 'listo_para_retiro'. Si todavía no está habilitado,
+// la pantalla ofrece ir al seguimiento en vivo; nunca inventa un QR local.
 //
-// El QR codifica el payload QrRetiro (de src/types/domain.ts): el id de la
-// orden y su estado, siempre un valor real del union EstadoOrden (nunca un
-// string inventado). El id llega por params desde seguimientos; si no viene un
-// estado válido se usa 'listo_para_retiro', el único estado desde el que
-// tiene sentido presentar el código de retiro. La serialización del payload
-// vive en src/services/qrRetiro.ts para que el cajero (escaner.tsx) consuma
-// exactamente el mismo formato.
-//
-// El botón de descarga conserva su TODO (expo-sharing / expo-media-library).
+// Se puede abrir con compraId (lo que envía resultado-pago) y/o con ordenId/id
+// (el enlace histórico desde seguimientos y Mis compras). Al ganar foco vuelve
+// a consultar: recargar o reabrir refleja el estado real del backend.
 
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Presionable } from '../../components/Presionable';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
+import type { AxiosError } from 'axios';
 
+import { obtenerCompra } from '../../services/compras';
+import { ApiProblem, toApiError } from '../../services/httpClient';
+import { obtenerOrden, obtenerQrRetiro } from '../../services/ordenes';
 import { esEstadoOrden } from '../../types/domain';
-import { serializarQrRetiro } from '../../services/qrRetiro';
 import { etiquetaEstadoOrden, visualEstadoOrden } from '../../utils/estadosOrden';
-import type { EstadoOrden, QrRetiro } from '../../types/domain';
+import type { EstadoOrden, Orden, QrRetiroBackend } from '../../types/domain';
 
 function textoUnico(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
+}
+
+// De las órdenes de una compra, se muestra la que efectivamente está lista para
+// retirar; si todavía no lo está, se usa la última no cancelada para poder
+// ofrecer el seguimiento. Nunca se elige una orden cancelada.
+function elegirOrden(ordenes: Orden[]): Orden | undefined {
+  return (
+    ordenes.find((orden) => orden.estado === 'listo_para_retiro') ??
+    [...ordenes].reverse().find((orden) => orden.estado !== 'cancelado')
+  );
 }
 
 export default function QrRetiroScreen() {
@@ -34,25 +44,85 @@ export default function QrRetiroScreen() {
   const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams();
-  const ordenId = textoUnico(params.id) ?? '';
+  const compraId = textoUnico(params.compraId) ?? '';
+  const ordenParam = textoUnico(params.ordenId) ?? textoUnico(params.id) ?? '';
   const estadoParam = textoUnico(params.estado);
-  const estado: EstadoOrden = esEstadoOrden(estadoParam) ? estadoParam : 'listo_para_retiro';
 
-  const payload: QrRetiro = { pedido: ordenId, estado };
-  const qrValue = serializarQrRetiro(payload);
+  const [orden, setOrden] = useState<Orden | null>(null);
+  const [qr, setQr] = useState<QrRetiroBackend | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleDescargar = () => {
-    // TODO: Implementar expo-sharing o expo-media-library para guardar la imagen en la galería
-    alert('Próximamente: El QR se guardará en tu galería de fotos.');
-  };
+  const recargar = useCallback(async (): Promise<void> => {
+    setCargando(true);
+    setError(null);
+    setQr(null);
 
-  const abrirBoleta = () => {
-    if (!ordenId) {
-      return;
+    try {
+      let ordenResuelta: Orden | undefined;
+
+      if (ordenParam) {
+        ordenResuelta = await obtenerOrden(ordenParam);
+      } else if (compraId) {
+        const compra = await obtenerCompra(compraId);
+        ordenResuelta = elegirOrden(compra.ordenes);
+      }
+
+      if (!ordenResuelta) {
+        setOrden(null);
+        setError('No hay una orden asociada a esta compra.');
+        return;
+      }
+
+      setOrden(ordenResuelta);
+
+      // El QR real lo habilita Order. Un error (404/409/ estado aún no listo)
+      // NO se transforma en un QR local: simplemente no se muestra.
+      try {
+        const codigo = await obtenerQrRetiro(ordenResuelta.ordenId);
+        setQr(codigo);
+      } catch {
+        setQr(null);
+      }
+    } catch (thrown) {
+      const apiError = toApiError(thrown as AxiosError<ApiProblem>);
+      console.error('[QrRetiro] No se pudo cargar el retiro:', apiError.message);
+      setOrden(null);
+      setError(apiError.message);
+    } finally {
+      setCargando(false);
     }
+  }, [compraId, ordenParam]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void recargar();
+    }, [recargar])
+  );
+
+  const estadoBase: EstadoOrden | null = orden
+    ? orden.estado
+    : esEstadoOrden(estadoParam)
+      ? estadoParam
+      : null;
+  const estado: EstadoOrden = estadoBase ?? 'listo_para_retiro';
+  const visual = visualEstadoOrden(estado);
+
+  const abrirBoleta = (): void => {
+    if (!orden) return;
     router.push({
       pathname: '/(cliente)/orden/[id]',
-      params: { id: ordenId, estado },
+      params: { id: orden.ordenId, estado },
+    });
+  };
+
+  const abrirSeguimiento = (): void => {
+    router.push({
+      pathname: '/(cliente)/seguimientos',
+      params: {
+        ...(compraId ? { compraId } : {}),
+        ...(orden ? { ordenId: orden.ordenId } : {}),
+      },
     });
   };
 
@@ -67,12 +137,17 @@ export default function QrRetiroScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {!ordenId ? (
-          <View style={styles.emptyCard}>
+        {cargando ? (
+          <View style={styles.emptyCard} testID="qr-retiro-cargando">
+            <ActivityIndicator size="large" color="#0052CC" />
+            <Text style={styles.emptyText}>Consultando el código de retiro…</Text>
+          </View>
+        ) : error || !orden ? (
+          <View style={styles.emptyCard} testID="qr-retiro-sin-orden">
             <Text style={styles.emptyIcon}>☕</Text>
-            <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
+            <Text style={styles.emptyTitle}>No pudimos encontrar tu pedido</Text>
             <Text style={styles.emptyText}>
-              Cuando realices una compra en el carrito, aquí verás tu código QR para el retiro.
+              {error ?? 'Cuando realices una compra en el carrito, aquí verás tu código QR.'}
             </Text>
           </View>
         ) : (
@@ -80,39 +155,64 @@ export default function QrRetiroScreen() {
             <View style={styles.badge}>
               <Text style={styles.badgeText}>SEGUIMIENTO DE RETIRO</Text>
             </View>
-            <Text style={styles.title}>Tu pedido está listo</Text>
+            <Text style={styles.title}>
+              {qr ? 'Tu pedido está listo' : 'Tu código todavía no está disponible'}
+            </Text>
             <Text style={styles.subtitle}>
-              Presenta este código QR en la barra de la cafetería para retirar tu compra.
+              {qr
+                ? 'Presenta este código QR en la barra de la cafetería para retirar tu compra.'
+                : 'Order habilita el QR cuando el pago esté aprobado y la orden lista para retiro.'}
             </Text>
 
             <View style={styles.card}>
               <View style={styles.ticketTop}>
                 <View>
                   <Text style={styles.orderLabel}>N° DE PEDIDO</Text>
-                  <Text style={styles.orderId}>#{ordenId}</Text>
+                  <Text style={styles.orderId}>#{orden.codigoOrden || orden.ordenId}</Text>
                 </View>
-                <View
-                  style={[styles.statusPill, { backgroundColor: visualEstadoOrden(estado).fondo }]}
-                >
-                  <Text style={[styles.statusPillText, { color: visualEstadoOrden(estado).texto }]}>
+                <View style={[styles.statusPill, { backgroundColor: visual.fondo }]}>
+                  <Text style={[styles.statusPillText, { color: visual.texto }]}>
                     {etiquetaEstadoOrden(estado)}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.qrSection}>
-                <View style={styles.qrWrapper}>
-                  <QRCode value={qrValue} size={180} color="#0052CC" backgroundColor="#FFFFFF" />
+              {qr ? (
+                <View style={styles.qrSection}>
+                  <View style={styles.qrWrapper} testID="qr-retiro-codigo">
+                    {/* El value es el código opaco del backend, NO un JSON local. */}
+                    <QRCode
+                      value={qr.codigo}
+                      size={180}
+                      color="#0052CC"
+                      backgroundColor="#FFFFFF"
+                    />
+                  </View>
+                  <View style={styles.idPill}>
+                    <Text style={styles.idPillText} testID="qr-retiro-codigo-texto">
+                      Código: {qr.codigo}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.idPill}>
-                  <Text style={styles.idPillText}>ID de orden: {ordenId}</Text>
+              ) : (
+                <View style={styles.qrPendiente} testID="qr-retiro-sin-qr">
+                  <Text style={styles.qrPendienteIcono}>⏳</Text>
+                  <Text style={styles.qrPendienteTexto}>
+                    El código QR se habilita automáticamente cuando tu orden esté lista para retiro.
+                  </Text>
                 </View>
-              </View>
+              )}
             </View>
 
-            <Presionable style={styles.downloadButton} onPress={handleDescargar}>
-              <Text style={styles.downloadButtonText}>↓ Descargar QR</Text>
-            </Presionable>
+            {!qr && (
+              <Presionable
+                style={styles.downloadButton}
+                onPress={abrirSeguimiento}
+                testID="qr-retiro-ver-seguimiento"
+              >
+                <Text style={styles.downloadButtonText}>Ver orden en vivo</Text>
+              </Presionable>
+            )}
 
             <Presionable style={styles.boletaButton} onPress={abrirBoleta} testID="abrir-boleta">
               <Text style={styles.boletaButtonText}>📄 Ver Boleta en PDF</Text>
@@ -249,6 +349,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 2,
+  },
+  qrPendiente: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 28,
+  },
+  qrPendienteIcono: {
+    fontSize: 32,
+  },
+  qrPendienteTexto: {
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   idPill: {
     backgroundColor: '#EFF6FF',

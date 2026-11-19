@@ -9,7 +9,7 @@
 // llegan normalizados como ApiError (toApiError).
 
 import { httpClient } from './httpClient';
-import type { AccionNoRetirado, Orden, PaginaOrdenes } from '../types/domain';
+import type { AccionNoRetirado, Orden, PaginaOrdenes, QrRetiroBackend } from '../types/domain';
 
 // Ruta del dominio de órdenes dentro del gateway.
 // El gateway sí rutea /v1/orders/** hacia order-service (StripPrefix=1), pero
@@ -155,6 +155,26 @@ export async function cancelarOrden(ordenId: string): Promise<Orden> {
       },
     }
   );
+
+  return response.data;
+}
+
+// --- INT4-128: estado base y QR real de una orden del cliente ----------------
+
+/** GET /v1/orders/{ordenId}: estado actual de la orden (base del seguimiento). */
+export async function obtenerOrden(ordenId: string): Promise<Orden> {
+  const response = await httpClient.get<Orden>(`${ORDENES_ENDPOINT}/${ordenId}`);
+
+  return response.data;
+}
+
+/**
+ * GET /v1/orders/{ordenId}/qr: código opaco generado por Order. Solo responde
+ * 200 con pago aprobado y orden 'listo_para_retiro'; cualquier otro estado
+ * responde error. No se construye un QR local: si falla, la pantalla lo oculta.
+ */
+export async function obtenerQrRetiro(ordenId: string): Promise<QrRetiroBackend> {
+  const response = await httpClient.get<QrRetiroBackend>(`${ORDENES_ENDPOINT}/${ordenId}/qr`);
 
   return response.data;
 }

@@ -11,21 +11,24 @@
 //   - Datos de entrega y facturación: campos validados (nombre completo, correo y
 //     teléfono). No hay dirección porque CloudCoffee solo retira en cafetería, así
 //     que el método de entrega se informa en vez de elegirse y el despacho es $0.
-//   - Método de pago: Mercado Pago (pasarela integrada). La tarjeta se ingresa
-//     en el sitio de Mercado Pago, no en la app (la app no maneja datos PCI).
+//   - Método de pago (INT4-128): PAGO SIMULADO de Order. El cliente elige el
+//     escenario (aprobar / rechazar / pendiente) y Order decide el estado real.
+//     No hay Mercado Pago, initPoint, navegador de pago ni webhooks externos.
 //   - Botón principal "Confirmar y Pagar $X": al pulsarlo entra en estado de
 //     carga (spinner + deshabilitado) para evitar dobles envíos o dobles cobros.
 //
 // Lógica y envío:
 //   El botón valida primero los datos de entrega; si algo falta, muestra el
 //   error debajo del campo sin llamar al backend. Con el formulario válido
-//   dispara POST /v1/compras con { items, datosEntrega } y el accessToken.
+//   dispara POST /v1/compras con { items } y luego POST
+//   /v1/compras/{compraId}/pago con el escenario elegido.
 //
-// Estados de respuesta:
-//   - 200/201: la compra quedó registrada → la misma pantalla muestra la
-//     confirmación "¡Compra realizada!" con el número de orden. Si el backend
-//     devuelve initPoint (pago pendiente), en este flujo se abre Mercado Pago
-//     y el comprobante lo confirma resultado-pago al volver.
+// Estados de pago (los devuelve Order, no los inventa la app):
+//   - aprobado: la compra se concretó → se vacía el carrito y resultado-pago
+//     consulta el estado real y lleva al QR de retiro con el compraId.
+//   - rechazado: NO se vacía el carrito → resultado-pago ofrece volver a
+//     intentar sin perder los productos.
+//   - pendiente: queda una orden en vivo; resultado-pago lleva al seguimiento.
 //   - 200/201 con estado "revisión requerida" (INT4-36): la compra quedó
 //     registrada pero necesita revisión antes de confirmarse → la misma
 //     pantalla muestra "Tu compra está en revisión" con el número de orden.
@@ -55,14 +58,14 @@ import { ApiProblem, getAccessToken, toApiError } from '../../services/httpClien
 // cantidad) y no la línea del carrito de types/domain, que trae además el nombre
 // y el precio. Se importa con alias para que no se confundan los dos.
 import {
-  abrirCheckoutMercadoPago,
   crearCompra,
   ESTADO_COMPRA_REVISION_REQUERIDA,
-  parsearRetornoPago,
+  simularPago,
   type DatosEntregaCompra,
   type ItemCarrito as ItemCarritoPago,
 } from '../../services/pagos';
 import { tokens } from '../../theme/tokens';
+import type { EscenarioPago } from '../../types/domain';
 
 type Vista = 'revision' | 'revision_requerida' | 'realizada' | 'fallo';
 
@@ -70,6 +73,19 @@ type Vista = 'revision' | 'revision_requerida' | 'realizada' | 'fallo';
 // método de entrega que elegir ni despacho que sumar. El retiro es siempre el
 // punto de retiro donde está cada cafetería del carrito.
 const METODO_ENTREGA = 'retiro' as const;
+
+// INT4-128: el pago simulado de Order tiene tres escenarios elegibles. La app
+// solo envía el valor al backend; no decide el estado ni genera comprobantes.
+const ESCENARIOS_PAGO: readonly {
+  valor: EscenarioPago;
+  etiqueta: string;
+  detalle: string;
+  icono: string;
+}[] = [
+  { valor: 'aprobar', etiqueta: 'Aprobar', detalle: 'Pago aprobado', icono: '✅' },
+  { valor: 'rechazar', etiqueta: 'Rechazar', detalle: 'Pago rechazado', icono: '❌' },
+  { valor: 'pendiente', etiqueta: 'Pendiente', detalle: 'Pago en proceso', icono: '⏳' },
+];
 
 // Mensaje del estado 401/403 según la especificación (el aviso de "Nada se
 // cobró y tu carrito sigue listo" vive en la vista de fallo, debajo).
@@ -136,6 +152,9 @@ export default function CheckoutScreen() {
   );
   const [mensajeError, setMensajeError] = useState<string | undefined>(params.mensaje);
   const [procesando, setProcesando] = useState(false);
+  // Escenario del pago simulado. 'aprobar' es el default para no trabar el
+  // camino feliz; el usuario puede elegir otro antes de confirmar.
+  const [escenario, setEscenario] = useState<EscenarioPago>('aprobar');
 
   // Datos de entrega y facturación (formulario validado al confirmar).
   const [formulario, setFormulario] = useState<FormularioEntrega>({
@@ -190,68 +209,40 @@ export default function CheckoutScreen() {
 
       const compra = await crearCompra(payload, accessToken, datosEntrega);
 
-      // 4) La orden ya existe del lado del servidor, así que el carrito se vacía
-      //    acá y no cuando el pago vuelve: si no se vaciara, volver al carrito y
-      //    pagar de nuevo crearía una segunda orden por los mismos productos.
-      //    Vaciar no afirma que el pago se haya hecho —la confirmación llega por
-      //    webhook— solo que el carrito se convirtió en una orden.
-      vaciar();
-
       // INT4-36: el backend puede responder que la compra quedó registrada
       // pero en revisión. No está confirmada ("realizada") ni es un fallo: la
       // misma pantalla muestra la vista de revisión con el número de orden.
-      // Se chequea ANTES del initPoint: una compra en revisión no debe abrir
-      // Mercado Pago ni ofrecer pagar de nuevo.
+      // Se chequea ANTES del pago: una compra en revisión todavía no se puede
+      // cobrar ni ofrecer pagar de nuevo.
       if (compra.estado === ESTADO_COMPRA_REVISION_REQUERIDA) {
+        // Acá sí existe una orden del lado del servidor: el carrito se vacía
+        // para que no se compre dos veces lo que ya está en revisión.
+        vaciar();
         setCompraId(compra.compraId);
         setMontoTotal(compra.montoTotal);
         setVista('revision_requerida');
         return;
       }
 
-      // Sin initPoint no hay checkout que abrir: la compra quedó registrada y no
-      // requiere pago en línea, así que la pantalla muestra la confirmación con
-      // el número de orden (el usuario la ve también en Mis Compras).
-      if (!compra.initPoint) {
-        setCompraId(compra.compraId);
-        setMontoTotal(compra.montoTotal);
-        setVista('realizada');
-        return;
+      // 4) Pago simulado de Order: el backend decide el estado final. No se
+      //    abre navegador, no hay initPoint ni se espera un webhook externo.
+      const pago = await simularPago(compra.compraId, escenario);
+
+      // 5) El carrito NO se vacía al crear la orden sino una vez conocido el
+      //    resultado. Con rechazo (y con pendiente) el usuario puede volver al
+      //    carrito sin perder sus productos; solo un pago aprobado convierte
+      //    el carrito en compra concretada.
+      if (pago.estado === 'aprobado') {
+        vaciar();
       }
-
-      // 5) Con pago pendiente, el pago se hace acá, en el flujo del carrito: se
-      //    abre Mercado Pago con el initPoint que devolvió el backend y el
-      //    comprobante lo confirma resultado-pago al volver del navegador.
-      const resultado = await abrirCheckoutMercadoPago(compra.initPoint);
-
-      if (resultado.tipo === 'cerrado_sin_confirmar') {
-        // El usuario cerró el navegador antes de completar el pago. La orden ya
-        // está creada (el carrito se vació al crearla), así que no hay nada que
-        // re-confirmar acá: se lo llevamos al resultado como pendiente, que le
-        // dice que la compra quedó registrada y que avisaremos cuando el estado
-        // cambie. Volver atrás no debe devolver al checkout.
-        console.warn('[Checkout] El usuario cerró el checkout sin confirmar');
-        router.replace({
-          pathname: '/resultado-pago',
-          params: { estado: 'pendiente', compraId: compra.compraId, paymentId: '' },
-        });
-        return;
-      }
-
-      const retorno = parsearRetornoPago(resultado.url);
 
       // replace y no push: volver atrás desde el resultado no debe devolver al
-      // checkout, que volvería a ofrecer pagar una orden ya creada.
+      // checkout, que volvería a ofrecer pagar una orden ya creada. El CompraId
+      // viaja siempre: resultado-pago consulta el estado real con él y decide
+      // el destino (QR, orden en vivo o carrito).
       router.replace({
         pathname: '/resultado-pago',
-        params: {
-          estado: retorno.estado,
-          // El deep link trae el id en external_reference, pero si el backend no
-          // lo configuró así no viene: se usa el que devolvió crearCompra, que
-          // siempre existe.
-          compraId: retorno.compraId ?? compra.compraId,
-          paymentId: retorno.paymentId ?? '',
-        },
+        params: { compraId: compra.compraId, pagoId: pago.pagoId },
       });
     } catch (thrown) {
       const apiError = toApiError(thrown as AxiosError<ApiProblem>);
@@ -267,7 +258,7 @@ export default function CheckoutScreen() {
     } finally {
       setProcesando(false);
     }
-  }, [items, formulario, vaciar, router]);
+  }, [items, formulario, escenario, vaciar, router]);
 
   const volverAlCarrito = useCallback((): void => {
     router.back();
@@ -646,18 +637,40 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {/* Método de pago: pasarela integrada (la tarjeta se ingresa en MP) */}
+        {/* INT4-128: pago simulado de Order, sin navegador ni pasarela externa */}
         <View style={styles.pagoSeccion} testID="checkout-pago-seccion">
           <Text style={styles.seccionTitulo}>Método de Pago</Text>
           <View style={styles.metodoPago} testID="checkout-metodo-pago">
-            <Text style={styles.metodoPagoIcono}>💙</Text>
+            <Text style={styles.metodoPagoIcono}>🧪</Text>
             <View style={styles.metodoPagoInfo}>
-              <Text style={styles.metodoPagoNombre}>Mercado Pago</Text>
+              <Text style={styles.metodoPagoNombre}>Pago simulado</Text>
               <Text style={styles.metodoPagoDetalle}>
-                Vas a pagar en el sitio de Mercado Pago, con tarjeta o saldo. La app no maneja los
-                datos de tu tarjeta.
+                Order confirma el resultado. Elegí el escenario que querés probar: no se usa Mercado
+                Pago ni se abre un navegador.
               </Text>
             </View>
+          </View>
+          <View style={styles.escenarios}>
+            {ESCENARIOS_PAGO.map((opcion) => {
+              const seleccionado = escenario === opcion.valor;
+              return (
+                <Presionable
+                  key={opcion.valor}
+                  style={[styles.escenario, seleccionado && styles.escenarioSeleccionado]}
+                  onPress={() => setEscenario(opcion.valor)}
+                  disabled={procesando}
+                  testID={`checkout-escenario-${opcion.valor}`}
+                >
+                  <Text style={styles.escenarioIcono}>{opcion.icono}</Text>
+                  <Text
+                    style={[styles.escenarioEtiqueta, seleccionado && styles.escenarioTextoActivo]}
+                  >
+                    {opcion.etiqueta}
+                  </Text>
+                  <Text style={styles.escenarioDetalle}>{opcion.detalle}</Text>
+                </Presionable>
+              );
+            })}
           </View>
         </View>
 
@@ -677,9 +690,9 @@ export default function CheckoutScreen() {
         </Presionable>
 
         <Text style={styles.nota}>
-          Al confirmar se validan tus datos, se envía la compra al backend y, si hay pago pendiente,
-          se abre Mercado Pago. El pago se confirma cuando Mercado Pago nos avisa, no al volver a la
-          app.
+          Al confirmar se validan tus datos, se crea la compra en Order y se simula el pago con el
+          escenario elegido. La pantalla siguiente consulta el estado real antes de mostrarte el
+          retiro o el seguimiento.
         </Text>
       </ScrollView>
     );
@@ -1000,7 +1013,7 @@ const styles = StyleSheet.create({
     color: tokens.colores.textoNeutro,
     fontSize: tokens.tipografia.tamano.etiqueta,
   },
-  // Método de pago (pasarela integrada; la tarjeta se ingresa en Mercado Pago)
+  // Método de pago (INT4-128): escenarios del pago simulado de Order.
   pagoSeccion: {
     gap: tokens.espaciado.md,
   },
@@ -1031,6 +1044,42 @@ const styles = StyleSheet.create({
     color: tokens.colores.textoNeutro,
     fontSize: tokens.tipografia.tamano.etiqueta,
     lineHeight: tokens.tipografia.interlineado.apretado,
+  },
+  escenarios: {
+    flexDirection: 'row',
+    gap: tokens.espaciado.sm,
+  },
+  escenario: {
+    flex: 1,
+    alignItems: 'center',
+    gap: tokens.espaciado.xxs,
+    backgroundColor: tokens.colores.superficie,
+    borderWidth: tokens.grosores.medio,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.lg,
+    paddingVertical: tokens.espaciado.md,
+    paddingHorizontal: tokens.espaciado.xs,
+  },
+  escenarioSeleccionado: {
+    borderColor: tokens.colores.azul,
+    borderWidth: tokens.grosores.grueso,
+    backgroundColor: tokens.colores.opcionActivaFondo,
+  },
+  escenarioIcono: {
+    fontSize: tokens.tipografia.tamano.encabezado,
+  },
+  escenarioEtiqueta: {
+    color: tokens.colores.textoNeutro,
+    fontSize: tokens.tipografia.tamano.etiqueta,
+    fontWeight: tokens.tipografia.peso.negrita,
+  },
+  escenarioTextoActivo: {
+    color: tokens.colores.azul,
+  },
+  escenarioDetalle: {
+    color: tokens.colores.textoNeutro,
+    fontSize: tokens.tipografia.tamano.etiqueta,
+    textAlign: 'center',
   },
 
   // Botones

@@ -10,16 +10,16 @@
 //     entrega completos no se dispara el POST,
 //   - que el payload es solo ofertaId y cantidad (el precio lo fija el backend)
 //     más los datos de entrega/facturación recopilados por la pantalla,
-//   - que el carrito se vacía cuando la orden ya existe del lado del servidor,
-//   - las salidas del éxito: con initPoint abre Mercado Pago en este flujo
-//     (resultado-pago lo confirma), y sin initPoint la misma pantalla muestra
-//     "¡Compra realizada!" (sin volver a cobrar),
+//   - que el carrito se vacía solo cuando Order aprueba el pago (INT4-128):
+//     con rechazo o pendiente el carrito queda intacto para reintentar,
+//   - que la pantalla elige el escenario del pago simulado y navega al
+//     resultado con compraId y pagoId, sin Mercado Pago ni navegador externo,
 //   - que la compra en estado "revisión requerida" (INT4-36) muestra la vista
-//     "Tu compra está en revisión" en la misma pantalla, sin abrir Mercado
-//     Pago ni ofrecer pagar de nuevo,
+//     "Tu compra está en revisión" en la misma pantalla, sin simular pago ni
+//     ofrecer pagar de nuevo,
 //   - que el fallo del backend (401/403 con mensaje de autenticación, u otro
 //     error) pasa la MISMA pantalla a la vista de fallo, sin vaciar el carrito
-//     y sin abrir Mercado Pago,
+//     y sin llamar al pago simulado,
 //   - las vistas de resultado por parámetro
 //     (?estado=realizada|revision_requerida|fallo), que son las que permiten
 //     demos y tests hoy (el backend aún no implementa el POST).
@@ -30,7 +30,12 @@ import { useLocalSearchParams } from 'expo-router';
 
 import CheckoutScreen from '../app/(cliente)/checkout';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
-import { abrirCheckoutMercadoPago, crearCompra, parsearRetornoPago } from '../services/pagos';
+import {
+  abrirCheckoutMercadoPago,
+  crearCompra,
+  parsearRetornoPago,
+  simularPago,
+} from '../services/pagos';
 import { getAccessToken } from '../services/httpClient';
 import { escribir, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
 import type { NuevoItemCarrito } from '../types/domain';
@@ -60,9 +65,21 @@ jest.mock('../services/pagos', () => ({
   })),
   crearCompra: jest.fn(async () => ({
     compraId: 'cmp-1',
-    estado: 'pendiente de pago',
-    initPoint: 'https://checkout.mp.test/iniciar',
+    estado: 'pendiente_pago',
     montoTotal: 6000,
+  })),
+  simularPago: jest.fn(async () => ({
+    pagoId: 'pago-1',
+    compraId: 'cmp-1',
+    estado: 'aprobado',
+    motivo: 'aprobacion_simulada',
+    montoTotal: 6000,
+    moneda: 'CLP',
+    simulado: true,
+    proveedor: 'simulado',
+    creadoAt: '2026-01-01T00:00:00Z',
+    actualizadoAt: '2026-01-01T00:00:00Z',
+    version: 1,
   })),
   parsearRetornoPago: jest.fn(() => ({
     estado: 'exitoso',
@@ -86,6 +103,7 @@ jest.mock(
 );
 
 const mockCrearCompra = crearCompra as unknown as jest.Mock;
+const mockSimularPago = simularPago as unknown as jest.Mock;
 const mockAbrirCheckout = abrirCheckoutMercadoPago as unknown as jest.Mock;
 const mockParsearRetorno = parsearRetornoPago as unknown as jest.Mock;
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
@@ -161,15 +179,28 @@ beforeEach(() => {
   limpiarRouter();
   mockUseLocalSearchParams.mockReturnValue(mockParams);
   mockCrearCompra.mockClear();
+  mockSimularPago.mockClear();
   mockAbrirCheckout.mockClear();
   mockParsearRetorno.mockClear();
   mockGetAccessToken.mockClear();
   mockGetAccessToken.mockReturnValue('token-de-prueba');
   mockCrearCompra.mockResolvedValue({
     compraId: 'cmp-1',
-    estado: 'pendiente de pago',
-    initPoint: 'https://checkout.mp.test/iniciar',
+    estado: 'pendiente_pago',
     montoTotal: 6000,
+  });
+  mockSimularPago.mockResolvedValue({
+    pagoId: 'pago-1',
+    compraId: 'cmp-1',
+    estado: 'aprobado',
+    motivo: 'aprobacion_simulada',
+    montoTotal: 6000,
+    moneda: 'CLP',
+    simulado: true,
+    proveedor: 'simulado',
+    creadoAt: '2026-01-01T00:00:00Z',
+    actualizadoAt: '2026-01-01T00:00:00Z',
+    version: 1,
   });
   mockAbrirCheckout.mockResolvedValue({
     tipo: 'retorno_recibido',
@@ -247,8 +278,11 @@ describe('Checkout (INT4-35)', () => {
     expect(texto(tree, 'checkout-entrega-detalle')).toContain('Retiro programado en 2 puntos');
     expect(() => tree.root.findByProps({ testID: 'checkout-direccion' })).toThrow();
 
-    // Método de pago: pasarela integrada (la tarjeta se ingresa en Mercado Pago).
-    expect(tree.root.findByProps({ testID: 'checkout-metodo-pago' })).toBeDefined();
+    // Método de pago (INT4-128): pago simulado de Order con los tres escenarios.
+    expect(texto(tree, 'checkout-metodo-pago')).toContain('Pago simulado');
+    expect(tree.root.findByProps({ testID: 'checkout-escenario-aprobar' })).toBeDefined();
+    expect(tree.root.findByProps({ testID: 'checkout-escenario-rechazar' })).toBeDefined();
+    expect(tree.root.findByProps({ testID: 'checkout-escenario-pendiente' })).toBeDefined();
 
     // El botón confirma con el total que ve el usuario, en estado de carga se
     // deshabilita para evitar dobles envíos.
@@ -278,7 +312,7 @@ describe('Checkout (INT4-35)', () => {
     expect(() => tree.root.findByProps({ testID: 'checkout-error-nombre' })).toThrow();
   });
 
-  it('al confirmar manda solo ofertaId y cantidad más los datos, vacía y abre Mercado Pago', async () => {
+  it('al confirmar crea la compra, simula el pago elegido y navega al resultado', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
@@ -294,6 +328,9 @@ describe('Checkout (INT4-35)', () => {
     );
     await llenarFormulario(tree);
 
+    // El escenario es una decisión del usuario, no un estado inventado por la
+    // app: se envía tal cual al pago simulado de Order.
+    await pulsar(tree, 'checkout-escenario-aprobar');
     await pulsar(tree, 'checkout-confirmar');
 
     // El payload no lleva precio: lo recalcula el backend contra el catálogo, y
@@ -311,21 +348,18 @@ describe('Checkout (INT4-35)', () => {
         metodoEntrega: 'retiro',
       }
     );
+    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'aprobar');
 
-    // La orden ya existe del lado del servidor: el carrito no puede quedar
-    // para pagar dos veces.
+    // Pago aprobado: recién acá el carrito se convierte en compra concretada.
     expect(leerCarrito(tree).items).toEqual([]);
 
-    // El pago se hace en este flujo: el checkout abre Mercado Pago con el
-    // initPoint que devolvió el backend (la vista de resultado no vuelve a
-    // cobrar) y resultado-pago lo confirma al volver del navegador.
-    expect(mockAbrirCheckout).toHaveBeenCalledWith('https://checkout.mp.test/iniciar');
-    expect(mockParsearRetorno).toHaveBeenCalledWith(
-      'cloudcoffee://pago/retorno?status=approved&payment_id=pay-1&external_reference=cmp-1'
-    );
+    // Sin Mercado Pago, sin initPoint y sin navegador externo: la pantalla de
+    // resultado consulta el estado real con el compraId.
+    expect(mockAbrirCheckout).not.toHaveBeenCalled();
+    expect(mockParsearRetorno).not.toHaveBeenCalled();
     expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/resultado-pago',
-      params: { estado: 'exitoso', compraId: 'cmp-1', paymentId: 'pay-1' },
+      params: { compraId: 'cmp-1', pagoId: 'pago-1' },
     });
   });
 
@@ -369,30 +403,66 @@ describe('Checkout (INT4-35)', () => {
     );
   });
 
-  it('sin initPoint la misma pantalla muestra la compra realizada, sin volver a cobrar', async () => {
+  it('con rechazo conserva el carrito para poder volver a intentar', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
-    mockCrearCompra.mockResolvedValue({
-      compraId: 'cmp-2',
-      estado: 'pendiente de pago',
-      initPoint: undefined,
+    mockSimularPago.mockResolvedValue({
+      pagoId: 'pago-rechazado',
+      compraId: 'cmp-1',
+      estado: 'rechazado',
+      motivo: 'rechazo_simulado',
       montoTotal: 1800,
+      moneda: 'CLP',
+      simulado: true,
+      proveedor: 'simulado',
+      creadoAt: '2026-01-01T00:00:00Z',
+      actualizadoAt: '2026-01-01T00:00:00Z',
+      version: 1,
     });
     await llenarFormulario(tree);
 
+    await pulsar(tree, 'checkout-escenario-rechazar');
     await pulsar(tree, 'checkout-confirmar');
 
-    // La compra llegó y quedó registrada: la vista "realizada" de la misma
-    // pantalla lo confirma. No hay navegación, no se abre Mercado Pago y no
-    // hay botón que vuelva a cobrar.
+    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'rechazar');
+    // El resultado-pago ofrecerá volver al carrito: no puede estar vacío.
+    expect(leerCarrito(tree).items).toHaveLength(1);
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
-    expect(routerMock.replace).not.toHaveBeenCalled();
-    expect(texto(tree, 'checkout-realizada-titulo')).toBe('¡Compra realizada!');
-    expect(texto(tree, 'checkout-realizada-compra')).toBe('cmp-2');
-    expect(texto(tree, 'checkout-realizada-total')).toBe('$1.800');
-    expect(() => tree.root.findByProps({ testID: 'checkout-confirmar' })).toThrow();
-    expect(leerCarrito(tree).items).toEqual([]);
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/resultado-pago',
+      params: { compraId: 'cmp-1', pagoId: 'pago-rechazado' },
+    });
+  });
+
+  it('con pendiente conserva el carrito y deja la orden en seguimiento', async () => {
+    const tree = montar();
+
+    await agregar(tree, linea(), 1);
+    mockSimularPago.mockResolvedValue({
+      pagoId: 'pago-pendiente',
+      compraId: 'cmp-1',
+      estado: 'pendiente',
+      motivo: 'escenario_pendiente',
+      montoTotal: 1800,
+      moneda: 'CLP',
+      simulado: true,
+      proveedor: 'simulado',
+      creadoAt: '2026-01-01T00:00:00Z',
+      actualizadoAt: '2026-01-01T00:00:00Z',
+      version: 1,
+    });
+    await llenarFormulario(tree);
+
+    await pulsar(tree, 'checkout-escenario-pendiente');
+    await pulsar(tree, 'checkout-confirmar');
+
+    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'pendiente');
+    expect(leerCarrito(tree).items).toHaveLength(1);
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/resultado-pago',
+      params: { compraId: 'cmp-1', pagoId: 'pago-pendiente' },
+    });
   });
 
   it('si el backend responde estado revisión requerida muestra la compra en revisión (INT4-36)', async () => {
@@ -412,8 +482,9 @@ describe('Checkout (INT4-35)', () => {
     await pulsar(tree, 'checkout-confirmar');
 
     // La compra llegó (el carrito se vació) pero quedó en revisión: ni
-    // "realizada" ni fallo, no se abre Mercado Pago, no se navega y no hay
-    // botón que vuelva a cobrar.
+    // "realizada" ni fallo, no se simula pago, no se abre Mercado Pago, no se
+    // navega y no hay botón que vuelva a cobrar.
+    expect(mockSimularPago).not.toHaveBeenCalled();
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
     expect(routerMock.replace).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-revision-requerida-titulo')).toBe('Tu compra está en revisión');
@@ -426,21 +497,22 @@ describe('Checkout (INT4-35)', () => {
     expect(leerCarrito(tree).items).toEqual([]);
   });
 
-  it('si el usuario cierra el navegador sin confirmar la compra queda pendiente', async () => {
+  it('si falla el pago simulado muestra el fallo y conserva el carrito', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
     await llenarFormulario(tree);
-    mockAbrirCheckout.mockResolvedValue({ tipo: 'cerrado_sin_confirmar' });
+    mockSimularPago.mockRejectedValue(new Error('pago no disponible'));
 
     await pulsar(tree, 'checkout-confirmar');
 
-    // La orden ya quedó creada (el carrito se vació al crearla): se avisa como
-    // pendiente y no se vuelve al checkout a confirmar de nuevo.
-    expect(routerMock.replace).toHaveBeenCalledWith({
-      pathname: '/resultado-pago',
-      params: { estado: 'pendiente', compraId: 'cmp-1', paymentId: '' },
-    });
+    // La compra se creó pero Order no pudo confirmar el cobro: no se afirma un
+    // pago aprobado, no se vacía el carrito y la pantalla muestra el fallo.
+    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'aprobar');
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    expect(texto(tree, 'checkout-fallo-titulo')).toBe('No pudimos realizar tu compra');
+    expect(texto(tree, 'checkout-fallo-mensaje')).toContain('pago no disponible');
+    expect(leerCarrito(tree).items).toHaveLength(1);
   });
 
   it('si el backend responde 500 la misma pantalla pasa al fallo sin vaciar el carrito', async () => {
@@ -459,6 +531,7 @@ describe('Checkout (INT4-35)', () => {
     // vista de fallo (no hay navegación a una ruta aparte ni alerta), el
     // carrito queda intacto y no se abre el pago (no hay initPoint).
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
+    expect(mockSimularPago).not.toHaveBeenCalled();
     expect(routerMock.replace).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-fallo-titulo')).toBe('No pudimos realizar tu compra');
     expect(texto(tree, 'checkout-fallo-mensaje')).toContain('boom');
@@ -500,6 +573,7 @@ describe('Checkout (INT4-35)', () => {
     await pulsar(tree, 'checkout-confirmar');
 
     expect(mockCrearCompra).not.toHaveBeenCalled();
+    expect(mockSimularPago).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-fallo-mensaje')).toBe(
       'Se requiere autenticación válida para acceder a este recurso. Nada se cobró y tu carrito sigue listo.'
     );
