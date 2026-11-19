@@ -150,7 +150,7 @@ function RootNavigator() {
       return;
     }
 
-    const enCampus = segments[0] === '(cliente)' && segments[1] === 'campus';
+    const enCampus = ruta === '(cliente)/campus';
     if (!tieneCampus && !enCampus) {
       router.replace('/(cliente)/campus');
       return;
@@ -158,7 +158,7 @@ function RootNavigator() {
     if (tieneCampus && segments[0] !== '(cliente)') {
       router.replace('/(cliente)');
     }
-  }, [sesion, bootstrapping, segments, router, tieneCampus]);
+  }, [sesion, bootstrapping, segments, ruta, router, tieneCampus]);
 
   // WebSocket de notificaciones: usa el accessToken real una vez autenticado.
   useEffect(() => {
