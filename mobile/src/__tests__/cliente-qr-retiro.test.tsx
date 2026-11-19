@@ -1,7 +1,7 @@
 // src/__tests__/cliente-qr-retiro.test.tsx
-// INT4-128: el Código de Retiro muestra SOLAMENTE el código opaco que devuelve
-// GET /v1/orders/{ordenId}/qr. Si Order no lo habilita, no se arma un QR local:
-// se ofrece el seguimiento en vivo. Conserva el enlace a la boleta (INT4-48).
+// INT4-128 + INT4-103: la pantalla muestra el código opaco que devuelve Order y
+// lo serializa en el QR que consume el cajero. Sin código válido del backend,
+// degrada y no ofrece un QR que pueda registrarse como entrega.
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -10,7 +10,8 @@ import QrRetiroScreen from '../app/(cliente)/qr-retiro';
 import { obtenerCompra } from '../services/compras';
 import { ApiError } from '../services/httpClient';
 import { obtenerOrden, obtenerQrRetiro } from '../services/ordenes';
-import { desmontar, limpiarRouter, pulsar, routerMock } from '../test-utils';
+import { serializarQrRetiro } from '../services/qrRetiro';
+import { desmontar, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
 import type { Compra, Orden, QrRetiroBackend } from '../types/domain';
 
 jest.mock('react-native-qrcode-svg', () => 'QRCode');
@@ -37,6 +38,8 @@ const mockObtenerQrRetiro = obtenerQrRetiro as unknown as jest.Mock;
 const mockUseFocusEffect = useFocusEffect as unknown as jest.Mock;
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
+const CODIGO = 'A'.repeat(43);
+
 const ORDEN: Orden = {
   ordenId: 'orden-1',
   codigoOrden: 'ORD-1',
@@ -56,9 +59,15 @@ const COMPRA: Compra = {
 
 const QR: QrRetiroBackend = {
   ordenId: 'orden-1',
-  codigo: 'codigo-opaco-de-order-1234567890',
+  codigo: CODIGO,
   expiraAt: '2026-01-01T01:00:00Z',
 };
+
+const QR_VALUE = serializarQrRetiro({
+  pedido: QR.ordenId,
+  estado: 'listo_para_retiro',
+  codigo: CODIGO,
+});
 
 // El mock de useFocusEffect captura el callback: ejecutarlo equivale a que la
 // pantalla gane foco y vuelva a consultar el QR al backend.
@@ -91,14 +100,15 @@ beforeEach(() => {
 });
 
 describe('pantalla de Código de Retiro (QR del backend)', () => {
-  it('resuelve la orden desde compraId y muestra el código opaco de Order', async () => {
+  it('resuelve la orden desde compraId y muestra el código opaco de Order en el QR', async () => {
     const tree = await renderizarQr();
 
     expect(mockObtenerCompra).toHaveBeenCalledWith('compra-1');
     expect(mockObtenerOrden).not.toHaveBeenCalled();
     expect(mockObtenerQrRetiro).toHaveBeenCalledWith('orden-1');
-    expect(tree.root.findAllByProps({ value: QR.codigo }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ value: QR_VALUE }).length).toBeGreaterThan(0);
     expect(() => tree.root.findByProps({ testID: 'qr-retiro-sin-qr' })).toThrow();
+    expect(tree.root.findAllByProps({ testID: 'cliente-qr-sin-codigo' })).toHaveLength(0);
 
     desmontar(tree);
   });
@@ -120,19 +130,32 @@ describe('pantalla de Código de Retiro (QR del backend)', () => {
     desmontar(tree);
   });
 
-  it('si Order no habilita el QR no muestra ninguno y ofrece el seguimiento', async () => {
+  it('si Order no habilita el QR degrada y ofrece el seguimiento', async () => {
     mockObtenerQrRetiro.mockRejectedValue(new ApiError('QR no disponible', 409));
 
     const tree = await renderizarQr();
 
     expect(() => tree.root.findByProps({ testID: 'qr-retiro-codigo' })).toThrow();
     expect(tree.root.findByProps({ testID: 'qr-retiro-sin-qr' })).toBeDefined();
+    expect(texto(tree, 'cliente-qr-sin-codigo')).toContain('todavía no está disponible');
 
     await pulsar(tree, 'qr-retiro-ver-seguimiento');
     expect(routerMock.push).toHaveBeenCalledWith({
       pathname: '/(cliente)/seguimientos',
       params: { compraId: 'compra-1', ordenId: 'orden-1' },
     });
+
+    desmontar(tree);
+  });
+
+  it('no muestra un QR registrable si el código del backend no cumple el contrato', async () => {
+    mockObtenerQrRetiro.mockResolvedValue({ ...QR, codigo: 'codigo-corto' });
+
+    const tree = await renderizarQr();
+
+    expect(tree.root.findAllByProps({ testID: 'qr-retiro-codigo' })).toHaveLength(0);
+    expect(tree.root.findByProps({ testID: 'qr-retiro-sin-qr' })).toBeDefined();
+    expect(texto(tree, 'cliente-qr-sin-codigo')).toContain('todavía no está disponible');
 
     desmontar(tree);
   });

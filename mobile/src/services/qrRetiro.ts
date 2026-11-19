@@ -1,23 +1,51 @@
 // src/services/qrRetiro.ts
 //
-// Contrato del código QR de retiro (INT4-47 + INT4-8): el cliente lo genera
-// (qr-retiro.tsx) codificando el payload QrRetiro (src/types/domain.ts) como
-// JSON, y el cajero lo escanea (escaner.tsx) para validar la entrega. Parsear y
-// serializar en este único lugar evita que cada pantalla invente su propio
-// formato o acepte estados que no existen en el union EstadoOrden.
+// Contrato del código QR de retiro (INT4-47 + INT4-8/INT4-103): el QR emitido
+// por Order contiene exactamente el token opaco de 43 caracteres Base64URL
+// (CodigoRetiro), nunca un JSON con id/estado. Este módulo es el único lugar
+// que decide si el contenido escaneado es ese token o el JSON legacy del
+// mockup, para que el cajero no acepte un QR que el backend rechazaría.
 
-import { esEstadoOrden } from '../types/domain';
+import { esCodigoRetiroValido, esEstadoOrden } from '../types/domain';
 import type { EstadoOrden, QrRetiro } from '../types/domain';
 
-export function serializarQrRetiro(payload: QrRetiro): string {
-  return JSON.stringify(payload);
+/** true si el contenido escaneado es el token opaco del contrato. */
+export function esQrCodigoOpaco(contenido: string): boolean {
+  return esCodigoRetiroValido(contenido.trim());
 }
 
-// Decodifica y valida el contenido escaneado. Devuelve null si el contenido no
-// es el JSON de un QrRetiro (pedido no vacío y estado válido del union).
+/**
+ * Serializa el QR con el mismo sobre que ya usa el mockup (`pedido`/`estado`)
+ * y agrega `codigo` cuando Order entregó el token. El QR no es el token puro:
+ * el escáner necesita el id de la orden para llegar a /entregar; el token viaja
+ * como campo opaco y es el backend quien lo valida contra esa orden. Sin
+ * `codigo` el QR queda marcado como no válido para entrega.
+ */
+export function serializarQrRetiro(payload: QrRetiro): string {
+  return JSON.stringify({
+    pedido: payload.pedido,
+    estado: payload.estado,
+    ...(payload.codigo ? { codigo: payload.codigo } : {}),
+  });
+}
+
+/**
+ * Decodifica y valida el contenido escaneado. El token opaco no codifica la
+ * orden, así que se devuelve con `pedido` vacío: el escáner no puede navegar a
+ * la confirmación sin antes haber validado el retiro contra el backend.
+ */
 export function parsearQrRetiro(contenido: string): QrRetiro | null {
+  const limpio = contenido.trim();
+  if (!limpio) {
+    return null;
+  }
+
+  if (esQrCodigoOpaco(limpio)) {
+    return { pedido: '', estado: 'listo_para_retiro', codigo: limpio };
+  }
+
   try {
-    const crudo = JSON.parse(contenido) as unknown;
+    const crudo = JSON.parse(limpio) as unknown;
     if (typeof crudo !== 'object' || crudo === null) {
       return null;
     }
@@ -32,7 +60,16 @@ export function parsearQrRetiro(contenido: string): QrRetiro | null {
       return null;
     }
 
-    return { pedido, estado: candidato.estado as EstadoOrden };
+    const codigo = candidato.codigo;
+    if (codigo !== undefined && !esCodigoRetiroValido(codigo)) {
+      return null;
+    }
+
+    return {
+      pedido,
+      estado: candidato.estado as EstadoOrden,
+      ...(codigo ? { codigo } : {}),
+    };
   } catch {
     return null;
   }

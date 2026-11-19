@@ -5,7 +5,7 @@ import { FlatList } from 'react-native';
 
 import NoRetiradosScreen from '../app/(cajero)/no-retirados';
 import { fetchPedidosEntrantes, resolverOrdenNoRetirada } from '../services/ordenes';
-import { getAccessToken } from '../services/httpClient';
+import { ApiError, getAccessToken } from '../services/httpClient';
 import { useOrdenEstado } from '../hooks/useOrdenEstado';
 import { textoDe } from '../test-utils';
 import type { Orden } from '../types/domain';
@@ -349,8 +349,10 @@ describe('Listado de órdenes no retiradas del cajero (INT4-11)', () => {
     );
     expect(dataDe(tree).map((o) => o.ordenId)).not.toContain('o-3');
     const exito = tree.root.findByProps({ testID: 'cajero-nr-exito' });
+    expect(textoDe(exito)).toContain('Revisión registrada');
     expect(textoDe(exito)).toContain('CC-9803');
-    expect(textoDe(exito)).toContain('1 ítem(s) reingresado(s)');
+    expect(textoDe(exito)).toContain('resolución final');
+    expect(textoDe(exito)).not.toContain('reingresado');
 
     act(() => tree.unmount());
   }, 20000);
@@ -387,8 +389,16 @@ describe('Listado de órdenes no retiradas del cajero (INT4-11)', () => {
     act(() => tree.unmount());
   }, 20000);
 
-  it('muestra el error normalizado de la API al confirmar y mantiene la orden', async () => {
-    mockResolverOrden.mockRejectedValue(new Error('Request failed with status code 503'));
+  it('muestra la degradación normalizada al confirmar y mantiene la orden', async () => {
+    mockResolverOrden.mockRejectedValue(
+      new ApiError('Not Found', 404, {
+        type: 'about:blank',
+        title: 'Not Found',
+        status: 404,
+        detail: 'Not Found',
+        code: 'RUTA_NO_DISPONIBLE',
+      })
+    );
     mockGetAccessToken.mockReturnValue('token-real');
     mockFetchPedidos.mockResolvedValue(ordenesMock);
 
@@ -406,7 +416,34 @@ describe('Listado de órdenes no retiradas del cajero (INT4-11)', () => {
     });
 
     const errorBanner = tree.root.findByProps({ testID: 'cajero-nr-error-o-3' });
-    expect(textoDe(errorBanner)).toContain('503');
+    expect(textoDe(errorBanner)).toContain('todavía no está disponible en el backend');
+    expect(textoDe(errorBanner)).toContain('No se registró ningún cambio');
+    expect(dataDe(tree).map((o) => o.ordenId)).toContain('o-3');
+    expect(tree.root.findAllByProps({ testID: 'cajero-nr-exito' })).toHaveLength(0);
+
+    act(() => tree.unmount());
+  }, 20000);
+
+  it('no muestra éxito si la respuesta no confirma el estado final', async () => {
+    mockResolverOrden.mockResolvedValue({ ...ordenesMock[2], estado: 'listo_para_retiro' });
+    mockGetAccessToken.mockReturnValue('token-real');
+    mockFetchPedidos.mockResolvedValue(ordenesMock);
+
+    const tree = await renderizarNoRetirados();
+
+    const btnReingresar = tree.root.findByProps({
+      testID: 'cajero-nr-accion-itm-3-reingresar',
+    });
+    await act(async () => {
+      btnReingresar.props.onPress();
+    });
+    const confirmar = tree.root.findByProps({ testID: 'cajero-nr-confirmar-o-3' });
+    await act(async () => {
+      confirmar.props.onPress();
+    });
+
+    const errorBanner = tree.root.findByProps({ testID: 'cajero-nr-error-o-3' });
+    expect(textoDe(errorBanner)).toContain('backend no confirmó');
     expect(dataDe(tree).map((o) => o.ordenId)).toContain('o-3');
 
     act(() => tree.unmount());

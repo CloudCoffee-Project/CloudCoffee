@@ -39,6 +39,11 @@ import { useOrdenEstado } from '../../hooks/useOrdenEstado';
 import { esEstadoOrdenNoRetirado } from '../../types/domain';
 import type { AccionNoRetirado, EstadoOrden, Orden } from '../../types/domain';
 import { visualEstadoOrden } from '../../utils/estadosOrden';
+import {
+  MENSAJE_SIN_CONFIRMACION,
+  mensajeErrorAccionOrden,
+  resultadoNoRetirado,
+} from '../../utils/accionesOrden';
 
 function formatearMonto(monto: number): string {
   return `$${monto.toLocaleString('es-CL')}`;
@@ -329,14 +334,23 @@ export default function NoRetiradosScreen() {
         ordenItemId: d.ordenItemId,
         accion: d.accion as AccionNoRetirado,
       }));
-      await resolverOrdenNoRetirada(orden.ordenId, decisionesTipadas, getAccessToken() ?? '');
-
-      // Éxito: la orden sale del listado y se informa el resumen por ítem.
-      const reingresar = decisionesTipadas.filter((d) => d.accion === 'reingresar').length;
-      const descartar = decisionesTipadas.filter((d) => d.accion === 'descartar').length;
-      setMensajeExito(
-        `Orden ${orden.codigoOrden} procesada: ${reingresar} ítem(s) reingresado(s) al stock, ${descartar} descartado(s).`
+      const respuesta = await resolverOrdenNoRetirada(
+        orden.ordenId,
+        decisionesTipadas,
+        getAccessToken() ?? ''
       );
+      const registrada = resultadoNoRetirado(respuesta);
+      if (!registrada) {
+        setErroresOrden((prev) => ({
+          ...prev,
+          [orden.ordenId]: MENSAJE_SIN_CONFIRMACION,
+        }));
+        return;
+      }
+
+      // Éxito solo con la Orden devuelta por el backend. No se afirma el
+      // reingreso/descarte por ítem: el contrato lo delega a otra issue.
+      setMensajeExito(registrada.mensaje);
       setPedidos((prev) => prev.filter((p) => p.ordenId !== orden.ordenId));
       setDecisiones((prev) => {
         const next = { ...prev };
@@ -346,7 +360,7 @@ export default function NoRetiradosScreen() {
     } catch (errorApi) {
       setErroresOrden((prev) => ({
         ...prev,
-        [orden.ordenId]: toApiError(errorApi as never).message,
+        [orden.ordenId]: mensajeErrorAccionOrden(errorApi, 'no_retirado'),
       }));
     } finally {
       setResolviendo(null);

@@ -362,12 +362,31 @@ export interface StockCafeteriaEvento {
   stockActual: number;
 }
 
+// Token opaco del contrato (CodigoRetiro en
+// backend/docs/compra-pago-retiro.openapi.json): Base64URL de 43 caracteres,
+// sin datos personales ni estado codificado. Lo emite Order y viaja exactamente
+// igual en el QR del cliente y en el cuerpo de /orders/{id}/entregar.
+export interface CodigoRetiro {
+  codigo: string;
+}
+
+const FORMATO_CODIGO_RETIRO = /^[A-Za-z0-9_-]{43}$/;
+
+export function esCodigoRetiroValido(valor: unknown): valor is string {
+  return typeof valor === 'string' && FORMATO_CODIGO_RETIRO.test(valor);
+}
+
 // Payload que codifica el QR de retiro: lo escanea el cajero en el punto de
 // retiro para validar el pedido. El estado siempre es un valor del union
 // EstadoOrden (nunca un string inventado en la pantalla).
+//
+// `codigo` es el token del contrato. En el QR legacy del mockup no viene: en ese
+// caso el escáner lo rechaza con degradación verificada, porque el backend no
+// puede registrar una entrega sin el token que él mismo emitió.
 export interface QrRetiro {
   pedido: string;
   estado: EstadoOrden;
+  codigo?: string;
 }
 
 // QR REAL devuelto por GET /v1/orders/{ordenId}/qr (INT4-128). Es un código

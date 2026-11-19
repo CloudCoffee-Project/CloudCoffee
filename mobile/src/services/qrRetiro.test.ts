@@ -1,9 +1,11 @@
 // src/services/qrRetiro.test.ts
-import { parsearQrRetiro, serializarQrRetiro } from './qrRetiro';
+import { esQrCodigoOpaco, parsearQrRetiro, serializarQrRetiro } from './qrRetiro';
 import type { QrRetiro } from '../types/domain';
 
+const CODIGO = 'b'.repeat(43);
+
 describe('qrRetiro (contrato del QR de retiro)', () => {
-  it('serializa y parsea un payload válido (round-trip)', () => {
+  it('serializa y parsea el payload legacy del mockup (round-trip)', () => {
     const payload: QrRetiro = { pedido: 'o-1', estado: 'listo_para_retiro' };
 
     const contenido = serializarQrRetiro(payload);
@@ -12,7 +14,45 @@ describe('qrRetiro (contrato del QR de retiro)', () => {
     expect(parsearQrRetiro(contenido)).toEqual(payload);
   });
 
-  it('acepta cualquier estado del union EstadoOrden', () => {
+  it('serializa el token del contrato dentro del payload del QR', () => {
+    const contenido = serializarQrRetiro({
+      pedido: 'o-1',
+      estado: 'listo_para_retiro',
+      codigo: CODIGO,
+    });
+
+    expect(JSON.parse(contenido)).toEqual({
+      pedido: 'o-1',
+      estado: 'listo_para_retiro',
+      codigo: CODIGO,
+    });
+    expect(parsearQrRetiro(contenido)).toEqual({
+      pedido: 'o-1',
+      estado: 'listo_para_retiro',
+      codigo: CODIGO,
+    });
+    // El contenido completo no es un token opaco: conserva el id para el
+    // escáner, mientras `codigo` sigue siendo opaco para el backend.
+    expect(esQrCodigoOpaco(contenido)).toBe(false);
+  });
+
+  it('parsea un token opaco sin inventar el id de la orden', () => {
+    expect(parsearQrRetiro(CODIGO)).toEqual({
+      pedido: '',
+      estado: 'listo_para_retiro',
+      codigo: CODIGO,
+    });
+  });
+
+  it('rechaza un codigo con formato inválido dentro del JSON legacy', () => {
+    expect(
+      parsearQrRetiro(
+        JSON.stringify({ pedido: 'o-1', estado: 'listo_para_retiro', codigo: 'corto' })
+      )
+    ).toBeNull();
+  });
+
+  it('acepta cualquier estado del union EstadoOrden en el payload legacy', () => {
     const casos: QrRetiro[] = [
       { pedido: 'a', estado: 'revision_requerida' },
       { pedido: 'a', estado: 'pendiente_pago' },
@@ -29,7 +69,7 @@ describe('qrRetiro (contrato del QR de retiro)', () => {
     });
   });
 
-  it('rechaza contenido que no es JSON', () => {
+  it('rechaza contenido que no es JSON ni un token válido', () => {
     expect(parsearQrRetiro('no-es-json')).toBeNull();
     expect(parsearQrRetiro('')).toBeNull();
   });

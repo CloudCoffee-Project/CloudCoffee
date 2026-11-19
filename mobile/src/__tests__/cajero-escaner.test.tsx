@@ -47,7 +47,12 @@ const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
 const mockUseIsFocused = useIsFocused as unknown as jest.Mock;
 const mockUseCameraPermissions = useCameraPermissions as unknown as jest.Mock;
 
-const payloadValido: QrRetiro = { pedido: 'o-1', estado: 'listo_para_retiro' };
+const CODIGO_RETIRO = 'd'.repeat(43);
+const payloadValido: QrRetiro = {
+  pedido: 'o-1',
+  estado: 'listo_para_retiro',
+  codigo: CODIGO_RETIRO,
+};
 const contenidoValido = serializarQrRetiro(payloadValido);
 
 const ordenEntregable: Orden = {
@@ -110,7 +115,7 @@ describe('procesarCodigo (validación del QR sin cámara)', () => {
 
   it('rechaza un QR de una orden ya entregada usar el estado del payload', () => {
     const resultado = procesarCodigo(
-      serializarQrRetiro({ pedido: 'o-9', estado: 'entregado' }),
+      serializarQrRetiro({ pedido: 'o-9', estado: 'entregado', codigo: CODIGO_RETIRO }),
       []
     );
 
@@ -144,6 +149,29 @@ describe('procesarCodigo (validación del QR sin cámara)', () => {
     const resultado = procesarCodigo('texto-plano', []);
 
     expect(resultado.tipo).toBe('error');
+  });
+
+  it('rechaza el QR legacy sin código del backend con degradación clara', () => {
+    const resultado = procesarCodigo(
+      serializarQrRetiro({ pedido: 'o-1', estado: 'listo_para_retiro' }),
+      []
+    );
+
+    expect(resultado.tipo).toBe('error');
+    if (resultado.tipo === 'error') {
+      expect(resultado.mensaje).toContain('no trae el código de retiro');
+      expect(resultado.mensaje).toContain('no se registró ninguna entrega');
+    }
+  });
+
+  it('degrada el token opaco mientras no exista /validar-retiro', () => {
+    const resultado = procesarCodigo(CODIGO_RETIRO, []);
+
+    expect(resultado.tipo).toBe('error');
+    if (resultado.tipo === 'error') {
+      expect(resultado.mensaje).toContain('validar-retiro');
+      expect(resultado.mensaje).toContain('No se puede identificar la orden');
+    }
   });
 });
 
@@ -180,7 +208,7 @@ describe('Pantalla de escaneo de QR (cajero)', () => {
 
     expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
-      params: { pedido: 'o-1', estado: 'listo_para_retiro' },
+      params: { pedido: 'o-1', estado: 'listo_para_retiro', codigo: CODIGO_RETIRO },
     });
 
     act(() => tree.unmount());

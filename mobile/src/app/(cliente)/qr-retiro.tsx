@@ -1,10 +1,11 @@
 // src/app/(cliente)/qr-retiro.tsx
 //
-// Código QR de retiro (INT4-47, adaptado a INT4-128). El QR YA NO se arma en la
-// app: Order lo genera (GET /v1/orders/{ordenId}/qr) y devuelve un código opaco.
-// Solo se muestra cuando el endpoint responde 200, es decir cuando el pago está
-// aprobado y la orden está 'listo_para_retiro'. Si todavía no está habilitado,
-// la pantalla ofrece ir al seguimiento en vivo; nunca inventa un QR local.
+// Código QR de retiro (INT4-47, INT4-128 e INT4-103). Order genera el código
+// opaco (GET /v1/orders/{ordenId}/qr) y la app SOLO lo reenvía dentro del
+// payload que consume el escáner: { pedido, estado, codigo }. No se inventa un
+// QR local ni se usa el folio como credencial. Si Order no habilita el código
+// o viene fuera del contrato, se muestra la degradación y no se ofrece un QR
+// que el backend rechazaría.
 //
 // Se puede abrir con compraId (lo que envía resultado-pago) y/o con ordenId/id
 // (el enlace histórico desde seguimientos y Mis compras). Al ganar foco vuelve
@@ -21,9 +22,10 @@ import type { AxiosError } from 'axios';
 import { obtenerCompra } from '../../services/compras';
 import { ApiProblem, toApiError } from '../../services/httpClient';
 import { obtenerOrden, obtenerQrRetiro } from '../../services/ordenes';
-import { esEstadoOrden } from '../../types/domain';
+import { serializarQrRetiro } from '../../services/qrRetiro';
+import { esCodigoRetiroValido, esEstadoOrden } from '../../types/domain';
 import { etiquetaEstadoOrden, visualEstadoOrden } from '../../utils/estadosOrden';
-import type { EstadoOrden, Orden, QrRetiroBackend } from '../../types/domain';
+import type { EstadoOrden, Orden, QrRetiro, QrRetiroBackend } from '../../types/domain';
 
 function textoUnico(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
@@ -108,6 +110,19 @@ export default function QrRetiroScreen() {
   const estado: EstadoOrden = estadoBase ?? 'listo_para_retiro';
   const visual = visualEstadoOrden(estado);
 
+  // INT4-103: solo es registrable si el token opaco que entregó Order cumple el
+  // contrato. El id de la orden viaja en `pedido` para que el cajero sepa qué
+  // /v1/orders/{id}/entregar debe llamar; el token viaja en `codigo`.
+  const codigoBackend = qr && esCodigoRetiroValido(qr.codigo) ? qr.codigo : undefined;
+  const payloadQr: QrRetiro | null = codigoBackend
+    ? {
+        pedido: qr?.ordenId || orden?.ordenId || ordenParam,
+        estado,
+        codigo: codigoBackend,
+      }
+    : null;
+  const qrValue = payloadQr ? serializarQrRetiro(payloadQr) : null;
+
   const abrirBoleta = (): void => {
     if (!orden) return;
     router.push({
@@ -156,13 +171,22 @@ export default function QrRetiroScreen() {
               <Text style={styles.badgeText}>SEGUIMIENTO DE RETIRO</Text>
             </View>
             <Text style={styles.title}>
-              {qr ? 'Tu pedido está listo' : 'Tu código todavía no está disponible'}
+              {codigoBackend ? 'Tu pedido está listo' : 'Tu código todavía no está disponible'}
             </Text>
             <Text style={styles.subtitle}>
-              {qr
+              {codigoBackend
                 ? 'Presenta este código QR en la barra de la cafetería para retirar tu compra.'
                 : 'Order habilita el QR cuando el pago esté aprobado y la orden lista para retiro.'}
             </Text>
+
+            {!codigoBackend ? (
+              <View style={styles.sinCodigoBanner} testID="cliente-qr-sin-codigo">
+                <Text style={styles.sinCodigoTexto}>
+                  El código de retiro del backend todavía no está disponible o no cumple el
+                  contrato. Este QR no permite registrar la entrega.
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.card}>
               <View style={styles.ticketTop}>
@@ -177,20 +201,14 @@ export default function QrRetiroScreen() {
                 </View>
               </View>
 
-              {qr ? (
+              {qrValue ? (
                 <View style={styles.qrSection}>
                   <View style={styles.qrWrapper} testID="qr-retiro-codigo">
-                    {/* El value es el código opaco del backend, NO un JSON local. */}
-                    <QRCode
-                      value={qr.codigo}
-                      size={180}
-                      color="#0052CC"
-                      backgroundColor="#FFFFFF"
-                    />
+                    <QRCode value={qrValue} size={180} color="#0052CC" backgroundColor="#FFFFFF" />
                   </View>
                   <View style={styles.idPill}>
                     <Text style={styles.idPillText} testID="qr-retiro-codigo-texto">
-                      Código: {qr.codigo}
+                      Código: {qr?.codigo}
                     </Text>
                   </View>
                 </View>
@@ -204,7 +222,7 @@ export default function QrRetiroScreen() {
               )}
             </View>
 
-            {!qr && (
+            {!qrValue && (
               <Presionable
                 style={styles.downloadButton}
                 onPress={abrirSeguimiento}
@@ -288,6 +306,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 20,
+  },
+  sinCodigoBanner: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F3DC87',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  sinCodigoTexto: {
+    color: '#92400E',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
   },
   card: {
     backgroundColor: '#FFFFFF',

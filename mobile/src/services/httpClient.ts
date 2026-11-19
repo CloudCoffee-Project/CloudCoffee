@@ -34,6 +34,10 @@ export interface ApiProblem {
   detail: string;
   instance?: string;
   timestamp?: string;
+  // Extensiones de dominio del contrato (backend/docs/compra-pago-retiro.md).
+  // `code` aparece en errores de Order; seguridad/Gateway pueden no enviarlo.
+  code?: string;
+  traceId?: string;
   errors?: ApiFieldError[];
 }
 
