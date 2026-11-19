@@ -1,55 +1,68 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ApiRequestError } from '../services/httpClient';
-import { clearPaymentScenario, getPayment, paymentSessionOwner, pendingPaymentScenario,
-  startPayment, type Payment, type PaymentScenario } from '../services/payments';
+import {
+  assertSandboxPayment, getPayment, isPaymentNotStarted, isPaymentReconciling,
+  openMercadoPagoCheckout, paymentSessionOwner, sandboxCheckoutUrl, startPayment, type Payment,
+} from '../services/payments';
 
 export function PaymentCheckout({ compraId }: { compraId: string }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [scenario, setScenario] = useState<PaymentScenario>(() => pendingPaymentScenario(compraId) ?? 'aprobar');
-  const [locked, setLocked] = useState(() => pendingPaymentScenario(compraId) !== null);
-  const active = useRef(true);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const pending = useRef<AbortController | null>(null);
+  const resultPath = `/pago/resultado?compraId=${encodeURIComponent(compraId)}`;
+
+  useEffect(() => () => pending.current?.abort(), [compraId]);
 
   async function pay() {
-    if (busy) return;
-    setBusy(true); setError('');
+    if (pending.current) return;
+    const controller = new AbortController();
+    pending.current = controller;
     const owner = paymentSessionOwner();
+    const isCurrent = () => !controller.signal.aborted && owner === paymentSessionOwner();
+
+    setBusy(true);
+    setError('');
     try {
       let payment: Payment;
-      try { payment = await getPayment(compraId); }
-      catch (cause) {
-        if (!(cause instanceof ApiRequestError && cause.status === 404)) throw cause;
-        payment = await startPayment(compraId, scenario);
+      try {
+        payment = await getPayment(compraId, controller.signal);
+      } catch (cause) {
+        if (!isPaymentNotStarted(cause)) throw cause;
+        if (!isCurrent()) return;
+        payment = await startPayment(compraId, controller.signal);
       }
-      if (!active.current || owner !== paymentSessionOwner()) return;
-      if (!payment.simulado || payment.proveedor !== 'simulado') throw new Error('El servidor no está configurado para pago simulado.');
-      clearPaymentScenario(compraId);
-      navigate(`/pago/resultado?compraId=${encodeURIComponent(compraId)}`);
+
+      if (!isCurrent()) return;
+      assertSandboxPayment(payment, compraId);
+      const url = sandboxCheckoutUrl(payment);
+      if (url) openMercadoPagoCheckout(url);
+      else navigate(resultPath);
     } catch (cause) {
-      if (!active.current || owner !== paymentSessionOwner()) return;
-      setLocked(pendingPaymentScenario(compraId) !== null);
-      setError(cause instanceof ApiRequestError ? cause.detail : cause instanceof Error ? cause.message : 'No se pudo simular el pago. Vuelve a intentarlo.');
-    } finally { if (active.current) setBusy(false); }
+      if (!isCurrent()) return;
+      if (isPaymentReconciling(cause) ||
+          (cause instanceof ApiRequestError && cause.code === 'PAGO_YA_INICIADO')) {
+        navigate(resultPath);
+        return;
+      }
+      setError(cause instanceof Error ? cause.message : 'No se pudo abrir Mercado Pago. Inténtalo nuevamente.');
+    } finally {
+      if (pending.current === controller) {
+        pending.current = null;
+        if (!controller.signal.aborted) setBusy(false);
+      }
+    }
   }
 
-  return <div className="payment-checkout">
-    <p>Pago simulado. No se realizan cobros reales.</p>
-    <label>Resultado de la simulación{' '}
-      <select aria-label="Resultado de la simulación" value={scenario} disabled={busy || locked}
-        onChange={event => setScenario(event.target.value as PaymentScenario)}>
-        <option value="aprobar">Aprobar</option>
-        <option value="rechazar">Rechazar</option>
-        <option value="pendiente">Dejar pendiente</option>
-      </select>
-    </label>
-    {locked && <p>El reintento conserva el escenario original hasta conocer la respuesta del servidor.</p>}
-    <button type="button" className="checkout-primary" disabled={busy} onClick={() => void pay()}>
-      {busy ? 'Procesando simulación…' : 'Simular pago'}
-    </button>
-    <Link className="checkout-secondary" to={`/pago/resultado?compraId=${encodeURIComponent(compraId)}`}>Consultar resultado del pago</Link>
-    {error && <p role="alert">{error}</p>}
-  </div>;
+  return (
+    <div className="payment-checkout">
+      <p>Mercado Pago Sandbox. Usa una cuenta y una tarjeta de prueba.</p>
+      <button type="button" className="checkout-primary" disabled={busy} onClick={() => void pay()}>
+        {busy ? 'Preparando el pago…' : 'Pagar con Mercado Pago'}
+      </button>
+      <Link className="checkout-secondary" to={resultPath}>Consultar resultado del pago</Link>
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
 }

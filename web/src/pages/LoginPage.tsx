@@ -55,13 +55,17 @@ export function LoginPage() {
 
       login(response.accessToken, response.refreshToken);
 
-      const state = location.state as { from?: { pathname?: string } } | null;
+      const state = location.state as { from?: { pathname?: string; search?: string } } | null;
       const fromPath = state?.from?.pathname;
+      const fromSearch = state?.from?.search;
+      const search = fromSearch?.startsWith('?') ? fromSearch : '';
       const session = decodeSessionToken(response.accessToken);
       const defaultPath = session?.role === 'CAJERO' ? '/cajero' : '/';
 
       // Redirigir tras inicio exitoso
-      navigate(fromPath && fromPath !== '/login' ? fromPath : defaultPath, { replace: true });
+      const returnTo = fromPath?.startsWith('/') && !fromPath.startsWith('//') && fromPath !== '/login'
+        ? { pathname: fromPath, search } : defaultPath;
+      navigate(returnTo, { replace: true });
 
     } catch (error) {
       if (error instanceof ApiRequestError) {

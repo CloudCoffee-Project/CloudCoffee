@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App';
@@ -55,6 +55,37 @@ describe('protección de rutas web según sesión y rol (INT2-94)', () => {
       expect(screen.getByRole('heading', { name: 'Iniciar Sesión' })).toBeTruthy();
     },
   );
+
+  it('reanuda el retorno de Mercado Pago después del login y conserva la compra', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const path = new URL(String(input)).pathname;
+      const json = (body: unknown) => new Response(JSON.stringify(body), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (path === '/v1/auth/login') {
+        return json({ accessToken: createTestJwt({ role: 'CLIENTE' }), refreshToken: 'test-refresh' });
+      }
+      if (path === '/v1/compras/compra-retorno') {
+        return json({ compraId: 'compra-retorno', estado: 'pendiente_pago' });
+      }
+      if (path === '/v1/compras/compra-retorno/pago') {
+        return json({ compraId: 'compra-retorno', estado: 'pendiente', proveedor: 'mercadopago_sandbox',
+          entorno: 'sandbox', simulado: false });
+      }
+      throw new Error(`Ruta inesperada: ${path}`);
+    });
+
+    try {
+      renderAppAt('/pago/retorno?compraId=compra-retorno&status=approved');
+      fireEvent.change(screen.getByLabelText(/Correo institucional/i), { target: { value: 'cliente@example.com' } });
+      fireEvent.change(screen.getByLabelText(/^Contraseña$/i), { target: { value: 'test-password' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Iniciar Sesión' }));
+      expect(await screen.findByRole('heading', { name: 'Pago pendiente de confirmación' })).toBeTruthy();
+      expect(screen.queryByRole('heading', { name: 'Pago aprobado' })).toBeNull();
+    } finally {
+      fetcher.mockRestore();
+    }
+  });
 
   it('limpia un token vencido y redirige a /login', () => {
     const expiredToken = createTestJwt({

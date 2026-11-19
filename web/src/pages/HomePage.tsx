@@ -41,7 +41,7 @@ export function HomePage() {
           <article>
             <span>02 / PIDE</span>
             <h3>Arma tu pedido</h3>
-            <p>Compara ofertas y continúa al checkout con pago simulado.</p>
+            <p>Compara ofertas y paga tu pedido con Mercado Pago.</p>
           </article>
           <article>
             <span>03 / DISFRUTA</span>
