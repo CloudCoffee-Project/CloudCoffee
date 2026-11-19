@@ -1,10 +1,16 @@
-// @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { getReceipt, canDownloadReceipt } from './receipts';
 import { ApiRequestError } from './httpClient';
 import type { Purchase } from './purchases';
 vi.mock('../config/env', () => ({ env: { apiBaseUrl: 'http://localhost:18080' } }));
-beforeEach(() => { localStorage.clear(); localStorage.setItem('accessToken', 'jwt-privado'); });
+beforeEach(() => {
+  const tokens = new Map([['accessToken', 'jwt-privado']]);
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => tokens.get(key) ?? null,
+    setItem: (key: string, value: string) => tokens.set(key, value),
+    removeItem: (key: string) => tokens.delete(key),
+  });
+});
 afterEach(() => vi.unstubAllGlobals());
 function pdf() { return new Response('%PDF-1.7\nexample', { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="comprobante-CC-orden.pdf"' } }); }
 it('descarga bytes y conserva nombre/tipo sin exponer el bearer en URL', async () => {
