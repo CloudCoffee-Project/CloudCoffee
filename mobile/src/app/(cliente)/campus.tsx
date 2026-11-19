@@ -1,8 +1,10 @@
 // src/app/(cliente)/campus.tsx
 //
-// Selección de campus (INT4-27). Es el paso obligatorio al entrar por primera
-// vez: define la sede activa y, con ella, el catálogo y la cafetería contra la
-// que se comparan precios y stock (RN-11/12).
+// Selección de campus (INT4-27, reforzado en INT4-125). Es el paso obligatorio
+// al entrar por primera vez: define la sede activa y, con ella, el catálogo y
+// la cafetería contra la que se comparan precios y stock (RN-11/12). Nunca se
+// asigna una sede automáticamente: Continuar queda deshabilitado hasta que el
+// cliente toque una tarjeta.
 //
 // El listado sale de GET /v1/catalog/campus (services/catalog.ts). El backend
 // todavía no implementa el controller: la pantalla consume el contrato real y
@@ -52,10 +54,12 @@ export default function CampusScreen() {
       setCampus(lista);
       setErrorCarga(null);
       setTieneSeleccionPrevia(guardada !== null);
-      // Preselección: la sede ya elegida si sigue en el catálogo; si no, la
-      // primera disponible, para no obligar a tocar una card sin motivo.
-      const sigueEnCatalogo = guardada !== null && lista.some((c) => c.id === guardada.id);
-      setSeleccionId(sigueEnCatalogo ? (guardada as Campus).id : (lista[0]?.id ?? null));
+      // INT4-125: solo se conserva la sede que el cliente eligió antes y que
+      // sigue en el catálogo. Si no hay elección previa (o la sede ya no
+      // existe), no se inventa una: el cliente debe tocar una tarjeta.
+      const idGuardado = guardada?.id;
+      const sigueEnCatalogo = idGuardado !== undefined && lista.some((c) => c.id === idGuardado);
+      setSeleccionId(sigueEnCatalogo ? idGuardado : null);
     } catch (error) {
       const apiError = toApiError(error as AxiosError<ApiProblem>);
       setCampus(null);
@@ -217,9 +221,8 @@ export default function CampusScreen() {
         {contenido}
       </ScrollView>
 
-      {/* El mockup selecciona al tocar la card; el paso es obligatorio en el
-          flujo de la app, así que se confirma explícitamente antes de entrar al
-          catálogo. */}
+      {/* El mockup preselecciona una sede, pero INT4-125 exige una elección
+          explícita: el botón permanece inactivo hasta que se toque una card. */}
       {campus !== null && campus.length > 0 && (
         <View style={styles.footer}>
           {errorGuardado !== null && (
@@ -239,7 +242,7 @@ export default function CampusScreen() {
             {guardando ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.btnConfirmarTexto}>Confirmar y continuar</Text>
+              <Text style={styles.btnConfirmarTexto}>Continuar</Text>
             )}
           </Presionable>
         </View>
