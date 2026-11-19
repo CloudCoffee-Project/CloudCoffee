@@ -45,7 +45,7 @@ it('reintenta confirmar con la misma clave y solo actualiza al responder backend
   view('/compras/compra-1'); fireEvent.click(await screen.findByRole('button', { name: 'Confirmar disponibilidad' }));
   await screen.findByText('Sigue procesando'); fireEvent.click(screen.getByRole('button', { name: 'Confirmar disponibilidad' }));
   await waitFor(() => expect(confirmPurchase).toHaveBeenCalledTimes(2)); expect(vi.mocked(confirmPurchase).mock.calls[0]).toEqual(vi.mocked(confirmPurchase).mock.calls[1]);
-  expect(await screen.findByRole('button', { name: /Simular pago/ })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: /Pagar con Mercado Pago/ })).toBeTruthy();
 });
 it('cancelación y recarga por eventos conservan el estado canónico', async () => {
   vi.mocked(cancelPurchase).mockResolvedValue({ ...purchase, estado: 'cancelado', montoTotal: 0 });
