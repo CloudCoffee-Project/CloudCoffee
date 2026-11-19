@@ -12,8 +12,7 @@ it('descarga bytes y conserva nombre/tipo sin exponer el bearer en URL', async (
   const first = await getReceipt('orden'); const second = await getReceipt('orden');
   expect(first.filename).toBe('comprobante-CC-orden.pdf'); expect(second.filename).toBe(first.filename);
   expect(first.blob.type).toBe('application/pdf');
-  const text = await new Promise(resolve => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsText(first.blob); });
-  expect(text).toBe('%PDF-1.7\nexample');
+  await expect(first.blob.text()).resolves.toBe('%PDF-1.7\nexample');
   const [url, options] = fetcher.mock.calls[0];
   expect(url.toString()).toBe('http://localhost:18080/v1/orders/orden/boleta');
   expect(new Headers(options.headers).get('Authorization')).toBe('Bearer jwt-privado');
