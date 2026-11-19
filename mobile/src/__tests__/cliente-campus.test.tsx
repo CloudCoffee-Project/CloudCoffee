@@ -104,14 +104,16 @@ describe('Selección de campus', () => {
     expect(() => tree.root.findByProps({ testID: 'campus-lista' })).toThrow();
   });
 
-  it('preselecciona el primer campus cuando no hay selección previa', async () => {
+  it('no preselecciona ningún campus cuando no hay selección previa', async () => {
     const tree = await renderCampus();
 
     const primera = tree.root.findByProps({ testID: 'campus-card-campus-1' });
     const segunda = tree.root.findByProps({ testID: 'campus-card-campus-2' });
+    const continuar = tree.root.findByProps({ testID: 'campus-confirmar' });
 
-    expect(textoDe(primera)).toContain('✓');
+    expect(textoDe(primera)).toContain('›');
     expect(textoDe(segunda)).toContain('›');
+    expect(continuar.props.disabled).toBe(true);
   });
 
   it('preselecciona el campus guardado si sigue en el catálogo', async () => {
@@ -126,13 +128,18 @@ describe('Selección de campus', () => {
     expect(textoDe(primera)).toContain('›');
   });
 
-  it('preselecciona el primer campus si el guardado ya no está en el catálogo', async () => {
+  it('no preselecciona el primero si el guardado ya no está en el catálogo', async () => {
     mockLeer.mockResolvedValue({ id: 'campus-obsoleto', nombre: 'Sede antigua', direccion: '' });
 
     const tree = await renderCampus();
 
     const primera = tree.root.findByProps({ testID: 'campus-card-campus-1' });
-    expect(textoDe(primera)).toContain('✓');
+    const segunda = tree.root.findByProps({ testID: 'campus-card-campus-2' });
+    const continuar = tree.root.findByProps({ testID: 'campus-confirmar' });
+
+    expect(textoDe(primera)).toContain('›');
+    expect(textoDe(segunda)).toContain('›');
+    expect(continuar.props.disabled).toBe(true);
   });
 
   it('ofrece volver al catálogo si ya había una selección previa', async () => {
@@ -198,6 +205,9 @@ describe('Selección de campus', () => {
     mockGuardar.mockRejectedValue(new Error('almacenamiento lleno'));
     const tree = await renderCampus();
 
+    await act(async () => {
+      tree.root.findByProps({ testID: 'campus-card-campus-1' }).props.onPress();
+    });
     await act(async () => {
       tree.root.findByProps({ testID: 'campus-confirmar' }).props.onPress();
     });
