@@ -37,7 +37,8 @@ public class GatewayCorsConfig {
         configuration.setExposedHeaders(List.of(
                 HttpHeaders.LOCATION,
                 IDEMPOTENCY_REPLAYED,
-                HttpHeaders.RETRY_AFTER));
+                HttpHeaders.RETRY_AFTER,
+                HttpHeaders.CONTENT_DISPOSITION));
         // La API utiliza Bearer tokens; no requiere cookies entre origenes.
         configuration.setAllowCredentials(false);
 

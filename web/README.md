@@ -298,3 +298,22 @@ plazo de retiro se muestran desde Order; la credencial QR depende de INT2-89 y
 su backend INT2-54. La descarga del comprobante se incorpora en INT2-138.
 
 Esta rama se apila sobre INT2-61: integrar primero el pago y luego el historial.
+
+## Descarga de comprobantes (INT2-138)
+
+El detalle de una compra pagada ofrece un PDF por orden cuyo pago está aprobado.
+La descarga usa `GET /v1/orders/:ordenId/boleta` con el JWT en la cabecera y
+`Accept: application/pdf`. El cliente HTTP conserva renovación de sesión y
+Problem Details incluso cuando el cuerpo de error llega como bytes. Una
+respuesta que no sea PDF nunca se guarda como documento.
+
+Se preserva el nombre de `Content-Disposition` (saneado); Gateway lo expone por
+CORS. La URL del archivo descargado es un blob local temporal, se revoca tras
+iniciar la descarga y nunca contiene bearer. Hay estado de carga, exclusión de
+clics duplicados y reintento de errores, sin generar otro folio. El documento se
+identifica como comprobante interno sin validez tributaria.
+
+Depende del historial INT2-90 y del endpoint PDF INT2-128. La rama web se apila
+sobre INT2-90; integrar INT2-128 antes de verificar el recorrido completo contra
+el entorno compartido. Las pruebas cubren transferencia binaria, CORS/headers,
+sesión renovada, orden ajena, error Problem Details, repetición y multicafetería.

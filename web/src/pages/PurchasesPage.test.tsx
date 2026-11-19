@@ -17,6 +17,12 @@ const purchase: Purchase = { compraId: 'compra-1', clienteId: 'user-1', estado: 
 ] };
 beforeEach(() => { vi.clearAllMocks(); auth.userId = 'user-1'; sessionStorage.clear(); vi.mocked(getPurchase).mockResolvedValue(purchase); vi.mocked(listPurchases).mockResolvedValue({ content: [purchase], number: 0, totalPages: 2, totalElements: 21, first: true, last: false }); });
 afterEach(cleanup);
+it('muestra un comprobante por orden pagada y oculta las impagas', async () => {
+  vi.mocked(getPurchase).mockResolvedValue({ ...purchase, estado: 'pagado', pago: { estado: 'aprobado' },
+    ordenes: purchase.ordenes.map(order => ({ ...order, estado: 'pagado' })) });
+  view('/compras/compra-1');
+  expect(await screen.findAllByRole('button', { name: 'Descargar comprobante PDF' })).toHaveLength(2);
+});
 function view(path = '/compras') { return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/compras" element={<PurchasesPage />} /><Route path="/compras/:compraId" element={<PurchaseDetailPage />} /></Routes></MemoryRouter>); }
 
 it('pagina desde backend y navega a detalle con una orden por cafetería', async () => {
