@@ -5,11 +5,32 @@ import java.util.UUID;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OrdenRepository extends JpaRepository<Orden, UUID> {
+    interface ProductoPopular {
+        UUID getProductoId();
+        long getCantidad();
+    }
+
+    // Global aggregate only: no customer, purchase or cafeteria identifiers are public.
+    @Query("""
+            select i.productoId as productoId, sum(i.cantidad) as cantidad
+            from Orden o join o.items i
+            where o.estado in (
+                cl.cloudcoffee.order_service.model.EstadoOrden.PAGADO,
+                cl.cloudcoffee.order_service.model.EstadoOrden.LISTO_PARA_RETIRO,
+                cl.cloudcoffee.order_service.model.EstadoOrden.ENTREGADO,
+                cl.cloudcoffee.order_service.model.EstadoOrden.NO_RETIRADO_PENDIENTE_REVISION,
+                cl.cloudcoffee.order_service.model.EstadoOrden.NO_RETIRADO_FINAL)
+            group by i.productoId
+            order by sum(i.cantidad) desc, i.productoId asc
+            """)
+    List<ProductoPopular> findProductosPopulares(Pageable pageable);
+
     // CAST tipa los filtros nulos también en PostgreSQL.
     @Query(value = """
             select count(*) from ordenes

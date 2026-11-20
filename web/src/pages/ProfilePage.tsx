@@ -131,13 +131,13 @@ export function ProfilePage() {
 
   return (
     <section className="profile-page" aria-labelledby="profile-title">
-      <h1 id="profile-title">Mi Perfil</h1>
+      <span className="eyebrow">⚙ Cuenta</span><h1 id="profile-title">Mi Perfil</h1>
       <p className="profile-intro">Consulta y actualiza tus datos personales.</p>
       <p className="profile-intro">
         <Link to="/perfil/cambiar-contrasena">Cambiar contraseña</Link>
       </p>
 
-      {isLoading ? (
+      <div className="profile-columns"><aside className="profile-identity"><span className="profile-avatar" aria-hidden="true">☕</span><h2>{profile ? `${profile.nombre} ${profile.apellido}` : 'Tu cuenta'}</h2><span className="eyebrow">{profile?.rol.replaceAll('_', ' ') ?? 'CloudCoffee'}</span><p>Tu pausa favorita, en tu campus.</p><img src="/brand/mascota-cafe.png" alt="" /></aside><div className="profile-editor">{isLoading ? (
         <div role="status">
           <LoadingSpinner />
           <p>Cargando tu perfil…</p>
@@ -196,6 +196,7 @@ export function ProfilePage() {
           )}
         </>
       )}
+      </div></div>
     </section>
   );
 }

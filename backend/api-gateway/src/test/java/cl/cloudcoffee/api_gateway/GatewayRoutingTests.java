@@ -177,6 +177,15 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertThat(received.query()).isEqualTo("none".equals(expectedQuery) ? null : expectedQuery);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"GET", "HEAD"})
+    void popularProductsArePublicAndForwardedToOrders(String method) throws Exception {
+        mvc.perform(request(HttpMethod.valueOf(method), "/v1/orders/productos-populares"))
+                .andExpect(status().isOk());
+        assertThat(BACKENDS.get("orders").take().path()).isEqualTo("/orders/productos-populares");
+        mvc.perform(post("/v1/orders/productos-populares")).andExpect(status().isUnauthorized());
+    }
+
     @Test
     void preservesBodyQueryParametersAndAuthorizationHeader() throws Exception {
         String authorization = "Bearer " + token();

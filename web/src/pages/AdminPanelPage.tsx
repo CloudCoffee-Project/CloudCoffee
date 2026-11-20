@@ -1,3 +1,4 @@
+import { ProductImageManager } from '../components/ProductImageManager';
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
@@ -206,6 +207,7 @@ export function AdminPanelPage({ panelRole, section }: AdminPanelPageProps) {
         <section className="admin-panel-notice" aria-labelledby="admin-section-heading">
           <h2 id="admin-section-heading">{activeItem.label}</h2>
           <p>{activeItem.description}</p>
+          {panelRole === 'SUPER_ADMIN' && section === 'catalogo' && <ProductImageManager key={userId} />}
           <p>
             Módulo habilitado para <strong>{panelRole}</strong>
             {context.cafeteriaId ? ` en cafetería ${context.cafeteriaId}` : ' a nivel global'}.

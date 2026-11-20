@@ -21,7 +21,10 @@ it('muestra un comprobante por orden pagada y oculta las impagas', async () => {
   vi.mocked(getPurchase).mockResolvedValue({ ...purchase, estado: 'pagado', pago: { estado: 'aprobado' },
     ordenes: purchase.ordenes.map(order => ({ ...order, estado: 'pagado' })) });
   view('/compras/compra-1');
-  expect(await screen.findAllByRole('button', { name: 'Descargar comprobante PDF' })).toHaveLength(2);
+  expect(await screen.findAllByRole('button', { name: 'Descargar comprobante PDF' })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: /b · Norte/ }));
+  expect(screen.getByRole('article').id).toBe('orden-b');
+  expect(screen.getAllByRole('button', { name: 'Descargar comprobante PDF' })).toHaveLength(1);
 });
 function view(path = '/compras') { return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/compras" element={<PurchasesPage />} /><Route path="/compras/:compraId" element={<PurchaseDetailPage />} /></Routes></MemoryRouter>); }
 
@@ -29,7 +32,7 @@ it('pagina desde backend y navega a detalle con una orden por cafetería', async
   view(); fireEvent.click(await screen.findByRole('button', { name: 'Siguiente' }));
   await waitFor(() => expect(listPurchases).toHaveBeenCalledWith(1, expect.any(AbortSignal)));
   fireEvent.click(await screen.findByRole('link', { name: 'Compra compra-1' }));
-  expect(await screen.findByText('Central')).toBeTruthy(); expect(screen.getByText('Norte')).toBeTruthy(); expect(screen.getByText(/2 × Café/)).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Central' })).toBeTruthy(); expect(screen.getByRole('button', { name: /b · Norte/ })).toBeTruthy(); expect(screen.getByText(/2 × Café/)).toBeTruthy();
 });
 it('muestra vacío y permite reintentar un error de red', async () => {
   vi.mocked(listPurchases).mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce({ content: [], number: 0, totalPages: 0, totalElements: 0, first: true, last: true });

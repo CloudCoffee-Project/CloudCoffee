@@ -4,6 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 import { ApiRequestError } from '../services/httpClient';
 import { listPurchases, paymentState, type PurchasePage } from '../services/purchases';
 import './CheckoutPage.css';
+import './OrdersPage.css';
+import { BrandArt } from '../components/BrandArt';
 
 export const purchaseMoney = (monto: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(monto);
 export const purchaseDate = (fecha?: string | null) => fecha ? new Date(fecha).toLocaleString('es-CL') : 'Sin fecha';
@@ -28,18 +30,19 @@ function PurchaseHistory() {
       .catch(cause => { if (!abort.signal.aborted) setError(purchaseError(cause)); });
     return () => abort.abort();
   }, [page, attempt]);
-  return <section className="checkout-page">
-    <h1>Mis Compras</h1>
+  return <section className="checkout-page orders-page">
+    <span className="eyebrow">☕ Historial y seguimiento</span><h1>Mis Compras</h1>
+    <p className="orders-intro">Tus pausas favoritas, en un solo lugar. Revisa tus pedidos y consulta sus comprobantes.</p>
     {error ? <><p role="alert">{error}</p><button onClick={() => setAttempt(v => v + 1)}>Reintentar</button></>
       : !data ? <p role="status">Cargando compras…</p> : <>
-        {data.content.length === 0 ? <p>No hay compras en esta página. <Link to="/catalogo">Ir al catálogo</Link></p> : <ul className="purchase-history">
-          {data.content.map(compra => <li className="checkout-result" key={compra.compraId}>
+        {data.content.length === 0 ? <p>No hay compras en esta página. <Link to="/catalogo">Ir al catálogo</Link></p> : <div className="orders-history-layout"><aside><h2>Tus pedidos</h2><p>Elige una compra para ver sus órdenes y productos.</p><BrandArt className="orders-art" /></aside><ul className="purchase-history">
+          {data.content.map(compra => <li className="checkout-result purchase-card" key={compra.compraId}>
             <h2><Link to={`/compras/${encodeURIComponent(compra.compraId)}`}>Compra {compra.compraId}</Link></h2>
             <p>{purchaseDate(compra.creadoAt)} · {purchaseMoney(compra.montoTotal)}</p>
             <p>Estado: {compra.estado.replaceAll('_', ' ')} · Pago: {paymentState(compra).replaceAll('_', ' ')}</p>
-            <p>{compra.ordenes.length} orden{compra.ordenes.length === 1 ? '' : 'es'} por cafetería</p>
+            <p>{compra.ordenes.map(order => order.cafeteriaNombre).join(' · ')}</p><p>{compra.ordenes.length} orden{compra.ordenes.length === 1 ? '' : 'es'} por cafetería <span aria-hidden="true">→</span></p>
           </li>)}
-        </ul>}
+        </ul></div>}
         <nav aria-label="Paginación de compras">
           <button disabled={page === 0} onClick={() => setParams({ page: String(page - 1) })}>Anterior</button>
           <span> Página {page + 1} de {Math.max(data.totalPages, 1)} · {data.totalElements} compras </span>
