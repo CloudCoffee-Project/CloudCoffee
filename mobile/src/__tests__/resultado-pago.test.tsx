@@ -1,95 +1,193 @@
 // src/__tests__/resultado-pago.test.tsx
+//
+// INT4-128: resultado-pago NO decide con el parámetro `estado` que venía del
+// viejo flujo de Mercado Pago. Al ganar foco consulta GET /v1/compras/{id} y
+// navega con el pago real: aprobado → QR, pendiente → seguimiento, rechazado →
+// carrito (que no se vació).
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import ResultadoPagoScreen from '../app/(cliente)/resultado-pago';
-import { limpiarRouter } from '../test-utils';
-import { useLocalSearchParams } from 'expo-router';
+import { obtenerCompra } from '../services/compras';
+import { ApiError } from '../services/httpClient';
+import { desmontar, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
+import type { Compra, EstadoPago, Orden } from '../types/domain';
 
 jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
 
-const mockUseLocalSearchParams = useLocalSearchParams as jest.Mock;
+jest.mock(
+  'react-native-safe-area-context',
+  () => jest.requireActual('../test-utils').safeAreaContextMock
+);
 
-describe('pantalla resultado-pago', () => {
-  beforeEach(() => {
-    limpiarRouter();
-    mockUseLocalSearchParams.mockReset();
-    mockUseLocalSearchParams.mockReturnValue({} as Record<string, string>);
+jest.mock('../services/compras', () => ({
+  obtenerCompra: jest.fn(),
+}));
+
+const mockObtenerCompra = obtenerCompra as unknown as jest.Mock;
+const mockUseFocusEffect = useFocusEffect as unknown as jest.Mock;
+const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
+
+function orden(sobre: Partial<Orden> = {}): Orden {
+  return {
+    ordenId: 'orden-1',
+    codigoOrden: 'ORD-1',
+    cafeteriaId: 'caf-1',
+    cafeteriaNombre: 'Cafetería Central',
+    estado: 'pendiente_pago',
+    montoTotal: 1800,
+    items: [],
+    ...sobre,
+  };
+}
+
+function compraConPago(estadoPago: EstadoPago, sobre: Partial<Compra> = {}): Compra {
+  return {
+    compraId: 'compra-123',
+    montoTotal: 1800,
+    estado: 'pendiente_pago',
+    ordenes: [orden()],
+    pago: {
+      pagoId: 'pago-456',
+      compraId: 'compra-123',
+      estado: estadoPago,
+      motivo:
+        estadoPago === 'aprobado'
+          ? 'aprobacion_simulada'
+          : estadoPago === 'rechazado'
+            ? 'rechazo_simulado'
+            : 'escenario_pendiente',
+      montoTotal: 1800,
+      moneda: 'CLP',
+      simulado: true,
+      proveedor: 'simulado',
+      creadoAt: '2026-01-01T00:00:00Z',
+      actualizadoAt: '2026-01-01T00:00:00Z',
+      version: 1,
+    },
+    ...sobre,
+  };
+}
+
+// El mock de useFocusEffect no ejecuta callbacks automáticamente: se invoca
+// manualmente el último para simular que la pantalla ganó foco.
+async function renderizarResultado(): Promise<ReactTestRenderer> {
+  let tree!: ReactTestRenderer;
+  await act(async () => {
+    tree = create(<ResultadoPagoScreen />);
   });
 
-  it('muestra resultado exitoso con datos de compra y pago', async () => {
+  const llamadas = mockUseFocusEffect.mock.calls;
+  const callback = llamadas[llamadas.length - 1][0];
+  await act(async () => {
+    callback();
+  });
+
+  return tree;
+}
+
+beforeEach(() => {
+  limpiarRouter();
+  mockUseFocusEffect.mockReset();
+  mockObtenerCompra.mockReset();
+  mockUseLocalSearchParams.mockReset();
+  mockUseLocalSearchParams.mockReturnValue({
+    compraId: 'compra-123',
+    pagoId: 'pago-456',
+  });
+});
+
+describe('pantalla resultado-pago (estado real de Order)', () => {
+  it('con pago aprobado navega al QR con el compraId', async () => {
+    mockObtenerCompra.mockResolvedValue(compraConPago('aprobado'));
+
+    const tree = await renderizarResultado();
+
+    expect(mockObtenerCompra).toHaveBeenCalledWith('compra-123');
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/qr-retiro',
+      params: { compraId: 'compra-123' },
+    });
+    expect(() => tree.root.findByProps({ testID: 'resultado-ir-qr' })).not.toThrow();
+
+    desmontar(tree);
+  });
+
+  it('con pago pendiente navega a la orden en vivo con compraId y ordenId', async () => {
+    mockObtenerCompra.mockResolvedValue(compraConPago('pendiente'));
+
+    const tree = await renderizarResultado();
+
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/seguimientos',
+      params: { compraId: 'compra-123', ordenId: 'orden-1' },
+    });
+
+    desmontar(tree);
+  });
+
+  it('con pago rechazado ofrece volver al carrito sin vaciarlo', async () => {
+    mockObtenerCompra.mockResolvedValue(compraConPago('rechazado'));
+
+    const tree = await renderizarResultado();
+
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    expect(texto(tree, 'resultado-titulo')).toBe('Pago rechazado');
+    expect(texto(tree, 'resultado-compra')).toContain('compra-123');
+    expect(texto(tree, 'resultado-pago')).toContain('pago-456');
+
+    await pulsar(tree, 'resultado-ir-carrito');
+    expect(routerMock.replace).toHaveBeenCalledWith('/carrito');
+
+    desmontar(tree);
+  });
+
+  it('no confía en el parámetro estado del flujo histórico', async () => {
+    mockObtenerCompra.mockResolvedValue(compraConPago('rechazado'));
     mockUseLocalSearchParams.mockReturnValue({
       estado: 'exitoso',
       compraId: 'compra-123',
       paymentId: 'pago-456',
-    } as Record<string, string>);
-
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<ResultadoPagoScreen />);
     });
 
-    const textoCompleto = JSON.stringify(tree.toJSON());
-    expect(textoCompleto).toContain('Pago exitoso');
-    expect(textoCompleto).toContain('compra-123');
-    expect(textoCompleto).toContain('pago-456');
-    expect(textoCompleto).toContain('Ver mi compra');
+    const tree = await renderizarResultado();
+
+    expect(texto(tree, 'resultado-titulo')).toBe('Pago rechazado');
+    expect(routerMock.replace).not.toHaveBeenCalled();
+
+    desmontar(tree);
   });
 
-  it('muestra resultado pendiente cuando el pago está en proceso', async () => {
-    mockUseLocalSearchParams.mockReturnValue({
-      estado: 'pendiente',
-      compraId: 'compra-789',
-      paymentId: 'pago-000',
-    } as Record<string, string>);
+  it('si falla la consulta muestra error con reintento y vuelve a consultar', async () => {
+    mockObtenerCompra
+      .mockRejectedValueOnce(new ApiError('Servicio no disponible', 503))
+      .mockResolvedValueOnce(compraConPago('aprobado'));
 
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<ResultadoPagoScreen />);
+    const tree = await renderizarResultado();
+
+    expect(texto(tree, 'resultado-titulo')).toBe('No pudimos confirmar el estado');
+    expect(texto(tree, 'resultado-mensaje')).toContain('Servicio no disponible');
+
+    await pulsar(tree, 'resultado-reintentar');
+
+    expect(mockObtenerCompra).toHaveBeenCalledTimes(2);
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/qr-retiro',
+      params: { compraId: 'compra-123' },
     });
 
-    const textoCompleto = JSON.stringify(tree.toJSON());
-    expect(textoCompleto).toContain('Pago pendiente');
-    expect(textoCompleto).toContain('compra-789');
-    expect(textoCompleto).toContain('pago-000');
-    expect(textoCompleto).toContain('Ver mis compras');
+    desmontar(tree);
   });
 
-  it('muestra resultado rechazado con opción para reintentar compra', async () => {
-    mockUseLocalSearchParams.mockReturnValue({
-      estado: 'rechazado',
-      compraId: 'compra-999',
-      paymentId: 'pago-111',
-    } as Record<string, string>);
+  it('sin compraId no consulta el backend y explica el problema', async () => {
+    mockUseLocalSearchParams.mockReturnValue({ estado: 'exitoso' });
 
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<ResultadoPagoScreen />);
-    });
+    const tree = await renderizarResultado();
 
-    const textoCompleto = JSON.stringify(tree.toJSON());
-    expect(textoCompleto).toContain('Pago rechazado');
-    expect(textoCompleto).toContain('compra-999');
-    expect(textoCompleto).toContain('pago-111');
-    expect(textoCompleto).toContain('Reintentar compra');
-  });
+    expect(mockObtenerCompra).not.toHaveBeenCalled();
+    expect(texto(tree, 'resultado-mensaje')).toContain('No hay una compra asociada');
 
-  it('muestra resultado desconocido cuando el estado no es reconocido', async () => {
-    mockUseLocalSearchParams.mockReturnValue({
-      estado: 'desconocido',
-      compraId: 'compra-222',
-      paymentId: 'pago-333',
-    } as Record<string, string>);
-
-    let tree!: ReactTestRenderer;
-    await act(async () => {
-      tree = create(<ResultadoPagoScreen />);
-    });
-
-    const textoCompleto = JSON.stringify(tree.toJSON());
-    expect(textoCompleto).toContain('No pudimos confirmar el estado');
-    expect(textoCompleto).toContain('compra-222');
-    expect(textoCompleto).toContain('pago-333');
-    expect(textoCompleto).toContain('Ver mis compras');
+    desmontar(tree);
   });
 });

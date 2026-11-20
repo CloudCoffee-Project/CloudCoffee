@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 import { httpClient } from './httpClient';
+import type { EscenarioPago, Orden, Pago } from '../types/domain';
 
 // Scheme del deep link: debe coincidir con "scheme" en app.json (cloudcoffee).
 const DEEP_LINK_RETORNO = 'cloudcoffee://pago/retorno';
@@ -39,6 +40,12 @@ export interface CompraCreada {
   estado: EstadoCompraCreada;
   initPoint?: string;
   montoTotal: number;
+  // El contrato actual de POST /v1/compras devuelve la Compra completa (con
+  // órdenes y pago null), no el DTO viejo con initPoint. Estos campos son
+  // opcionales para conservar el historial de pantallas/tests que usaban el
+  // DTO anterior sin initPoint.
+  ordenes?: Orden[];
+  pago?: Pago | null;
 }
 
 // Genera un UUID v4 para Idempotency-Key (exigido por el backend).
@@ -67,6 +74,45 @@ export async function crearCompra(
       },
     }
   );
+
+  return response.data;
+}
+
+// --- INT4-128: pago simulado de Order (sin proveedor externo) ----------------
+//
+// El checkout ya no abre un navegador de Mercado Pago: Order expone su propio
+// pago simulado con tres escenarios elegibles. El resultado es definitivo y lo
+// devuelve el backend; la app no decide el estado ni usa webhooks externos.
+// Las funciones de MP de abajo se conservan por historial (INT4-38/39/40) pero el
+// recorrido actual no las llama.
+const PAGOS_ENDPOINT = '/v1/compras';
+
+export type SimularPagoResponse = Pago;
+
+/**
+ * POST /v1/compras/{compraId}/pago con { escenario }. Requiere Idempotency-Key
+ * (UUID): repetir la llamada no cambia el resultado ni crea otro pago.
+ */
+export async function simularPago(
+  compraId: string,
+  escenario: EscenarioPago
+): Promise<SimularPagoResponse> {
+  const response = await httpClient.post<SimularPagoResponse>(
+    `${PAGOS_ENDPOINT}/${compraId}/pago`,
+    { escenario },
+    {
+      headers: {
+        'Idempotency-Key': generarIdempotencyKey(),
+      },
+    }
+  );
+
+  return response.data;
+}
+
+/** GET /v1/compras/{compraId}/pago: estado real del pago, sin simulación local. */
+export async function consultarPago(compraId: string): Promise<SimularPagoResponse> {
+  const response = await httpClient.get<SimularPagoResponse>(`${PAGOS_ENDPOINT}/${compraId}/pago`);
 
   return response.data;
 }
