@@ -11,6 +11,8 @@
 /secrets/
 **/*.pem
 **/*.key
+**/firebase-admin*.json
+**/firebase-service-account*.json
 
 # Archivos de compilación de Java / Maven (evita subir carpetas target)
 target/
