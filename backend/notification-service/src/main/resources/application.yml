@@ -45,6 +45,11 @@ spring:
             enable: ${SMTP_STARTTLS:true}
 
 app:
+  fcm:
+    enabled: ${FCM_ENABLED:false}
+    credentials-file: ${FCM_CREDENTIALS_FILE:}
+    credentials-json: ${FCM_CREDENTIALS_JSON:}
+    dispatch-ms: ${FCM_DISPATCH_MS:5000}
   mail:
     from: ${SMTP_FROM:noreply@cloudcoffee.cl}
   websocket:
