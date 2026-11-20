@@ -1,9 +1,10 @@
 // src/app/(cliente)/resultado-pago.tsx
 //
-// INT4-128: puente entre el pago simulado de Order y el recorrido de retiro.
-// La pantalla NO confía en el estado que venga por params (eso era del flujo de
-// Mercado Pago): al ganar foco consulta GET /v1/compras/{compraId} y decide con
-// el pago real del backend:
+// INT4-128 / INT4-130: puente entre el pago simulado de Order y el recorrido de
+// retiro. La pantalla NO confía en el estado que venga por params (eso era del
+// flujo de Mercado Pago): al ganar foco consulta PRIMERO
+// GET /v1/compras/{compraId}/pago y después GET /v1/compras/{compraId} para las
+// órdenes. Decide con el pago real del backend:
 //   - aprobado  → /(cliente)/qr-retiro con el compraId (el QR lo habilita Order).
 //   - pendiente → /(cliente)/seguimientos (orden en vivo con GET + WebSocket).
 //   - rechazado → esta misma vista ofrece volver al carrito, que NO se vació.
@@ -21,7 +22,8 @@ import type { AxiosError } from 'axios';
 import { Presionable } from '../../components/Presionable';
 import { obtenerCompra } from '../../services/compras';
 import { ApiProblem, toApiError } from '../../services/httpClient';
-import type { Compra } from '../../types/domain';
+import { consultarPago } from '../../services/pagos';
+import type { Compra, EstadoPago } from '../../types/domain';
 
 type Resultado = 'aprobado' | 'rechazado' | 'pendiente' | 'desconocido';
 
@@ -109,12 +111,26 @@ export default function ResultadoPagoScreen() {
     setCargando(true);
     setError(null);
     try {
+      // INT4-130: el pago existente se consulta PRIMERO. Su estado manda por
+      // encima del pago embebido en la compra; la compra se lee después para
+      // saber a qué orden/seguimiento navegar.
+      let estadoDelPago: EstadoPago | null = null;
+      try {
+        const pago = await consultarPago(compraId);
+        estadoDelPago = pago.estado;
+      } catch (thrown) {
+        const apiError = toApiError(thrown as AxiosError<ApiProblem>);
+        if (apiError.status !== 404) {
+          console.warn('[ResultadoPago] No se pudo consultar /pago:', apiError.message);
+        }
+      }
+
       const actual = await obtenerCompra(compraId);
       setCompra(actual);
 
       // Navegación por estado REAL, no por el params con el que se abrió la
       // pantalla. replace para que volver atrás no reabra el checkout.
-      const resultado = resultadoDeCompra(actual);
+      const resultado = estadoDelPago ?? resultadoDeCompra(actual);
       if (resultado === 'aprobado') {
         router.replace({
           pathname: '/(cliente)/qr-retiro',

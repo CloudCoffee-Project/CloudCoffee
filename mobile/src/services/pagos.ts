@@ -2,8 +2,14 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
+import { generarIdempotencyKey } from './intencionPago';
 import { httpClient } from './httpClient';
 import type { EscenarioPago, Orden, Pago } from '../types/domain';
+
+// INT4-130: la clave ya no se genera suelta en cada llamada. La intención
+// persistida (services/intencionPago.ts) es la dueña de la clave para que un
+// reintento reutilice exactamente el mismo Idempotency-Key.
+export { generarIdempotencyKey };
 
 // Scheme del deep link: debe coincidir con "scheme" en app.json (cloudcoffee).
 const DEEP_LINK_RETORNO = 'cloudcoffee://pago/retorno';
@@ -48,15 +54,6 @@ export interface CompraCreada {
   pago?: Pago | null;
 }
 
-// Genera un UUID v4 para Idempotency-Key (exigido por el backend).
-function generarIdempotencyKey(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
 export async function crearCompra(
   items: ItemCarrito[],
   accessToken: string,
@@ -91,18 +88,24 @@ export type SimularPagoResponse = Pago;
 
 /**
  * POST /v1/compras/{compraId}/pago con { escenario }. Requiere Idempotency-Key
- * (UUID): repetir la llamada no cambia el resultado ni crea otro pago.
+ * (UUID): repetir la misma clave y el mismo cuerpo reproduce la respuesta;
+ * otra clave con pago ya iniciado responde 409 PAGO_YA_INICIADO.
+ *
+ * INT4-130: el checkout pasa la clave de la intención persistida. El parámetro
+ * sigue siendo opcional para conservar el contrato de las pantallas y tests
+ * históricos que solo conocían compraId + escenario.
  */
 export async function simularPago(
   compraId: string,
-  escenario: EscenarioPago
+  escenario: EscenarioPago,
+  idempotencyKey: string = generarIdempotencyKey()
 ): Promise<SimularPagoResponse> {
   const response = await httpClient.post<SimularPagoResponse>(
     `${PAGOS_ENDPOINT}/${compraId}/pago`,
     { escenario },
     {
       headers: {
-        'Idempotency-Key': generarIdempotencyKey(),
+        'Idempotency-Key': idempotencyKey,
       },
     }
   );
