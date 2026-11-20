@@ -25,6 +25,7 @@
 //     demos y tests hoy (el backend aún no implementa el POST).
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
@@ -32,12 +33,13 @@ import CheckoutScreen from '../app/(cliente)/checkout';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
 import {
   abrirCheckoutMercadoPago,
+  consultarPago,
   crearCompra,
   parsearRetornoPago,
   simularPago,
 } from '../services/pagos';
-import { getAccessToken } from '../services/httpClient';
-import { escribir, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
+import { ApiError, getAccessToken } from '../services/httpClient';
+import { desmontar, escribir, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
 import type { NuevoItemCarrito } from '../types/domain';
 
 // El provider se monta real (no mockeado) para que la pantalla vea de verdad
@@ -55,6 +57,13 @@ jest.mock('../context/AuthContext', () => ({
 const mockParams: Record<string, string | undefined> = {};
 
 jest.mock('expo-router', () => jest.requireActual('../test-utils').expoRouterMock);
+
+// INT4-130: la intención se persiste en AsyncStorage; en Jest se usa el mock
+// del proyecto (no existe el módulo nativo).
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 
 // Los servicios de pago se mockean: la pantalla orquesta llamadas, no las
 // implementa. Los defaults permiten el camino feliz y cada test los afina.
@@ -86,6 +95,11 @@ jest.mock('../services/pagos', () => ({
     paymentId: 'pay-1',
     compraId: 'cmp-1',
   })),
+  // INT4-130: por defecto no hay pago (404) y se configura por test.
+  consultarPago: jest.fn(),
+  // La clave se genera con la implementación real para que las aserciones
+  // comprueben un UUID v4 de verdad.
+  generarIdempotencyKey: jest.requireActual('../services/pagos').generarIdempotencyKey,
   // La constante que la pantalla usa para distinguir el estado INT4-36.
   ESTADO_COMPRA_REVISION_REQUERIDA: 'revisión requerida',
 }));
@@ -104,10 +118,17 @@ jest.mock(
 
 const mockCrearCompra = crearCompra as unknown as jest.Mock;
 const mockSimularPago = simularPago as unknown as jest.Mock;
+const mockConsultarPago = consultarPago as unknown as jest.Mock;
 const mockAbrirCheckout = abrirCheckoutMercadoPago as unknown as jest.Mock;
 const mockParsearRetorno = parsearRetornoPago as unknown as jest.Mock;
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
+const mockGetItem = AsyncStorage.getItem as unknown as jest.Mock;
+const mockSetItem = AsyncStorage.setItem as unknown as jest.Mock;
+const mockRemoveItem = AsyncStorage.removeItem as unknown as jest.Mock;
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CLAVE_GUARDADA = '123e4567-e89b-42d3-a456-426614174000';
 
 // Datos de entrega y facturación válidos, tal como el usuario los escribiría.
 const FORM_VALIDO = {
@@ -151,6 +172,21 @@ function montar(): ReactTestRenderer {
   return tree;
 }
 
+// Igual que montar(), pero espera a que se resuelva la lectura de la
+// intención persistida (useEffect) antes de devolver el árbol.
+async function montarConEspera(): Promise<ReactTestRenderer> {
+  let tree!: ReactTestRenderer;
+  await act(async () => {
+    tree = create(
+      <CarritoProvider>
+        <Sonda />
+        <CheckoutScreen />
+      </CarritoProvider>
+    );
+  });
+  return tree;
+}
+
 function leerCarrito(tree: ReactTestRenderer): ValorCarrito {
   return tree.root.findAllByProps({ testID: 'carrito-sonda' })[0].props as ValorCarrito;
 }
@@ -180,6 +216,12 @@ beforeEach(() => {
   mockUseLocalSearchParams.mockReturnValue(mockParams);
   mockCrearCompra.mockClear();
   mockSimularPago.mockClear();
+  mockConsultarPago.mockClear();
+  mockGetItem.mockClear();
+  mockSetItem.mockClear();
+  mockRemoveItem.mockClear();
+  mockGetItem.mockResolvedValue(null);
+  mockConsultarPago.mockRejectedValue(new ApiError('PAGO_NO_ENCONTRADO', 404));
   mockAbrirCheckout.mockClear();
   mockParsearRetorno.mockClear();
   mockGetAccessToken.mockClear();
@@ -348,7 +390,17 @@ describe('Checkout (INT4-35)', () => {
         metodoEntrega: 'retiro',
       }
     );
-    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'aprobar');
+    expect(mockSimularPago).toHaveBeenCalledWith(
+      'cmp-1',
+      'aprobar',
+      expect.stringMatching(UUID_V4)
+    );
+
+    // INT4-130: el pago existente se consulta ANTES de simular.
+    expect(mockConsultarPago).toHaveBeenCalledWith('cmp-1');
+    expect(mockConsultarPago.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSimularPago.mock.invocationCallOrder[0]
+    );
 
     // Pago aprobado: recién acá el carrito se convierte en compra concretada.
     expect(leerCarrito(tree).items).toEqual([]);
@@ -425,7 +477,11 @@ describe('Checkout (INT4-35)', () => {
     await pulsar(tree, 'checkout-escenario-rechazar');
     await pulsar(tree, 'checkout-confirmar');
 
-    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'rechazar');
+    expect(mockSimularPago).toHaveBeenCalledWith(
+      'cmp-1',
+      'rechazar',
+      expect.stringMatching(UUID_V4)
+    );
     // El resultado-pago ofrecerá volver al carrito: no puede estar vacío.
     expect(leerCarrito(tree).items).toHaveLength(1);
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
@@ -457,7 +513,11 @@ describe('Checkout (INT4-35)', () => {
     await pulsar(tree, 'checkout-escenario-pendiente');
     await pulsar(tree, 'checkout-confirmar');
 
-    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'pendiente');
+    expect(mockSimularPago).toHaveBeenCalledWith(
+      'cmp-1',
+      'pendiente',
+      expect.stringMatching(UUID_V4)
+    );
     expect(leerCarrito(tree).items).toHaveLength(1);
     expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/resultado-pago',
@@ -508,7 +568,11 @@ describe('Checkout (INT4-35)', () => {
 
     // La compra se creó pero Order no pudo confirmar el cobro: no se afirma un
     // pago aprobado, no se vacía el carrito y la pantalla muestra el fallo.
-    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'aprobar');
+    expect(mockSimularPago).toHaveBeenCalledWith(
+      'cmp-1',
+      'aprobar',
+      expect.stringMatching(UUID_V4)
+    );
     expect(routerMock.replace).not.toHaveBeenCalled();
     expect(texto(tree, 'checkout-fallo-titulo')).toBe('No pudimos realizar tu compra');
     expect(texto(tree, 'checkout-fallo-mensaje')).toContain('pago no disponible');
@@ -647,5 +711,103 @@ describe('Checkout (INT4-35)', () => {
     const tree2 = montar();
     await pulsar(tree2, 'checkout-fallo-volver-carrito');
     expect(routerMock.replace).toHaveBeenCalledWith('/carrito');
+  });
+
+  it('INT4-130: reabrir conserva clave y escenario y reintenta sin crear otra compra', async () => {
+    mockGetItem.mockResolvedValue(
+      JSON.stringify({
+        compraId: 'cmp-1',
+        idempotencyKey: CLAVE_GUARDADA,
+        escenario: 'rechazar',
+      })
+    );
+
+    const tree = await montarConEspera();
+    await agregar(tree, linea(), 1);
+
+    // Reabrir consulta primero el pago existente y recupera la decisión.
+    expect(mockConsultarPago).toHaveBeenCalledWith('cmp-1');
+    expect(tree.root.findByProps({ testID: 'checkout-intencion-recuperada' })).toBeDefined();
+
+    await llenarFormulario(tree);
+    await pulsar(tree, 'checkout-confirmar');
+
+    expect(mockCrearCompra).not.toHaveBeenCalled();
+    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'rechazar', CLAVE_GUARDADA);
+    expect(mockSetItem).toHaveBeenCalledWith(
+      expect.stringContaining('intencion-pago'),
+      expect.stringContaining(CLAVE_GUARDADA)
+    );
+
+    desmontar(tree);
+  });
+
+  it('INT4-130: con pago pendiente ya creado va al resultado sin simular de nuevo', async () => {
+    mockGetItem.mockResolvedValue(
+      JSON.stringify({
+        compraId: 'cmp-1',
+        idempotencyKey: CLAVE_GUARDADA,
+        escenario: 'pendiente',
+      })
+    );
+    mockConsultarPago.mockResolvedValue({
+      pagoId: 'pago-pendiente',
+      compraId: 'cmp-1',
+      estado: 'pendiente',
+    });
+
+    const tree = await montarConEspera();
+
+    expect(mockCrearCompra).not.toHaveBeenCalled();
+    expect(mockSimularPago).not.toHaveBeenCalled();
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/resultado-pago',
+      params: { compraId: 'cmp-1', pagoId: 'pago-pendiente' },
+    });
+
+    desmontar(tree);
+  });
+
+  it('INT4-130: con pago terminal ya creado muestra el estado real y cierra la intención', async () => {
+    mockGetItem.mockResolvedValue(
+      JSON.stringify({
+        compraId: 'cmp-1',
+        idempotencyKey: CLAVE_GUARDADA,
+        escenario: 'aprobar',
+      })
+    );
+    mockConsultarPago.mockResolvedValue({
+      pagoId: 'pago-aprobado',
+      compraId: 'cmp-1',
+      estado: 'aprobado',
+    });
+
+    const tree = await montarConEspera();
+
+    expect(mockCrearCompra).not.toHaveBeenCalled();
+    expect(mockSimularPago).not.toHaveBeenCalled();
+    expect(mockConsultarPago).toHaveBeenCalledWith('cmp-1');
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/resultado-pago',
+      params: { compraId: 'cmp-1', pagoId: 'pago-aprobado' },
+    });
+    expect(mockRemoveItem).toHaveBeenCalledWith(expect.stringContaining('intencion-pago'));
+
+    desmontar(tree);
+  });
+
+  it('INT4-130: elegir escenario persiste la clave y la decisión antes de confirmar', async () => {
+    const tree = montar();
+
+    await agregar(tree, linea(), 1);
+    await pulsar(tree, 'checkout-escenario-pendiente');
+
+    const llamada = mockSetItem.mock.calls[mockSetItem.mock.calls.length - 1];
+    const guardado = JSON.parse(llamada[1]);
+    expect(guardado.escenario).toBe('pendiente');
+    expect(guardado.idempotencyKey).toMatch(UUID_V4);
+    expect(guardado.compraId).toBeUndefined();
+
+    desmontar(tree);
   });
 });
