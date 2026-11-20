@@ -276,6 +276,10 @@ services:
             FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
             RESET_PASSWORD_URL: ${RESET_PASSWORD_URL:-http://localhost:3000/restaurar-contrasena}
             WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+            FCM_ENABLED: ${FCM_ENABLED:-false}
+            FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+            FCM_CREDENTIALS_JSON: ${FCM_CREDENTIALS_JSON:-}
+            FCM_DISPATCH_MS: ${FCM_DISPATCH_MS:-5000}
             MANAGEMENT_HEALTH_MAIL_ENABLED: "true"
         secrets:
             - jwt_public_key

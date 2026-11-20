@@ -79,6 +79,33 @@ notificaciones FCM a iOS dependen de que el cliente registre un token FCM válid
 Esta limitación no abre ni modifica el historial global y no cambia el cliente
 mobile en esta entrega.
 
+### Push FCM de compras y reposición (INT2-115)
+
+Notification encola una entrega por evento, canal FCM y dispositivo del
+`clienteId` del evento de compra/retiro. La navegación usa `data.url` con las
+rutas internas que consume la app (`/(cliente)/mis-compras`,
+`/(cliente)/orden/{ordenId}` y `/(cliente)/producto/{productoId}`). El evento
+genérico `catalog.stock.actualizado.v1` continúa publicándose solo por WebSocket.
+El push de reposición solo procesa `catalog.producto.disponible.v1` y los UUID
+incluidos en `payload.destinatarios`; no consulta ni expande seguidores.
+
+FCM está desactivado por omisión. Para habilitarlo en Docker, configurar
+`FCM_ENABLED=true`, montar el archivo de credenciales de Firebase Admin fuera
+del repositorio y asignar a `FCM_CREDENTIALS_FILE` la ruta del archivo dentro
+del contenedor; alternativamente, inyectar el JSON mediante un gestor de secretos
+en `FCM_CREDENTIALS_JSON`. No guardar ni versionar el JSON de cuenta de servicio.
+`FCM_DISPATCH_MS`
+controla el intervalo del despachador (5 s por omisión). Si FCM está desactivado,
+no se encolan pushes y correo/WebSocket mantienen su comportamiento.
+
+El consumidor RabbitMQ persiste las entregas pendientes sin llamar a Firebase.
+El worker ejecuta los envíos en segundo plano, con máximo 3 intentos para errores
+transitorios, backoff de 30/60 segundos y estado independiente del historial del
+evento. Un `UNREGISTERED` elimina el token inválido. Los logs identifican evento,
+entrega y dispositivo por UUID; nunca imprimen el token ni el detalle del SDK.
+La migración `V5__create_notification_push_deliveries.sql` crea esta cola durable.
+Los errores permanentes y los reintentos agotados quedan como `FAILED`.
+
 ### Eventos WebSocket autorizados (INT2-80)
 
 `/v1/notifications/ws` expone STOMP sobre SockJS a través del Gateway. El cliente
