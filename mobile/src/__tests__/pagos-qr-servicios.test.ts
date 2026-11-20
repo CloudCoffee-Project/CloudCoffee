@@ -7,6 +7,13 @@ import { obtenerCompra } from '../services/compras';
 import { obtenerOrden, obtenerQrRetiro } from '../services/ordenes';
 import { consultarPago, simularPago } from '../services/pagos';
 
+// INT4-130: pagos.ts importa la intención persistida; en Jest AsyncStorage se
+// reemplaza por el mock del proyecto (no hay módulo nativo).
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
+
 jest.mock('../services/httpClient', () => ({
   httpClient: {
     get: jest.fn(),
@@ -50,6 +57,15 @@ describe('servicios de pago simulado y retiro', () => {
     expect(url).toBe('/v1/compras/cmp-1/pago');
     expect(body).toEqual({ escenario: 'rechazar' });
     expect(config.headers['Idempotency-Key']).toMatch(UUID_V4);
+  });
+
+  it('INT4-130: simularPago reutiliza la Idempotency-Key de la intención', async () => {
+    const clave = '123e4567-e89b-42d3-a456-426614174000';
+
+    await simularPago('cmp-1', 'rechazar', clave);
+
+    const config = mockPost.mock.calls[0][2];
+    expect(config.headers['Idempotency-Key']).toBe(clave);
   });
 
   it('consultarPago lee el estado real del pago', async () => {

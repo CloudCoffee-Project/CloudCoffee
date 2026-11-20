@@ -23,6 +23,13 @@
 //   dispara POST /v1/compras con { items } y luego POST
 //   /v1/compras/{compraId}/pago con el escenario elegido.
 //
+// INT4-130: la clave Idempotency-Key y el escenario se guardan en AsyncStorage
+// (services/intencionPago.ts). Al reabrir o reintentar se consulta primero
+// GET /v1/compras/{compraId}/pago; si el pago ya existe se va directo al
+// resultado con ese compraId, y si no existe se reutiliza la MISMA clave y el
+// MISMO escenario. Así un reintento nunca crea un segundo pago (409
+// PAGO_YA_INICIADO) ni cambia la decisión del usuario.
+//
 // Estados de pago (los devuelve Order, no los inventa la app):
 //   - aprobado: la compra se concretó → se vacía el carrito y resultado-pago
 //     consulta el estado real y lleva al QR de retiro con el compraId.
@@ -45,7 +52,7 @@
 // vista de fallo (401 del gateway). Cuando el backend implemente su lado, esta
 // pantalla funciona sin cambios. Ver docs/contratos-backend.md, fila 6.
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -58,12 +65,20 @@ import { ApiProblem, getAccessToken, toApiError } from '../../services/httpClien
 // cantidad) y no la línea del carrito de types/domain, que trae además el nombre
 // y el precio. Se importa con alias para que no se confundan los dos.
 import {
+  consultarPago,
   crearCompra,
   ESTADO_COMPRA_REVISION_REQUERIDA,
+  generarIdempotencyKey,
   simularPago,
   type DatosEntregaCompra,
   type ItemCarrito as ItemCarritoPago,
 } from '../../services/pagos';
+import {
+  guardarIntencionPago,
+  leerIntencionPago,
+  limpiarIntencionPago,
+  type IntencionPago,
+} from '../../services/intencionPago';
 import { tokens } from '../../theme/tokens';
 import type { EscenarioPago } from '../../types/domain';
 
@@ -96,6 +111,10 @@ interface FormularioEntrega {
   nombre: string;
   correo: string;
   telefono: string;
+}
+
+function textoUnico(valor: string | string[] | undefined): string | undefined {
+  return Array.isArray(valor) ? valor[0] : valor;
 }
 
 function formatearPrecio(precio: number): string {
@@ -131,6 +150,7 @@ export default function CheckoutScreen() {
     compraId?: string;
     montoTotal?: string;
   }>();
+  const compraIdParam = textoUnico(params.compraId);
 
   // La vista arranca donde la deje el flujo (o el parámetro para demos/tests):
   // "revision" muestra el resumen; "realizada", "revision_requerida" y "fallo"
@@ -155,6 +175,9 @@ export default function CheckoutScreen() {
   // Escenario del pago simulado. 'aprobar' es el default para no trabar el
   // camino feliz; el usuario puede elegir otro antes de confirmar.
   const [escenario, setEscenario] = useState<EscenarioPago>('aprobar');
+  // INT4-130: intención persistida (clave + escenario + compraId). Se restaura
+  // al montar para que reabrir la app no cambie lo que el usuario eligió.
+  const [intencion, setIntencion] = useState<IntencionPago | null>(null);
 
   // Datos de entrega y facturación (formulario validado al confirmar).
   const [formulario, setFormulario] = useState<FormularioEntrega>({
@@ -163,6 +186,69 @@ export default function CheckoutScreen() {
     telefono: '',
   });
   const [errores, setErrores] = useState<Record<string, string>>({});
+
+  // INT4-130: al reabrir el checkout se retoma la intención guardada. Si ya
+  // existe la compra se consulta PRIMERO el pago (GET .../pago) y se navega al
+  // resultado para mostrar siempre el estado real: con pago pendiente se
+  // conserva la intención, con pago terminal se libera para permitir una compra
+  // nueva, y con 404 se conservan compraId, clave y escenario para reintentar
+  // sin crear un segundo pago.
+  useEffect(() => {
+    let activo = true;
+
+    void (async (): Promise<void> => {
+      const guardada = await leerIntencionPago();
+      if (!activo || !guardada) {
+        return;
+      }
+
+      setEscenario(guardada.escenario);
+      setIntencion(guardada);
+
+      const compraReanudada = compraIdParam ?? guardada.compraId;
+      if (!compraReanudada) {
+        return;
+      }
+
+      setCompraId(compraReanudada);
+      try {
+        const pago = await consultarPago(compraReanudada);
+        if (!activo) {
+          return;
+        }
+
+        router.replace({
+          pathname: '/resultado-pago',
+          params: { compraId: compraReanudada, pagoId: pago.pagoId },
+        });
+
+        if (pago.estado === 'pendiente') {
+          // Pendiente: se conserva la intención para reanudar el seguimiento.
+          return;
+        }
+
+        // Aprobado o rechazado: el flujo terminó, pero el estado real ya se
+        // está mostrando en resultado-pago. Se cierra la intención porque el
+        // contrato pide una compra nueva para reintentar (un rechazo no se
+        // recobra con otra clave sobre la misma compra).
+        await limpiarIntencionPago();
+        if (activo) {
+          setIntencion(null);
+        }
+      } catch (thrown) {
+        const apiError = toApiError(thrown as AxiosError<ApiProblem>);
+        if (apiError.status === 404) {
+          // Pago no iniciado todavía: se conserva la intención para reintentar.
+          return;
+        }
+        console.warn('[Checkout] No se pudo consultar el pago previo:', apiError.message);
+      }
+    })();
+
+    return () => {
+      activo = false;
+    };
+  }, [compraIdParam, router]);
 
   const cambiarCampo = useCallback((campo: keyof FormularioEntrega, valor: string): void => {
     setFormulario((prev) => ({ ...prev, [campo]: valor }));
@@ -207,33 +293,78 @@ export default function CheckoutScreen() {
         metodoEntrega: METODO_ENTREGA,
       };
 
-      const compra = await crearCompra(payload, accessToken, datosEntrega);
-
-      // INT4-36: el backend puede responder que la compra quedó registrada
-      // pero en revisión. No está confirmada ("realizada") ni es un fallo: la
-      // misma pantalla muestra la vista de revisión con el número de orden.
-      // Se chequea ANTES del pago: una compra en revisión todavía no se puede
-      // cobrar ni ofrecer pagar de nuevo.
-      if (compra.estado === ESTADO_COMPRA_REVISION_REQUERIDA) {
-        // Acá sí existe una orden del lado del servidor: el carrito se vacía
-        // para que no se compre dos veces lo que ya está en revisión.
-        vaciar();
-        setCompraId(compra.compraId);
-        setMontoTotal(compra.montoTotal);
-        setVista('revision_requerida');
-        return;
+      // 3) INT4-130: recuperar (o crear) la intención. El mismo UUID viaja en
+      //    el pago aunque se reintente: cambiarlo daría 409 PAGO_YA_INICIADO.
+      let intencionActual = intencion ?? { idempotencyKey: generarIdempotencyKey(), escenario };
+      if (intencionActual.escenario !== escenario) {
+        intencionActual = { ...intencionActual, escenario };
       }
 
-      // 4) Pago simulado de Order: el backend decide el estado final. No se
-      //    abre navegador, no hay initPoint ni se espera un webhook externo.
-      const pago = await simularPago(compra.compraId, escenario);
+      let compraIdResuelto = compraIdParam ?? intencionActual.compraId;
 
-      // 5) El carrito NO se vacía al crear la orden sino una vez conocido el
-      //    resultado. Con rechazo (y con pendiente) el usuario puede volver al
-      //    carrito sin perder sus productos; solo un pago aprobado convierte
-      //    el carrito en compra concretada.
+      if (!compraIdResuelto) {
+        const compra = await crearCompra(payload, accessToken, datosEntrega);
+
+        // INT4-36: el backend puede responder que la compra quedó registrada
+        // pero en revisión. No está confirmada ni es un fallo: la misma
+        // pantalla muestra la vista de revisión. Se chequea ANTES del pago.
+        if (compra.estado === ESTADO_COMPRA_REVISION_REQUERIDA) {
+          vaciar();
+          setCompraId(compra.compraId);
+          setMontoTotal(compra.montoTotal);
+          // No se puede pagar una compra en revisión: se cierra la intención
+          // para no reutilizar su clave en una compra distinta.
+          await limpiarIntencionPago();
+          setIntencion(null);
+          setVista('revision_requerida');
+          return;
+        }
+
+        compraIdResuelto = compra.compraId;
+        setMontoTotal(compra.montoTotal);
+      }
+
+      intencionActual = { ...intencionActual, compraId: compraIdResuelto };
+      await guardarIntencionPago(intencionActual);
+      setCompraId(compraIdResuelto);
+      setIntencion(intencionActual);
+
+      // 4) Consultar PRIMERO el pago existente. Si Order ya tiene pago no se
+      //    simula otra vez: resultado-pago consultará y mostrará el estado real.
+      try {
+        const pagoExistente = await consultarPago(compraIdResuelto);
+        if (pagoExistente.estado !== 'pendiente') {
+          await limpiarIntencionPago();
+          setIntencion(null);
+        }
+        router.replace({
+          pathname: '/resultado-pago',
+          params: { compraId: compraIdResuelto, pagoId: pagoExistente.pagoId },
+        });
+        return;
+      } catch (thrown) {
+        const apiError = toApiError(thrown as AxiosError<ApiProblem>);
+        if (apiError.status !== 404) {
+          // Sin conexión o error del gateway: se intenta con la MISMA clave;
+          // la idempotencia del backend evita duplicar el pago.
+          console.warn('[Checkout] No se pudo consultar el pago previo:', apiError.message);
+        }
+      }
+
+      // 5) Pago simulado de Order con la clave de la intención. El backend
+      //    decide el estado final; no hay navegador, initPoint ni webhook.
+      const pago = await simularPago(compraIdResuelto, escenario, intencionActual.idempotencyKey);
+
       if (pago.estado === 'aprobado') {
         vaciar();
+      }
+
+      // Pendiente: se conserva la intención para que reabrir consulte el pago.
+      // Aprobado/rechazado son terminales: se cierra (el contrato exige una
+      // compra nueva para volver a intentar un pago rechazado).
+      if (pago.estado !== 'pendiente') {
+        await limpiarIntencionPago();
+        setIntencion(null);
       }
 
       // replace y no push: volver atrás desde el resultado no debe devolver al
@@ -242,7 +373,7 @@ export default function CheckoutScreen() {
       // el destino (QR, orden en vivo o carrito).
       router.replace({
         pathname: '/resultado-pago',
-        params: { compraId: compra.compraId, pagoId: pago.pagoId },
+        params: { compraId: compraIdResuelto, pagoId: pago.pagoId },
       });
     } catch (thrown) {
       const apiError = toApiError(thrown as AxiosError<ApiProblem>);
@@ -258,7 +389,7 @@ export default function CheckoutScreen() {
     } finally {
       setProcesando(false);
     }
-  }, [items, formulario, escenario, vaciar, router]);
+  }, [items, formulario, escenario, intencion, compraIdParam, vaciar, router]);
 
   const volverAlCarrito = useCallback((): void => {
     router.back();
@@ -650,6 +781,16 @@ export default function CheckoutScreen() {
               </Text>
             </View>
           </View>
+          {/* INT4-130: aviso cuando se retoma una intención guardada. */}
+          {!!intencion?.compraId && (
+            <View style={styles.avisoReanudacion} testID="checkout-intencion-recuperada">
+              <Text style={styles.avisoReanudacionTexto}>
+                Retomamos tu pago anterior: se consultará el estado real antes de simular y se
+                reutilizará tu escenario.
+              </Text>
+            </View>
+          )}
+
           <View style={styles.escenarios}>
             {ESCENARIOS_PAGO.map((opcion) => {
               const seleccionado = escenario === opcion.valor;
@@ -657,7 +798,15 @@ export default function CheckoutScreen() {
                 <Presionable
                   key={opcion.valor}
                   style={[styles.escenario, seleccionado && styles.escenarioSeleccionado]}
-                  onPress={() => setEscenario(opcion.valor)}
+                  onPress={() => {
+                    setEscenario(opcion.valor);
+                    // Guardar en cuanto elige: si cierra la app antes de
+                    // confirmar, el escenario y la clave sobreviven.
+                    const base = intencion ?? { idempotencyKey: generarIdempotencyKey() };
+                    const nueva: IntencionPago = { ...base, escenario: opcion.valor };
+                    void guardarIntencionPago(nueva);
+                    setIntencion(nueva);
+                  }}
                   disabled={procesando}
                   testID={`checkout-escenario-${opcion.valor}`}
                 >
@@ -1041,6 +1190,20 @@ const styles = StyleSheet.create({
     fontWeight: tokens.tipografia.peso.negrita,
   },
   metodoPagoDetalle: {
+    color: tokens.colores.textoNeutro,
+    fontSize: tokens.tipografia.tamano.etiqueta,
+    lineHeight: tokens.tipografia.interlineado.apretado,
+  },
+  // INT4-130: intención recuperada al reabrir el checkout.
+  avisoReanudacion: {
+    backgroundColor: tokens.colores.amarilloFondo,
+    borderWidth: tokens.grosores.fino,
+    borderColor: tokens.colores.bordeCalido,
+    borderRadius: tokens.radios.lg,
+    paddingHorizontal: tokens.espaciado.xl,
+    paddingVertical: tokens.espaciado.md,
+  },
+  avisoReanudacionTexto: {
     color: tokens.colores.textoNeutro,
     fontSize: tokens.tipografia.tamano.etiqueta,
     lineHeight: tokens.tipografia.interlineado.apretado,
