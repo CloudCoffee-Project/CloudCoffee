@@ -15,12 +15,16 @@ export function useCafeteriaStock(cafeteriaId: string): Record<string, number> {
     const unsubscribe = subscribeToTopic(topicCafeteriaStock(cafeteriaId), (message) => {
       try {
         const evento = JSON.parse(message.body) as StockCafeteriaEvento;
+        const payload = evento?.payload;
+        if (typeof payload?.ofertaId !== 'string' || typeof payload.stockActual !== 'number') {
+          return;
+        }
         setStockPorOferta((prev) => ({
           ...prev,
-          [evento.ofertaId]: evento.stockActual,
+          [payload.ofertaId]: payload.stockActual,
         }));
       } catch {
-        // Mensaje malformado: se ignora y se espera el siguiente evento.
+        // Mensaje malformado o sin envelope: se ignora y se espera el siguiente.
       }
     });
 

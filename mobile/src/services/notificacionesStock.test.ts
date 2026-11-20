@@ -1,8 +1,8 @@
 // src/services/notificacionesStock.test.ts
 import { estadoDeStock, notificacionDeEventoStock, transicionDeStock } from './notificacionesStock';
-import type { StockCafeteriaEvento } from '../types/domain';
+import type { StockCafeteriaPayload } from '../types/domain';
 
-function evento(stockActual: number, ofertaId = 'o-1'): StockCafeteriaEvento {
+function evento(stockActual: number, ofertaId = 'o-1'): StockCafeteriaPayload {
   return {
     ofertaId,
     productoId: 'p-1',

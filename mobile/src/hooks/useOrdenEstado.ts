@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 
 import { subscribeToTopic, topicOrdenEstado } from '../services/websocket';
+import { esEstadoOrden } from '../types/domain';
 import type { EstadoOrden, OrdenEstadoEvento } from '../types/domain';
 
 // Se suscribe al estado en tiempo real de una orden y lo devuelve.
@@ -16,9 +17,11 @@ export function useOrdenEstado(ordenId: string): EstadoOrden | null {
     const unsubscribe = subscribeToTopic(topicOrdenEstado(ordenId), (message) => {
       try {
         const evento = JSON.parse(message.body) as OrdenEstadoEvento;
-        setEstado(evento.estado);
+        const estadoEvento = evento?.payload?.estado;
+        if (!esEstadoOrden(estadoEvento)) return;
+        setEstado(estadoEvento);
       } catch {
-        // Mensaje malformado: se ignora y se espera el siguiente evento.
+        // Mensaje malformado o sin envelope: se ignora y se espera el siguiente.
       }
     });
 

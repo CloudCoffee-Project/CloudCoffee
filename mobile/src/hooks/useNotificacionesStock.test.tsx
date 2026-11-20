@@ -44,11 +44,18 @@ function Sonda({ cafeteriaId, activo = true }: { cafeteriaId: string | null; act
 function mensaje(stockActual: number, ofertaId = 'o-1'): IMessage {
   return {
     body: JSON.stringify({
-      ofertaId,
-      productoId: 'p-1',
-      cafeteriaId: 'cafe-1',
-      campusId: 'san-juan-pablo-ii',
-      stockActual,
+      eventId: 'evento-1',
+      timestamp: '2026-11-17T12:00:00Z',
+      traceId: 'traza-1',
+      eventType: 'catalog.stock.actualizado.v1',
+      payload: {
+        ofertaId,
+        productoId: 'p-1',
+        cafeteriaId: 'cafe-1',
+        campusId: 'san-juan-pablo-ii',
+        stockActual,
+        version: 1,
+      },
     }),
   } as IMessage;
 }
@@ -147,6 +154,19 @@ describe('useNotificacionesStock', () => {
 
     await act(async () => {
       callback({ body: 'no-es-json' } as IMessage);
+    });
+
+    expect(mockAgregar).not.toHaveBeenCalled();
+  });
+
+  it('ignora eventos con campos planos (sin envelope payload)', async () => {
+    await renderizarSonda('cafe-1');
+    const callback = ultimoCallback();
+
+    await act(async () => {
+      callback({
+        body: JSON.stringify({ ofertaId: 'o-1', stockActual: 0 }),
+      } as IMessage);
     });
 
     expect(mockAgregar).not.toHaveBeenCalled();

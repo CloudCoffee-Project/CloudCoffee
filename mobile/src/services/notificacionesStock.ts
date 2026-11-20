@@ -4,12 +4,12 @@
 // topic /topic/cafeteria/{cafeteriaId}/stock en notificaciones de producto
 // "agotado" o "disponible" para la bandeja local y el banner in-app.
 //
-// El evento (StockCafeteriaEvento) no trae el nombre del producto ni de la
-// cafetería, por eso los textos son genéricos; cuando el catálogo real
+// El payload del evento (StockCafeteriaPayload) no trae el nombre del producto
+// ni de la cafetería, por eso los textos son genéricos; cuando el catálogo real
 // entregue ofertas con stock/disponible, estos helpers se reutilizan sin
 // tocar las pantallas.
 
-import type { StockCafeteriaEvento } from '../types/domain';
+import type { StockCafeteriaPayload } from '../types/domain';
 import type { NotificacionHistorial } from './historialNotificaciones';
 
 export type EstadoStockNotificable = 'agotado' | 'disponible';
@@ -40,12 +40,12 @@ export function transicionDeStock(
 // el estado y la oferta: eventos repetidos con el mismo estado reemplazan la
 // entrada previa (agregarNotificacion deduplica por id).
 export function notificacionDeEventoStock(
-  evento: StockCafeteriaEvento,
+  payload: StockCafeteriaPayload,
   tipo: EstadoStockNotificable
 ): NotificacionHistorial {
   const agotado = tipo === 'agotado';
   return {
-    id: `stock-${tipo}-${evento.ofertaId}`,
+    id: `stock-${tipo}-${payload.ofertaId}`,
     titulo: agotado ? 'Producto agotado' : 'Producto disponible',
     cuerpo: agotado
       ? 'Un producto de la cafetería se quedó sin stock.'

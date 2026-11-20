@@ -346,20 +346,33 @@ export interface PaginaCompras {
   empty: boolean;
 }
 
-// Eventos STOMP de tiempo real (contrato a fijar con el backend cuando
-// exista el endpoint). Se tipan acá para que los hooks/servicios no definan
-// DTOs propios: los estados usan el union EstadoOrden, nunca string plano.
-export interface OrdenEstadoEvento {
-  ordenId: string;
-  estado: EstadoOrden;
+// Envelope CloudCoffeeEvent que publica el notification-service en
+// /v1/notifications/ws. Los datos de negocio van siempre en `payload`, nunca
+// como campos planos del mensaje STOMP.
+export interface CloudCoffeeEvent<TPayload> {
+  eventId: string;
+  timestamp: string;
+  traceId: string;
+  eventType: string;
+  payload: TPayload;
 }
 
-export interface StockCafeteriaEvento {
+// Payloads de los topics que consume la app. `version` es la versión del
+// recurso (ver backend/docs/compra-pago-retiro.md) y permite ignorar eventos
+// atrasados si llega algún día a usarse para reconciliación.
+export interface OrdenEstadoPayload {
+  ordenId: string;
+  estado: EstadoOrden;
+  version?: number;
+}
+
+export interface StockCafeteriaPayload {
   ofertaId: string;
   productoId: string;
   cafeteriaId: string;
   campusId: string;
   stockActual: number;
+  version?: number;
 }
 
 // Token opaco del contrato (CodigoRetiro en
@@ -375,6 +388,9 @@ const FORMATO_CODIGO_RETIRO = /^[A-Za-z0-9_-]{43}$/;
 export function esCodigoRetiroValido(valor: unknown): valor is string {
   return typeof valor === 'string' && FORMATO_CODIGO_RETIRO.test(valor);
 }
+
+export type OrdenEstadoEvento = CloudCoffeeEvent<OrdenEstadoPayload>;
+export type StockCafeteriaEvento = CloudCoffeeEvent<StockCafeteriaPayload>;
 
 // Payload que codifica el QR de retiro: lo escanea el cajero en el punto de
 // retiro para validar el pedido. El estado siempre es un valor del union

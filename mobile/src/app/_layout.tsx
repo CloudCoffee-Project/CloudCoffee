@@ -160,17 +160,23 @@ function RootNavigator() {
     }
   }, [sesion, bootstrapping, segments, ruta, router, tieneCampus]);
 
-  // WebSocket de notificaciones: usa el accessToken real una vez autenticado.
+  // WebSocket de notificaciones: solo se conecta con sesión activa y lee el
+  // JWT vigente en cada reconnect (el refresh puede rotar el accessToken).
+  // Al cerrar sesión o desmontar el layout se corta y se limpian suscripciones.
   useEffect(() => {
-    const token = getAccessToken();
-    connectWebSocket(token ?? 'token_de_prueba', () => {
-      /*  console.warn('¡Listo! Conexión WebSocket establecida');*/
-    });
+    if (bootstrapping || !sesion) return;
+
+    connectWebSocket(
+      () => getAccessToken(),
+      () => {
+        /* console.warn('¡Listo! Conexión WebSocket establecida'); */
+      }
+    );
 
     return () => {
       disconnectWebSocket();
     };
-  }, [sesion]);
+  }, [sesion, bootstrapping]);
 
   if (bootstrapping) {
     return (

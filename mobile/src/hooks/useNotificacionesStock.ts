@@ -32,17 +32,21 @@ export function useNotificacionesStock(
     const unsubscribe = subscribeToTopic(topicCafeteriaStock(cafeteriaId), (message) => {
       try {
         const evento = JSON.parse(message.body) as StockCafeteriaEvento;
-        const anterior = previosRef.current[evento.ofertaId] ?? null;
-        const tipo = transicionDeStock(anterior, evento.stockActual);
-        previosRef.current[evento.ofertaId] = evento.stockActual;
+        const payload = evento?.payload;
+        if (typeof payload?.ofertaId !== 'string' || typeof payload.stockActual !== 'number') {
+          return;
+        }
+        const anterior = previosRef.current[payload.ofertaId] ?? null;
+        const tipo = transicionDeStock(anterior, payload.stockActual);
+        previosRef.current[payload.ofertaId] = payload.stockActual;
         if (!tipo) {
           return;
         }
-        const entrada = notificacionDeEventoStock(evento, tipo);
+        const entrada = notificacionDeEventoStock(payload, tipo);
         void agregarNotificacion(entrada);
         setUltimaNotificacion({ titulo: entrada.titulo, cuerpo: entrada.cuerpo, url: entrada.url });
       } catch {
-        // Mensaje malformado: se ignora y se espera el siguiente evento.
+        // Mensaje malformado o sin envelope: se ignora y se espera el siguiente.
       }
     });
 

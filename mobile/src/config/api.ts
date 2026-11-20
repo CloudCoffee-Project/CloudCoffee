@@ -6,7 +6,8 @@
 import { Platform } from 'react-native';
 
 // Puerto publicado del api-gateway en docker-compose (ver .env del backend,
-// variable API_GATEWAY_PORT).
+// variable API_GATEWAY_PORT). Se usa solo como fallback local cuando no hay
+// EXPO_PUBLIC_API_URL.
 const GATEWAY_PORT = 18080;
 
 function defaultHost(): string {
@@ -18,13 +19,14 @@ const GATEWAY_URL = `http://${defaultHost()}:${GATEWAY_PORT}`;
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? GATEWAY_URL;
 
-// Endpoint STOMP/WebSocket, mismo host/patrón Platform-aware que el gateway
-// HTTP. El backend todavía no expone /ws: se centraliza acá para que el
-// contrato se fije en un solo lugar cuando exista.
-const WS_PATH = '/ws';
+// Endpoint STOMP sobre SockJS del notification-service, expuesto por el
+// Gateway. El JWT viaja en el frame CONNECT, nunca en la URL.
+const WS_PATH = '/v1/notifications/ws';
 
-const GATEWAY_WS_URL = `http://${defaultHost()}:${GATEWAY_PORT}${WS_PATH}`;
+function conPath(base: string, path: string): string {
+  return `${base.replace(/\/+$/, '')}${path}`;
+}
 
-export const WS_BASE_URL = process.env.EXPO_PUBLIC_WS_URL ?? GATEWAY_WS_URL;
+export const WS_BASE_URL = process.env.EXPO_PUBLIC_WS_URL ?? conPath(API_BASE_URL, WS_PATH);
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
