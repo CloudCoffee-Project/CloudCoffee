@@ -1730,7 +1730,7 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": true,
-        "description": "UUID por intención; misma clave/carga reproduce resultado durante al menos 24 h desde finalizar. Otra carga entra en conflicto. Ver reglas de concurrencia en el documento.",
+        "description": "Obligatoria: UUID por intención. Misma clave/carga reproduce resultado durante la retención desde finalizar (30 días por defecto, mínimo 24 h). Pendientes y referencias activas no se purgan. Tras purga la creación puede ser una intención nueva: consultar historial antes de reusar. El pago único por compra impide un segundo cobro.",
         "schema": {
           "type": "string",
           "format": "uuid"
