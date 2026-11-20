@@ -32,6 +32,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
               WHERE p.id = offer.product_id
                 AND p.status = 'ACTIVE'
                 AND c.status = 'OPEN'
+                AND c.active = true
           )
         """, nativeQuery = true)
     int reserveStock(@Param("offerId") UUID offerId, @Param("quantity") int quantity);
@@ -42,6 +43,8 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         WHERE o.product.id = :productId
           AND o.product.status = cl.cloudcoffee.catalog_service.model.enums.ProductStatus.ACTIVE
           AND c.campus.id = :campusId
+          AND c.campus.active = true
+          AND c.active = true
           AND c.status = cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus.OPEN
           AND o.status = cl.cloudcoffee.catalog_service.model.enums.OfferStatus.AVAILABLE
         ORDER BY o.price ASC
