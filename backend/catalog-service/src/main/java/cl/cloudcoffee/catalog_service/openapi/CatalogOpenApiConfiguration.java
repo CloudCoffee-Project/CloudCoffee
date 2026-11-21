@@ -48,6 +48,10 @@ public class CatalogOpenApiConfiguration {
                         successContent.addMediaType("application/json", successContent.remove("*/*"));
                     }
                 });
+                if (path.endsWith("/ajustes-stock") && "POST".equals(method.name())) {
+                    stockAdjustmentErrors(operation, path);
+                    return;
+                }
                 if (path.startsWith("/catalog/seguimientos")) {
                     seguimientoErrors(operation, method.name(), path);
                     return;
@@ -73,6 +77,18 @@ public class CatalogOpenApiConfiguration {
                 operation.getResponses().addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
             }));
         };
+    }
+
+    private static void stockAdjustmentErrors(io.swagger.v3.oas.models.Operation operation, String path) {
+        var responses = operation.getResponses();
+        responses.addApiResponse("400", problem("JSON, parámetros o clave de idempotencia inválidos", 400, path));
+        responses.addApiResponse("401", problem("JWT ausente, inválido o vencido", 401, path));
+        responses.addApiResponse("403", problem("Rol o asignación de cafetería no autorizados", 403, path));
+        responses.addApiResponse("404", problem("Oferta inexistente o de otra cafetería", 404, path));
+        responses.addApiResponse("409", problem(
+                "Stock negativo, total fuera de rango o clave de idempotencia reutilizada con otros datos", 409, path));
+        responses.addApiResponse("415", problem("Se requiere application/json", 415, path));
+        responses.addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
     }
 
     // INT2-116: rutas que siempre exigen un JWT de CLIENTE.
