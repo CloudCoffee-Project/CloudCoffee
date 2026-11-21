@@ -2320,7 +2320,7 @@
           "ADMIN_CAFETERIA (su cafetería)",
           "SUPER_ADMIN"
         ],
-        "description": "Orden: pagadoAt DESC, id DESC. ADMIN_CAFETERIA no puede pedir otra cafetería: 403.",
+        "description": "Orden fijo por pagadoAt DESC, ordenId DESC. Las fechas se aplican a la aprobación del pago. INT2-125 habilita ADMIN_CAFETERIA en su cafetería asignada. SUPER_ADMIN figura en el contrato objetivo INT2-109.",
         "parameters": [
           {
             "name": "desde",
@@ -2330,7 +2330,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Inclusive, zona America/Santiago. Por defecto hace 30 días."
+            "description": "Inclusive en America/Santiago. Por defecto 29 días antes de hasta."
           },
           {
             "name": "hasta",
@@ -2340,7 +2340,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Inclusive. Rango máximo 92 días."
+            "description": "Inclusive en America/Santiago. Por defecto hoy. Máximo 92 días inclusivos en total."
           },
           {
             "name": "cafeteriaId",
@@ -2350,7 +2350,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Solo SUPER_ADMIN."
+            "description": "Para ADMIN_CAFETERIA debe coincidir con la asignación persistida. Otra cafetería devuelve 403. SUPER_ADMIN podrá usarlo como filtro global."
           },
           {
             "name": "campusId",
@@ -2360,7 +2360,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Solo SUPER_ADMIN."
+            "description": "Solo SUPER_ADMIN en el contrato objetivo INT2-109."
           },
           {
             "name": "estado",
@@ -2425,7 +2425,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Inclusive, zona America/Santiago. Por defecto hace 30 días."
+            "description": "Inclusive en America/Santiago. Por defecto 29 días antes de hasta."
           },
           {
             "name": "hasta",
@@ -2435,7 +2435,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Inclusive. Rango máximo 92 días."
+            "description": "Inclusive en America/Santiago. Por defecto hoy. Máximo 92 días inclusivos en total."
           },
           {
             "name": "cafeteriaId",
@@ -2445,7 +2445,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Solo SUPER_ADMIN."
+            "description": "Para ADMIN_CAFETERIA debe coincidir con la asignación persistida. Otra cafetería devuelve 403. SUPER_ADMIN podrá usarlo como filtro global."
           },
           {
             "name": "campusId",
@@ -2455,7 +2455,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Solo SUPER_ADMIN."
+            "description": "Solo SUPER_ADMIN en el contrato objetivo INT2-109."
           },
           {
             "name": "estado",
@@ -2510,6 +2510,56 @@
           },
           "503": {
             "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Totales de las órdenes pagadas de la cafetería asignada, con los mismos filtros que el listado. INT2-125 habilita ADMIN_CAFETERIA en su cafetería asignada. SUPER_ADMIN figura en el contrato objetivo INT2-109."
+      }
+    },
+    "/orders/ventas/{ordenId}": {
+      "get": {
+        "operationId": "detalleVenta",
+        "summary": "Detalle e ítems históricos de una orden pagada",
+        "x-roles": [
+          "ADMIN_CAFETERIA (su cafetería)"
+        ],
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Éxito",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VentaDetalle"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
           }
         },
         "security": [
@@ -4271,8 +4321,12 @@
             "maxLength": 255
           },
           "campusId": {
-            "type": "string",
-            "format": "uuid"
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Snapshot de la cotización. Puede ser null en órdenes históricas sin plan de creación."
           },
           "estado": {
             "$ref": "#/components/schemas/EstadoVenta"
@@ -4332,6 +4386,69 @@
           }
         ],
         "description": "Sin datos personales del comprador."
+      },
+      "VentaDetalle": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "venta": {
+            "$ref": "#/components/schemas/Venta"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ordenItemId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "ofertaId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "productoId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "productoNombre": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                "cantidad": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "precioUnitario": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2000000000
+                },
+                "subtotal": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2000000000
+                }
+              },
+              "required": [
+                "ordenItemId",
+                "ofertaId",
+                "productoId",
+                "productoNombre",
+                "cantidad",
+                "precioUnitario",
+                "subtotal"
+              ]
+            }
+          }
+        },
+        "required": [
+          "venta",
+          "items"
+        ]
       },
       "PaginaVentas": {
         "type": "object",

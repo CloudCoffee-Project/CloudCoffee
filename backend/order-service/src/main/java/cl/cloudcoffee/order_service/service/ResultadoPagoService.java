@@ -172,9 +172,9 @@ public class ResultadoPagoService {
         CompraResponse antes = consultas.compra(clienteId, compraId);
         if (aprobado) {
             jdbc.update("""
-                    UPDATE ordenes SET estado='PAGADO', retiro_hasta=?, version=version+1, updated_at=?
+                    UPDATE ordenes SET estado='PAGADO', retiro_hasta=?, pagado_at=?, version=version+1, updated_at=?
                     WHERE compra_id=? AND estado='PENDIENTE_PAGO'
-                    """, utc(ahora.plus(PLAZO_RETIRO)), utc(ahora), compraId);
+                    """, utc(ahora.plus(PLAZO_RETIRO)), utc(ahora), utc(ahora), compraId);
         } else {
             for (UUID reserva : reservasActivas(compraId)) {
                 if (confirmadas.contains(reserva)) continue;

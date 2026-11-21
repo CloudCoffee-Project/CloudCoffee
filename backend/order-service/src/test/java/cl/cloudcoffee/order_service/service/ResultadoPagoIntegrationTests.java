@@ -83,8 +83,16 @@ class ResultadoPagoIntegrationTests extends JwtTestSupport {
             assertThat(orden.estado()).isEqualTo("pagado");
             assertThat(Duration.between(Instant.now(), orden.retiroHasta()))
                     .isBetween(Duration.ofMinutes(119), Duration.ofMinutes(120));
+            var snapshot = jdbc.queryForObject("SELECT campus_id, pagado_at FROM ordenes WHERE id=?",
+                    (rs, n) -> new VentaSnapshot(rs.getObject("campus_id", UUID.class),
+                            cl.cloudcoffee.order_service.persistence.JdbcInstants.read(rs, "pagado_at")),
+                    orden.ordenId());
+            assertThat(snapshot).isEqualTo(new VentaSnapshot(catalog.ofertas.get(oferta1).campusId(),
+                    orden.retiroHasta().minus(Duration.ofHours(2))));
         });
     }
+
+    private record VentaSnapshot(UUID campusId, Instant pagadoAt) {}
 
     @Test void rechazarLiberaLasReservasYCancelaCompraYOrdenes() throws Exception {
         CompraResponse compra = crear();
