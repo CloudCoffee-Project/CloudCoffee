@@ -11,9 +11,11 @@
 //   - Datos de entrega y facturación: campos validados (nombre completo, correo y
 //     teléfono). No hay dirección porque CloudCoffee solo retira en cafetería, así
 //     que el método de entrega se informa en vez de elegirse y el despacho es $0.
-//   - Método de pago (INT4-128): PAGO SIMULADO de Order. El cliente elige el
-//     escenario (aprobar / rechazar / pendiente) y Order decide el estado real.
-//     No hay Mercado Pago, initPoint, navegador de pago ni webhooks externos.
+//   - Método de pago (INT4-128): PAGO SIMULADO de Order. El cliente NO elige si
+//     se aprueba, se rechaza o queda pendiente: Order decide el estado real.
+//     El `escenario` que exige el contrato se fija en config/pagoSimulado.ts y
+//     no se muestra ni se puede cambiar en la pantalla. No hay Mercado Pago,
+//     initPoint, navegador de pago ni webhooks externos.
 //   - Botón principal "Confirmar y Pagar $X": al pulsarlo entra en estado de
 //     carga (spinner + deshabilitado) para evitar dobles envíos o dobles cobros.
 //
@@ -21,14 +23,14 @@
 //   El botón valida primero los datos de entrega; si algo falta, muestra el
 //   error debajo del campo sin llamar al backend. Con el formulario válido
 //   dispara POST /v1/compras con { items } y luego POST
-//   /v1/compras/{compraId}/pago con el escenario elegido.
+//   /v1/compras/{compraId}/pago con el escenario configurado.
 //
-// INT4-130: la clave Idempotency-Key y el escenario se guardan en AsyncStorage
-// (services/intencionPago.ts). Al reabrir o reintentar se consulta primero
-// GET /v1/compras/{compraId}/pago; si el pago ya existe se va directo al
-// resultado con ese compraId, y si no existe se reutiliza la MISMA clave y el
-// MISMO escenario. Así un reintento nunca crea un segundo pago (409
-// PAGO_YA_INICIADO) ni cambia la decisión del usuario.
+// INT4-130/131: la clave Idempotency-Key y el escenario se guardan en
+// AsyncStorage (services/intencionPago.ts). Al reabrir o reintentar se consulta
+// primero GET /v1/compras/{compraId}/pago; si el pago ya existe se va directo al
+// resultado con ese compraId, y si no existe se reutiliza la MISMA clave junto
+// con el escenario configurado. Así un reintento nunca crea un segundo pago
+// (409 PAGO_YA_INICIADO) ni revive una elección antigua del usuario.
 //
 // Estados de pago (los devuelve Order, no los inventa la app):
 //   - aprobado: la compra se concretó → se vacía el carrito y resultado-pago
@@ -59,6 +61,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AxiosError } from 'axios';
 
+import { ESCENARIO_PAGO_CLIENTE } from '../../config/pagoSimulado';
 import { useCarrito } from '../../context/CarritoContext';
 import { ApiProblem, getAccessToken, toApiError } from '../../services/httpClient';
 // ItemCarrito de pagos es el payload de POST /v1/compras (solo ofertaId y
@@ -80,7 +83,6 @@ import {
   type IntencionPago,
 } from '../../services/intencionPago';
 import { tokens } from '../../theme/tokens';
-import type { EscenarioPago } from '../../types/domain';
 
 type Vista = 'revision' | 'revision_requerida' | 'realizada' | 'fallo';
 
@@ -88,19 +90,6 @@ type Vista = 'revision' | 'revision_requerida' | 'realizada' | 'fallo';
 // método de entrega que elegir ni despacho que sumar. El retiro es siempre el
 // punto de retiro donde está cada cafetería del carrito.
 const METODO_ENTREGA = 'retiro' as const;
-
-// INT4-128: el pago simulado de Order tiene tres escenarios elegibles. La app
-// solo envía el valor al backend; no decide el estado ni genera comprobantes.
-const ESCENARIOS_PAGO: readonly {
-  valor: EscenarioPago;
-  etiqueta: string;
-  detalle: string;
-  icono: string;
-}[] = [
-  { valor: 'aprobar', etiqueta: 'Aprobar', detalle: 'Pago aprobado', icono: '✅' },
-  { valor: 'rechazar', etiqueta: 'Rechazar', detalle: 'Pago rechazado', icono: '❌' },
-  { valor: 'pendiente', etiqueta: 'Pendiente', detalle: 'Pago en proceso', icono: '⏳' },
-];
 
 // Mensaje del estado 401/403 según la especificación (el aviso de "Nada se
 // cobró y tu carrito sigue listo" vive en la vista de fallo, debajo).
@@ -172,11 +161,9 @@ export default function CheckoutScreen() {
   );
   const [mensajeError, setMensajeError] = useState<string | undefined>(params.mensaje);
   const [procesando, setProcesando] = useState(false);
-  // Escenario del pago simulado. 'aprobar' es el default para no trabar el
-  // camino feliz; el usuario puede elegir otro antes de confirmar.
-  const [escenario, setEscenario] = useState<EscenarioPago>('aprobar');
-  // INT4-130: intención persistida (clave + escenario + compraId). Se restaura
-  // al montar para que reabrir la app no cambie lo que el usuario eligió.
+  // INT4-130/131: intención persistida (clave + escenario + compraId). Se
+  // restaura al montar para reutilizar la clave; el escenario siempre se toma
+  // de la configuración del despliegue, nunca de una elección en la UI.
   const [intencion, setIntencion] = useState<IntencionPago | null>(null);
 
   // Datos de entrega y facturación (formulario validado al confirmar).
@@ -191,8 +178,8 @@ export default function CheckoutScreen() {
   // existe la compra se consulta PRIMERO el pago (GET .../pago) y se navega al
   // resultado para mostrar siempre el estado real: con pago pendiente se
   // conserva la intención, con pago terminal se libera para permitir una compra
-  // nueva, y con 404 se conservan compraId, clave y escenario para reintentar
-  // sin crear un segundo pago.
+  // nueva, y con 404 se conservan compraId y clave para reintentar sin crear
+  // un segundo pago.
   useEffect(() => {
     let activo = true;
 
@@ -202,7 +189,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      setEscenario(guardada.escenario);
       setIntencion(guardada);
 
       const compraReanudada = compraIdParam ?? guardada.compraId;
@@ -293,11 +279,17 @@ export default function CheckoutScreen() {
         metodoEntrega: METODO_ENTREGA,
       };
 
-      // 3) INT4-130: recuperar (o crear) la intención. El mismo UUID viaja en
-      //    el pago aunque se reintente: cambiarlo daría 409 PAGO_YA_INICIADO.
-      let intencionActual = intencion ?? { idempotencyKey: generarIdempotencyKey(), escenario };
-      if (intencionActual.escenario !== escenario) {
-        intencionActual = { ...intencionActual, escenario };
+      // 3) INT4-130/131: recuperar (o crear) la intención. El mismo UUID viaja
+      //    en el pago aunque se reintente: cambiarlo daría 409 PAGO_YA_INICIADO.
+      //    Si quedó una intención de una versión anterior con otro escenario, se
+      //    normaliza al configurado: el estado final lo decide Order de todas
+      //    formas y el pago previo ya se consultó arriba.
+      let intencionActual = intencion ?? {
+        idempotencyKey: generarIdempotencyKey(),
+        escenario: ESCENARIO_PAGO_CLIENTE,
+      };
+      if (intencionActual.escenario !== ESCENARIO_PAGO_CLIENTE) {
+        intencionActual = { ...intencionActual, escenario: ESCENARIO_PAGO_CLIENTE };
       }
 
       let compraIdResuelto = compraIdParam ?? intencionActual.compraId;
@@ -353,7 +345,11 @@ export default function CheckoutScreen() {
 
       // 5) Pago simulado de Order con la clave de la intención. El backend
       //    decide el estado final; no hay navegador, initPoint ni webhook.
-      const pago = await simularPago(compraIdResuelto, escenario, intencionActual.idempotencyKey);
+      const pago = await simularPago(
+        compraIdResuelto,
+        intencionActual.escenario,
+        intencionActual.idempotencyKey
+      );
 
       if (pago.estado === 'aprobado') {
         vaciar();
@@ -389,7 +385,7 @@ export default function CheckoutScreen() {
     } finally {
       setProcesando(false);
     }
-  }, [items, formulario, escenario, intencion, compraIdParam, vaciar, router]);
+  }, [items, formulario, intencion, compraIdParam, vaciar, router]);
 
   const volverAlCarrito = useCallback((): void => {
     router.back();
@@ -768,16 +764,16 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {/* INT4-128: pago simulado de Order, sin navegador ni pasarela externa */}
+        {/* INT4-128/131: pago de Order, sin navegador ni pasarela externa.
+            El resultado no se elige acá: lo decide Order. */}
         <View style={styles.pagoSeccion} testID="checkout-pago-seccion">
           <Text style={styles.seccionTitulo}>Método de Pago</Text>
           <View style={styles.metodoPago} testID="checkout-metodo-pago">
-            <Text style={styles.metodoPagoIcono}>🧪</Text>
+            <Text style={styles.metodoPagoIcono}>💳</Text>
             <View style={styles.metodoPagoInfo}>
-              <Text style={styles.metodoPagoNombre}>Pago simulado</Text>
+              <Text style={styles.metodoPagoNombre}>Confirmación de pago</Text>
               <Text style={styles.metodoPagoDetalle}>
-                Order confirma el resultado. Elegí el escenario que querés probar: no se usa Mercado
-                Pago ni se abre un navegador.
+                Confirmamos el resultado de tu compra antes de habilitar el retiro.
               </Text>
             </View>
           </View>
@@ -785,42 +781,11 @@ export default function CheckoutScreen() {
           {!!intencion?.compraId && (
             <View style={styles.avisoReanudacion} testID="checkout-intencion-recuperada">
               <Text style={styles.avisoReanudacionTexto}>
-                Retomamos tu pago anterior: se consultará el estado real antes de simular y se
-                reutilizará tu escenario.
+                Retomamos tu compra anterior: primero consultaremos el estado real del pago para no
+                cobrarte dos veces.
               </Text>
             </View>
           )}
-
-          <View style={styles.escenarios}>
-            {ESCENARIOS_PAGO.map((opcion) => {
-              const seleccionado = escenario === opcion.valor;
-              return (
-                <Presionable
-                  key={opcion.valor}
-                  style={[styles.escenario, seleccionado && styles.escenarioSeleccionado]}
-                  onPress={() => {
-                    setEscenario(opcion.valor);
-                    // Guardar en cuanto elige: si cierra la app antes de
-                    // confirmar, el escenario y la clave sobreviven.
-                    const base = intencion ?? { idempotencyKey: generarIdempotencyKey() };
-                    const nueva: IntencionPago = { ...base, escenario: opcion.valor };
-                    void guardarIntencionPago(nueva);
-                    setIntencion(nueva);
-                  }}
-                  disabled={procesando}
-                  testID={`checkout-escenario-${opcion.valor}`}
-                >
-                  <Text style={styles.escenarioIcono}>{opcion.icono}</Text>
-                  <Text
-                    style={[styles.escenarioEtiqueta, seleccionado && styles.escenarioTextoActivo]}
-                  >
-                    {opcion.etiqueta}
-                  </Text>
-                  <Text style={styles.escenarioDetalle}>{opcion.detalle}</Text>
-                </Presionable>
-              );
-            })}
-          </View>
         </View>
 
         <Presionable
@@ -838,10 +803,9 @@ export default function CheckoutScreen() {
           )}
         </Presionable>
 
-        <Text style={styles.nota}>
-          Al confirmar se validan tus datos, se crea la compra en Order y se simula el pago con el
-          escenario elegido. La pantalla siguiente consulta el estado real antes de mostrarte el
-          retiro o el seguimiento.
+        <Text style={styles.nota} testID="checkout-nota">
+          Al confirmar se validan tus datos, se crea la compra y se confirma el pago. La pantalla
+          siguiente consulta el estado real antes de mostrarte el retiro o el seguimiento.
         </Text>
       </ScrollView>
     );
@@ -1162,7 +1126,7 @@ const styles = StyleSheet.create({
     color: tokens.colores.textoNeutro,
     fontSize: tokens.tipografia.tamano.etiqueta,
   },
-  // Método de pago (INT4-128): escenarios del pago simulado de Order.
+  // Método de pago (INT4-128): pago simulado de Order, sin selector de resultado.
   pagoSeccion: {
     gap: tokens.espaciado.md,
   },
@@ -1208,43 +1172,6 @@ const styles = StyleSheet.create({
     fontSize: tokens.tipografia.tamano.etiqueta,
     lineHeight: tokens.tipografia.interlineado.apretado,
   },
-  escenarios: {
-    flexDirection: 'row',
-    gap: tokens.espaciado.sm,
-  },
-  escenario: {
-    flex: 1,
-    alignItems: 'center',
-    gap: tokens.espaciado.xxs,
-    backgroundColor: tokens.colores.superficie,
-    borderWidth: tokens.grosores.medio,
-    borderColor: tokens.colores.bordeCalido,
-    borderRadius: tokens.radios.lg,
-    paddingVertical: tokens.espaciado.md,
-    paddingHorizontal: tokens.espaciado.xs,
-  },
-  escenarioSeleccionado: {
-    borderColor: tokens.colores.azul,
-    borderWidth: tokens.grosores.grueso,
-    backgroundColor: tokens.colores.opcionActivaFondo,
-  },
-  escenarioIcono: {
-    fontSize: tokens.tipografia.tamano.encabezado,
-  },
-  escenarioEtiqueta: {
-    color: tokens.colores.textoNeutro,
-    fontSize: tokens.tipografia.tamano.etiqueta,
-    fontWeight: tokens.tipografia.peso.negrita,
-  },
-  escenarioTextoActivo: {
-    color: tokens.colores.azul,
-  },
-  escenarioDetalle: {
-    color: tokens.colores.textoNeutro,
-    fontSize: tokens.tipografia.tamano.etiqueta,
-    textAlign: 'center',
-  },
-
   // Botones
   btnPrimario: {
     backgroundColor: tokens.colores.azul,
