@@ -12,8 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { agregarNotificacion } from '../services/historialNotificaciones';
 import { notificacionDeEventoStock, transicionDeStock } from '../services/notificacionesStock';
+import { parsearEventoStock } from '../services/parsearEventoStock';
 import { subscribeToTopic, topicCafeteriaStock } from '../services/websocket';
-import type { StockCafeteriaEvento } from '../types/domain';
 import type { NotificacionRecibida } from './useNotificacionesPush';
 
 export function useNotificacionesStock(
@@ -30,20 +30,21 @@ export function useNotificacionesStock(
     }
 
     const unsubscribe = subscribeToTopic(topicCafeteriaStock(cafeteriaId), (message) => {
-      try {
-        const evento = JSON.parse(message.body) as StockCafeteriaEvento;
-        const anterior = previosRef.current[evento.ofertaId] ?? null;
-        const tipo = transicionDeStock(anterior, evento.stockActual);
-        previosRef.current[evento.ofertaId] = evento.stockActual;
-        if (!tipo) {
-          return;
-        }
-        const entrada = notificacionDeEventoStock(evento, tipo);
-        void agregarNotificacion(entrada);
-        setUltimaNotificacion({ titulo: entrada.titulo, cuerpo: entrada.cuerpo, url: entrada.url });
-      } catch {
+      const evento = parsearEventoStock(message.body);
+      if (!evento) {
         // Mensaje malformado: se ignora y se espera el siguiente evento.
+        return;
       }
+
+      const anterior = previosRef.current[evento.ofertaId] ?? null;
+      const tipo = transicionDeStock(anterior, evento.stockActual);
+      previosRef.current[evento.ofertaId] = evento.stockActual;
+      if (!tipo) {
+        return;
+      }
+      const entrada = notificacionDeEventoStock(evento, tipo);
+      void agregarNotificacion(entrada);
+      setUltimaNotificacion({ titulo: entrada.titulo, cuerpo: entrada.cuerpo, url: entrada.url });
     });
 
     return unsubscribe;

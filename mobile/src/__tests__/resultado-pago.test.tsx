@@ -230,4 +230,50 @@ describe('pantalla resultado-pago (estado real de Order)', () => {
 
     desmontar(tree);
   });
+
+  it('INT4-131: pagoId y estado fabricados en params no confirman el pago', async () => {
+    mockUseLocalSearchParams.mockReturnValue({
+      estado: 'exitoso',
+      pagoId: 'pago-fabricado',
+      paymentId: 'pay-fabricado',
+      compraId: 'compra-123',
+    });
+    mockConsultarPago.mockResolvedValue(pagoSimulado('rechazado'));
+    mockObtenerCompra.mockResolvedValue(compraConPago('rechazado'));
+
+    const tree = await renderizarResultado();
+
+    expect(mockConsultarPago).toHaveBeenCalledWith('compra-123');
+    expect(mockConsultarPago.mock.invocationCallOrder[0]).toBeLessThan(
+      mockObtenerCompra.mock.invocationCallOrder[0]
+    );
+    expect(texto(tree, 'resultado-titulo')).toBe('Pago rechazado');
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    expect(() => tree.root.findByProps({ testID: 'resultado-ir-qr' })).toThrow();
+
+    desmontar(tree);
+  });
+
+  it('INT4-131: timeout en /pago con params exitosos no inventa una aprobación', async () => {
+    mockUseLocalSearchParams.mockReturnValue({
+      estado: 'exitoso',
+      pagoId: 'pago-fabricado',
+      compraId: 'compra-123',
+    });
+    mockConsultarPago.mockRejectedValue(new ApiError('Network Error', 0));
+    mockObtenerCompra.mockResolvedValue(compraConPago('pendiente'));
+
+    const tree = await renderizarResultado();
+
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/seguimientos',
+      params: { compraId: 'compra-123', ordenId: 'orden-1' },
+    });
+    expect(routerMock.replace).not.toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/(cliente)/qr-retiro' })
+    );
+    expect(() => tree.root.findByProps({ testID: 'resultado-ir-qr' })).toThrow();
+
+    desmontar(tree);
+  });
 });

@@ -12,8 +12,9 @@
 //     más los datos de entrega/facturación recopilados por la pantalla,
 //   - que el carrito se vacía solo cuando Order aprueba el pago (INT4-128):
 //     con rechazo o pendiente el carrito queda intacto para reintentar,
-//   - que la pantalla elige el escenario del pago simulado y navega al
-//     resultado con compraId y pagoId, sin Mercado Pago ni navegador externo,
+//   - que el resultado del pago NO se elige en la pantalla: se envía el
+//     escenario fijo del despliegue y se navega al resultado con compraId y
+//     pagoId, sin Mercado Pago ni navegador externo,
 //   - que la compra en estado "revisión requerida" (INT4-36) muestra la vista
 //     "Tu compra está en revisión" en la misma pantalla, sin simular pago ni
 //     ofrecer pagar de nuevo,
@@ -30,6 +31,7 @@ import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
 import CheckoutScreen from '../app/(cliente)/checkout';
+import { ESCENARIO_PAGO_CLIENTE } from '../config/pagoSimulado';
 import { CarritoProvider, useCarrito } from '../context/CarritoContext';
 import {
   abrirCheckoutMercadoPago,
@@ -320,11 +322,18 @@ describe('Checkout (INT4-35)', () => {
     expect(texto(tree, 'checkout-entrega-detalle')).toContain('Retiro programado en 2 puntos');
     expect(() => tree.root.findByProps({ testID: 'checkout-direccion' })).toThrow();
 
-    // Método de pago (INT4-128): pago simulado de Order con los tres escenarios.
-    expect(texto(tree, 'checkout-metodo-pago')).toContain('Pago simulado');
-    expect(tree.root.findByProps({ testID: 'checkout-escenario-aprobar' })).toBeDefined();
-    expect(tree.root.findByProps({ testID: 'checkout-escenario-rechazar' })).toBeDefined();
-    expect(tree.root.findByProps({ testID: 'checkout-escenario-pendiente' })).toBeDefined();
+    // Método de pago (INT4-128/131): pago de Order, SIN selector de resultado.
+    // El cliente no puede decidir si se aprueba, se rechaza o queda pendiente:
+    // eso lo resuelve Order con el estado real de la compra. Tampoco se le
+    // muestra que el cobro es simulado ni que antes se usaba Mercado Pago.
+    expect(texto(tree, 'checkout-metodo-pago')).toContain('Confirmación de pago');
+    expect(texto(tree, 'checkout-metodo-pago')).toContain('Confirmamos el resultado');
+    expect(texto(tree, 'checkout-metodo-pago')).not.toContain('simulado');
+    expect(texto(tree, 'checkout-metodo-pago')).not.toContain('Mercado Pago');
+    expect(texto(tree, 'checkout-nota')).not.toContain('simula');
+    expect(() => tree.root.findByProps({ testID: 'checkout-escenario-aprobar' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'checkout-escenario-rechazar' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'checkout-escenario-pendiente' })).toThrow();
 
     // El botón confirma con el total que ve el usuario, en estado de carga se
     // deshabilita para evitar dobles envíos.
@@ -354,7 +363,7 @@ describe('Checkout (INT4-35)', () => {
     expect(() => tree.root.findByProps({ testID: 'checkout-error-nombre' })).toThrow();
   });
 
-  it('al confirmar crea la compra, simula el pago elegido y navega al resultado', async () => {
+  it('al confirmar crea la compra, simula el pago configurado y navega al resultado', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
@@ -370,9 +379,8 @@ describe('Checkout (INT4-35)', () => {
     );
     await llenarFormulario(tree);
 
-    // El escenario es una decisión del usuario, no un estado inventado por la
-    // app: se envía tal cual al pago simulado de Order.
-    await pulsar(tree, 'checkout-escenario-aprobar');
+    // El escenario es configuración del despliegue, no una decisión del usuario
+    // ni un estado inventado por la app: viaja al pago simulado de Order.
     await pulsar(tree, 'checkout-confirmar');
 
     // El payload no lleva precio: lo recalcula el backend contra el catálogo, y
@@ -392,7 +400,7 @@ describe('Checkout (INT4-35)', () => {
     );
     expect(mockSimularPago).toHaveBeenCalledWith(
       'cmp-1',
-      'aprobar',
+      ESCENARIO_PAGO_CLIENTE,
       expect.stringMatching(UUID_V4)
     );
 
@@ -455,7 +463,7 @@ describe('Checkout (INT4-35)', () => {
     );
   });
 
-  it('con rechazo conserva el carrito para poder volver a intentar', async () => {
+  it('si Order rechaza el pago conserva el carrito para poder volver a intentar', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
@@ -474,12 +482,11 @@ describe('Checkout (INT4-35)', () => {
     });
     await llenarFormulario(tree);
 
-    await pulsar(tree, 'checkout-escenario-rechazar');
     await pulsar(tree, 'checkout-confirmar');
 
     expect(mockSimularPago).toHaveBeenCalledWith(
       'cmp-1',
-      'rechazar',
+      ESCENARIO_PAGO_CLIENTE,
       expect.stringMatching(UUID_V4)
     );
     // El resultado-pago ofrecerá volver al carrito: no puede estar vacío.
@@ -491,7 +498,7 @@ describe('Checkout (INT4-35)', () => {
     });
   });
 
-  it('con pendiente conserva el carrito y deja la orden en seguimiento', async () => {
+  it('si Order deja el pago pendiente conserva el carrito y va al seguimiento', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
@@ -510,12 +517,11 @@ describe('Checkout (INT4-35)', () => {
     });
     await llenarFormulario(tree);
 
-    await pulsar(tree, 'checkout-escenario-pendiente');
     await pulsar(tree, 'checkout-confirmar');
 
     expect(mockSimularPago).toHaveBeenCalledWith(
       'cmp-1',
-      'pendiente',
+      ESCENARIO_PAGO_CLIENTE,
       expect.stringMatching(UUID_V4)
     );
     expect(leerCarrito(tree).items).toHaveLength(1);
@@ -570,7 +576,7 @@ describe('Checkout (INT4-35)', () => {
     // pago aprobado, no se vacía el carrito y la pantalla muestra el fallo.
     expect(mockSimularPago).toHaveBeenCalledWith(
       'cmp-1',
-      'aprobar',
+      ESCENARIO_PAGO_CLIENTE,
       expect.stringMatching(UUID_V4)
     );
     expect(routerMock.replace).not.toHaveBeenCalled();
@@ -713,7 +719,7 @@ describe('Checkout (INT4-35)', () => {
     expect(routerMock.replace).toHaveBeenCalledWith('/carrito');
   });
 
-  it('INT4-130: reabrir conserva clave y escenario y reintenta sin crear otra compra', async () => {
+  it('INT4-130/131: reabrir conserva la clave y reintenta con el escenario configurado', async () => {
     mockGetItem.mockResolvedValue(
       JSON.stringify({
         compraId: 'cmp-1',
@@ -725,7 +731,8 @@ describe('Checkout (INT4-35)', () => {
     const tree = await montarConEspera();
     await agregar(tree, linea(), 1);
 
-    // Reabrir consulta primero el pago existente y recupera la decisión.
+    // Reabrir consulta primero el pago existente y recupera la clave, sin
+    // revivir el escenario 'rechazar' de una versión anterior de la pantalla.
     expect(mockConsultarPago).toHaveBeenCalledWith('cmp-1');
     expect(tree.root.findByProps({ testID: 'checkout-intencion-recuperada' })).toBeDefined();
 
@@ -733,7 +740,7 @@ describe('Checkout (INT4-35)', () => {
     await pulsar(tree, 'checkout-confirmar');
 
     expect(mockCrearCompra).not.toHaveBeenCalled();
-    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', 'rechazar', CLAVE_GUARDADA);
+    expect(mockSimularPago).toHaveBeenCalledWith('cmp-1', ESCENARIO_PAGO_CLIENTE, CLAVE_GUARDADA);
     expect(mockSetItem).toHaveBeenCalledWith(
       expect.stringContaining('intencion-pago'),
       expect.stringContaining(CLAVE_GUARDADA)
@@ -796,17 +803,148 @@ describe('Checkout (INT4-35)', () => {
     desmontar(tree);
   });
 
-  it('INT4-130: elegir escenario persiste la clave y la decisión antes de confirmar', async () => {
+  it('INT4-130/131: al confirmar se persiste la clave con el escenario configurado', async () => {
     const tree = montar();
 
     await agregar(tree, linea(), 1);
-    await pulsar(tree, 'checkout-escenario-pendiente');
+    await llenarFormulario(tree);
+    await pulsar(tree, 'checkout-confirmar');
 
     const llamada = mockSetItem.mock.calls[mockSetItem.mock.calls.length - 1];
     const guardado = JSON.parse(llamada[1]);
-    expect(guardado.escenario).toBe('pendiente');
+    expect(guardado.escenario).toBe(ESCENARIO_PAGO_CLIENTE);
     expect(guardado.idempotencyKey).toMatch(UUID_V4);
-    expect(guardado.compraId).toBeUndefined();
+    expect(guardado.compraId).toBe('cmp-1');
+
+    desmontar(tree);
+  });
+
+  it('INT4-131: timeout conserva la clave; al reabrir reintenta sin crear otra compra', async () => {
+    const tree = montar();
+
+    await agregar(tree, linea(), 1);
+    await llenarFormulario(tree);
+    // Timeout = error sin `response`: toApiError lo deja con status 0. El
+    // backend pudo haber iniciado el pago, así que nada se puede afirmar.
+    mockSimularPago.mockRejectedValueOnce(new Error('Network Error'));
+
+    await pulsar(tree, 'checkout-confirmar');
+
+    expect(texto(tree, 'checkout-fallo-titulo')).toBe('No pudimos realizar tu compra');
+    expect(texto(tree, 'checkout-fallo-mensaje')).toContain('Network Error');
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    expect(mockAbrirCheckout).not.toHaveBeenCalled();
+    expect(leerCarrito(tree).items).toHaveLength(1);
+
+    const escrito = mockSetItem.mock.calls[mockSetItem.mock.calls.length - 1];
+    const guardado = JSON.parse(escrito[1]);
+    expect(guardado).toMatchObject({
+      compraId: 'cmp-1',
+      escenario: ESCENARIO_PAGO_CLIENTE,
+      idempotencyKey: expect.stringMatching(UUID_V4),
+    });
+    desmontar(tree);
+
+    // Reapertura: AsyncStorage devuelve EXACTAMENTE la intención del timeout.
+    mockGetItem.mockResolvedValue(JSON.stringify(guardado));
+    limpiarRouter();
+    const reabierto = await montarConEspera();
+    await agregar(reabierto, linea(), 1);
+
+    expect(mockConsultarPago).toHaveBeenCalledWith('cmp-1');
+    expect(() =>
+      reabierto.root.findByProps({ testID: 'checkout-intencion-recuperada' })
+    ).not.toThrow();
+
+    await llenarFormulario(reabierto);
+    await pulsar(reabierto, 'checkout-confirmar');
+
+    // No se crea otra compra y se reutilizan clave y escenario configurado:
+    // cambiar cualquiera de los dos daría 409 PAGO_YA_INICIADO.
+    expect(mockCrearCompra).toHaveBeenCalledTimes(1);
+    expect(mockSimularPago).toHaveBeenLastCalledWith(
+      'cmp-1',
+      ESCENARIO_PAGO_CLIENTE,
+      guardado.idempotencyKey
+    );
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/resultado-pago',
+      params: { compraId: 'cmp-1', pagoId: 'pago-1' },
+    });
+    expect(mockAbrirCheckout).not.toHaveBeenCalled();
+
+    desmontar(reabierto);
+  });
+
+  it('INT4-131: 409 PAGO_YA_INICIADO muestra el detail del Problem Details sin confirmar pago', async () => {
+    const tree = montar();
+
+    await agregar(tree, linea(), 1);
+    await llenarFormulario(tree);
+    mockSimularPago.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          type: 'about:blank',
+          title: 'Conflicto',
+          status: 409,
+          detail: 'La compra ya tiene un pago iniciado.',
+          code: 'PAGO_YA_INICIADO',
+          traceId: 'trace-int4-131',
+        },
+      },
+    });
+
+    await pulsar(tree, 'checkout-confirmar');
+
+    // toApiError (real en esta suite) usa el detail del problem+json, no un
+    // mensaje inventado; la pantalla sigue siendo la de fallo.
+    expect(texto(tree, 'checkout-fallo-mensaje')).toBe('La compra ya tiene un pago iniciado.');
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    expect(mockAbrirCheckout).not.toHaveBeenCalled();
+    expect(leerCarrito(tree).items).toHaveLength(1);
+
+    desmontar(tree);
+  });
+
+  it('INT4-131: pago existente en Order se muestra sin simularlo ni crear otra compra', async () => {
+    const tree = montar();
+
+    await agregar(tree, linea(), 1);
+    await llenarFormulario(tree);
+    mockConsultarPago.mockResolvedValue({
+      pagoId: 'pago-ya-existente',
+      compraId: 'cmp-1',
+      estado: 'aprobado',
+    });
+
+    await pulsar(tree, 'checkout-confirmar');
+
+    expect(mockConsultarPago).toHaveBeenCalledWith('cmp-1');
+    expect(mockSimularPago).not.toHaveBeenCalled();
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/resultado-pago',
+      params: { compraId: 'cmp-1', pagoId: 'pago-ya-existente' },
+    });
+    expect(mockAbrirCheckout).not.toHaveBeenCalled();
+
+    desmontar(tree);
+  });
+
+  it('INT4-131: parámetros de navegación fabricados no confirman ningún pago', async () => {
+    mockParams.estado = 'realizada';
+    mockParams.compraId = 'cmp-fabricada';
+    mockParams.montoTotal = '999999';
+
+    const tree = montar();
+
+    // La vista es solo informativa: no se consulta ni se simula nada, no se
+    // abre navegador de pago y no queda un botón que vuelva a cobrar.
+    expect(mockCrearCompra).not.toHaveBeenCalled();
+    expect(mockConsultarPago).not.toHaveBeenCalled();
+    expect(mockSimularPago).not.toHaveBeenCalled();
+    expect(mockAbrirCheckout).not.toHaveBeenCalled();
+    expect(() => tree.root.findByProps({ testID: 'checkout-confirmar' })).toThrow();
 
     desmontar(tree);
   });

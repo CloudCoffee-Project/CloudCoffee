@@ -96,9 +96,17 @@ export function esEstadoPago(valor: unknown): valor is EstadoPago {
   return typeof valor === 'string' && (ESTADOS_PAGO as readonly string[]).includes(valor);
 }
 
-// Escenario elegible en el checkout para el pago simulado de Order. Cada
-// escenario produce siempre el mismo EstadoPago (contrato INT2-50).
+// Escenarios del pago simulado de Order (contrato INT2-50): cada uno produce
+// siempre el mismo EstadoPago. NO son una elección del cliente: el checkout usa
+// un escenario fijo por configuración y Order decide el estado real. Se mantienen
+// los tres para el contrato del servicio y sus tests deterministas.
 export type EscenarioPago = 'aprobar' | 'rechazar' | 'pendiente';
+
+export const ESCENARIOS_PAGO: readonly EscenarioPago[] = ['aprobar', 'rechazar', 'pendiente'];
+
+export function esEscenarioPago(valor: unknown): valor is EscenarioPago {
+  return typeof valor === 'string' && (ESCENARIOS_PAGO as readonly string[]).includes(valor);
+}
 
 // Motivos que el backend puede devolver en un Pago (enum del contrato).
 export type MotivoPago =
