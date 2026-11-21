@@ -26,8 +26,10 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        // INT2-116 agrega /catalog/seguimientos y /catalog/seguimientos/{seguimientoId}.
-        assertThat(api.path("paths").size()).isEqualTo(8);
+        // El contrato también incluye administración de campus/cafeterías y estado operativo.
+        assertThat(api.path("paths").size()).isEqualTo(19);
+        assertThat(api.path("paths").path("/catalog/admin/cafeterias").isObject()).isTrue();
+        assertThat(api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/estado-operativo").isObject()).isTrue();
         for (String method : new String[]{"get", "post"}) {
             assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/security/0/bearerAuth").isArray()).isTrue();
             assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/responses/403/content/application~1problem+json/schema/$ref")
