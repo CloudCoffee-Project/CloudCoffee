@@ -42,7 +42,7 @@ describe('persistencia de la intención de pago simulado', () => {
     await expect(leerIntencionPago()).resolves.toEqual(intencion);
   });
 
-  it('permite una intención todavía sin compra (escenario elegido antes de confirmar)', async () => {
+  it('permite una intención todavía sin compra (escenario configurado)', async () => {
     const intencion = { idempotencyKey: CLAVE, escenario: 'pendiente' } as const;
     mockGetItem.mockResolvedValue(JSON.stringify(intencion));
 
@@ -76,5 +76,24 @@ describe('persistencia de la intención de pago simulado', () => {
   it('genera UUID v4 para la Idempotency-Key', () => {
     expect(generarIdempotencyKey()).toMatch(UUID_V4);
     expect(generarIdempotencyKey()).not.toBe(generarIdempotencyKey());
+  });
+
+  it('INT4-131: tras un timeout la misma clave y escenario sobreviven a la reapertura', async () => {
+    const antesDelTimeout = { idempotencyKey: CLAVE, escenario: 'pendiente' } as const;
+    await guardarIntencionPago(antesDelTimeout);
+
+    // El timeout ocurre después de crear la compra: se conserva su id con la
+    // MISMA clave para que el reintento consulte ese pago y no cree otro.
+    const trasElTimeout = { ...antesDelTimeout, compraId: 'cmp-timeout' };
+    await guardarIntencionPago(trasElTimeout);
+
+    const escrito = mockSetItem.mock.calls[mockSetItem.mock.calls.length - 1][1];
+    mockGetItem.mockResolvedValue(escrito);
+
+    const reabierta = await leerIntencionPago();
+
+    expect(reabierta).toEqual(trasElTimeout);
+    expect(reabierta?.idempotencyKey).toBe(CLAVE);
+    expect(reabierta?.escenario).toBe('pendiente');
   });
 });

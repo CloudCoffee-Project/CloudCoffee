@@ -6,9 +6,9 @@
 // Idempotency-Key UUID por intención: repetir la misma clave con el mismo
 // escenario reproduce la primera respuesta, pero usar otra clave cuando la
 // compra ya tiene pago responde 409 PAGO_YA_INICIADO. La BD tampoco guarda el
-// escenario elegido (solo estado y motivo), así que la app necesita conservar
+// escenario usado (solo estado y motivo), así que la app necesita conservar
 // clave + escenario + compraId para que reabrir o reintentar no cree otro pago
-// ni cambie lo que el usuario pidió simular.
+// ni cambie lo que ya se envió a Order.
 //
 // No es un secreto del usuario: se guarda en AsyncStorage, igual que el campus
 // o el historial de notificaciones. Los tokens siguen en SecureStore
@@ -16,12 +16,13 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { EscenarioPago } from '../types/domain';
+import { esEscenarioPago, type EscenarioPago } from '../types/domain';
+
+export { esEscenarioPago };
 
 /** Clave única del almacén: una sola intención activa a la vez (un checkout). */
 export const INTENCION_PAGO_STORAGE_KEY = '@cloudcoffee:intencion-pago';
 
-const ESCENARIOS: readonly EscenarioPago[] = ['aprobar', 'rechazar', 'pendiente'];
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface IntencionPago {
@@ -29,7 +30,7 @@ export interface IntencionPago {
   compraId?: string;
   /** Se envía como Idempotency-Key en POST /v1/compras/{compraId}/pago. */
   idempotencyKey: string;
-  /** Decisión del usuario; Order decide después el EstadoPago real. */
+  /** Escenario fijo del despliegue; Order decide el EstadoPago real. */
   escenario: EscenarioPago;
 }
 
@@ -40,10 +41,6 @@ export function generarIdempotencyKey(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
-}
-
-export function esEscenarioPago(valor: unknown): valor is EscenarioPago {
-  return typeof valor === 'string' && (ESCENARIOS as readonly string[]).includes(valor);
 }
 
 function esIntencionValida(valor: unknown): valor is IntencionPago {
