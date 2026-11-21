@@ -8,7 +8,9 @@ import {
   getRefreshToken,
   httpClient,
   isAccessTokenExpired,
+  MENSAJE_ERROR_BACKEND,
   mensajeDeErrorApi,
+  mensajeErrorBackend,
   onTokensCambiados,
   refreshAccessToken,
   setAccessToken,
@@ -147,6 +149,44 @@ describe('httpClient base (INT4-16)', () => {
 
       expect(mensajeDeErrorApi(apiError)).toBe('La contraseña actual es incorrecta.');
       expect(toApiError(apiError as never)).toBe(apiError);
+    });
+  });
+
+  describe('mensaje único del backend (INT4-132)', () => {
+    it('usa el detail del problem+json cuando viene con información', () => {
+      const error = new Error('Request failed with status code 503') as any;
+      error.response = {
+        status: 503,
+        data: {
+          type: 'about:blank',
+          title: 'Servicio no disponible',
+          status: 503,
+          detail: 'Order no está disponible en este momento.',
+        },
+      };
+
+      expect(mensajeErrorBackend(error)).toBe('Order no está disponible en este momento.');
+    });
+
+    it('respeta el 429 con Retry-After del normalizador', () => {
+      const error = new Error('Too Many Requests') as any;
+      error.response = {
+        status: 429,
+        headers: { 'retry-after': '45' },
+        data: { type: 'about:blank', title: 'Rate limit', status: 429, detail: 'Espera.' },
+      };
+
+      expect(mensajeErrorBackend(error)).toBe(
+        'Demasiadas solicitudes. Intenta de nuevo en 45 segundos.'
+      );
+    });
+
+    it('mantiene el mensaje de red y cae al respaldo si no hay detalle', () => {
+      const error = new Error('Network Error') as any;
+
+      expect(mensajeErrorBackend(error)).toBe('Network Error');
+      expect(mensajeErrorBackend(undefined)).toBe(MENSAJE_ERROR_BACKEND);
+      expect(mensajeErrorBackend(new ApiError('', 500))).toBe(MENSAJE_ERROR_BACKEND);
     });
   });
 });

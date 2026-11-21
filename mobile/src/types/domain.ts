@@ -88,9 +88,16 @@ export function puedeCancelarCompra(estado: EstadoCompra): boolean {
 // EstadoPago es el enum del contrato (backend/docs/compra-pago-retiro.openapi.json
 // y order-service/model/EstadoPago). El pago ya no se decide en la app ni en un
 // redirect de Mercado Pago: Order devuelve este estado y la app solo lo lee.
-export type EstadoPago = 'pendiente' | 'aprobado' | 'rechazado';
+// La BD (order-db, CHECK de `pagos.estado`) también permite REQUIERE_CONCILIACION:
+// se incluye para no tratar ese pago real como un valor desconocido.
+export type EstadoPago = 'pendiente' | 'aprobado' | 'rechazado' | 'requiere_conciliacion';
 
-export const ESTADOS_PAGO: readonly EstadoPago[] = ['pendiente', 'aprobado', 'rechazado'];
+export const ESTADOS_PAGO: readonly EstadoPago[] = [
+  'pendiente',
+  'aprobado',
+  'rechazado',
+  'requiere_conciliacion',
+];
 
 export function esEstadoPago(valor: unknown): valor is EstadoPago {
   return typeof valor === 'string' && (ESTADOS_PAGO as readonly string[]).includes(valor);
@@ -115,7 +122,13 @@ export type MotivoPago =
   | 'escenario_pendiente'
   | 'procesando_stock'
   | 'reserva_vencida'
-  | 'compra_cancelada';
+  | 'compra_cancelada'
+  // Valores del CHECK de `pagos.motivo` en order-db (proveedor y conciliación).
+  | 'esperando_proveedor'
+  | 'proveedor_confirmado'
+  | 'proveedor_rechazado'
+  | 'proveedor_cancelado'
+  | 'conciliacion_requerida';
 
 /** Pago embebido en una Compra (GET /v1/compras/{compraId}) y en el pago simulado. */
 export interface Pago {

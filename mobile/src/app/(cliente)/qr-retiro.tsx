@@ -13,6 +13,7 @@
 
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ErrorBackend } from '../../components/ErrorBackend';
 import { Presionable } from '../../components/Presionable';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,7 +54,8 @@ export default function QrRetiroScreen() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [qr, setQr] = useState<QrRetiroBackend | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // INT4-132: se guarda el error original y la tarjeta compartida lo normaliza.
+  const [error, setError] = useState<unknown>(null);
 
   const recargar = useCallback(async (): Promise<void> => {
     setCargando(true);
@@ -83,14 +85,23 @@ export default function QrRetiroScreen() {
       try {
         const codigo = await obtenerQrRetiro(ordenResuelta.ordenId);
         setQr(codigo);
-      } catch {
-        setQr(null);
+      } catch (thrown) {
+        const apiError = toApiError(thrown as AxiosError<ApiProblem>);
+        if (apiError.status === 404 || apiError.status === 409) {
+          // Int4-103: todavía no habilitaron el código. Es degradación esperada,
+          // no un fallo: se ofrece el seguimiento sin inventar un QR local.
+          setQr(null);
+        } else {
+          // INT4-132: red caída, timeout o 5xx sí son fallos. Misma tarjeta y
+          // mismo reintento que en resultado-pago.
+          throw thrown;
+        }
       }
     } catch (thrown) {
       const apiError = toApiError(thrown as AxiosError<ApiProblem>);
       console.error('[QrRetiro] No se pudo cargar el retiro:', apiError.message);
       setOrden(null);
-      setError(apiError.message);
+      setError(thrown);
     } finally {
       setCargando(false);
     }
@@ -157,14 +168,16 @@ export default function QrRetiroScreen() {
             <ActivityIndicator size="large" color="#0052CC" />
             <Text style={styles.emptyText}>Consultando el código de retiro…</Text>
           </View>
-        ) : error || !orden ? (
-          <View style={styles.emptyCard} testID="qr-retiro-sin-orden">
-            <Text style={styles.emptyIcon}>☕</Text>
-            <Text style={styles.emptyTitle}>No pudimos encontrar tu pedido</Text>
-            <Text style={styles.emptyText}>
-              {error ?? 'Cuando realices una compra en el carrito, aquí verás tu código QR.'}
-            </Text>
-          </View>
+        ) : error !== null || !orden ? (
+          <ErrorBackend
+            error={error}
+            mensaje={error === null ? 'No hay una orden asociada a esta compra.' : undefined}
+            onReintentar={() => void recargar()}
+            testID="qr-retiro-sin-orden"
+            tituloTestID="qr-retiro-error-titulo"
+            mensajeTestID="qr-retiro-error-mensaje"
+            reintentarTestID="qr-retiro-reintentar"
+          />
         ) : (
           <>
             <View style={styles.badge}>

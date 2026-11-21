@@ -41,6 +41,10 @@ type EstadoListaProps = {
   accion: AccionEstadoLista;
   /** Identifica la lista cuyo estado representa esta tarjeta. */
   testID: string;
+  /** Permite a la pantalla exponer el título con su propio testID estable. */
+  tituloTestID?: string;
+  /** Permite a la pantalla exponer el mensaje con su propio testID estable. */
+  mensajeTestID?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -56,6 +60,8 @@ export function EstadoLista({
   mensaje,
   accion,
   testID,
+  tituloTestID,
+  mensajeTestID,
   style,
 }: EstadoListaProps) {
   const esError = variante === 'error';
@@ -74,10 +80,16 @@ export function EstadoLista({
         <Text style={styles.iconoTexto}>{icono}</Text>
       </View>
 
-      <Text style={[styles.titulo, esError ? styles.tituloError : null]} accessibilityRole="header">
+      <Text
+        style={[styles.titulo, esError ? styles.tituloError : null]}
+        accessibilityRole="header"
+        testID={tituloTestID}
+      >
         {titulo}
       </Text>
-      <Text style={styles.mensaje}>{mensaje}</Text>
+      <Text style={styles.mensaje} testID={mensajeTestID}>
+        {mensaje}
+      </Text>
 
       <Presionable
         style={styles.boton}

@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { AxiosError } from 'axios';
 
+import { ErrorBackend } from '../../components/ErrorBackend';
 import { Presionable } from '../../components/Presionable';
 import { obtenerCompra } from '../../services/compras';
 import { ApiProblem, toApiError } from '../../services/httpClient';
@@ -68,6 +69,15 @@ function textoUnico(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
+// Un pago en conciliación tampoco es un aprobado: se sigue en la orden en vivo,
+// igual que uno pendiente. Normalizar acá evita que la navegación compare estados
+// crudos y olvide uno de los valores reales del CHECK de `pagos.estado`.
+function resultadoDeEstadoPago(estado: EstadoPago): Resultado {
+  if (estado === 'aprobado') return 'aprobado';
+  if (estado === 'rechazado') return 'rechazado';
+  return 'pendiente';
+}
+
 // Deriva el resultado del pago de la compra real. `pago` es la fuente de verdad;
 // si la compra es antigua y no trae pago, el estado de la compra da una señal
 // conservadora (nunca afirmamos un aprobado que el backend no dijo).
@@ -75,11 +85,7 @@ function resultadoDeCompra(compra: Compra | null): Resultado {
   if (!compra) return 'desconocido';
 
   const pago = compra.pago ?? null;
-  if (pago) {
-    if (pago.estado === 'aprobado') return 'aprobado';
-    if (pago.estado === 'rechazado') return 'rechazado';
-    if (pago.estado === 'pendiente') return 'pendiente';
-  }
+  if (pago) return resultadoDeEstadoPago(pago.estado);
 
   if (compra.estado === 'pagado') return 'aprobado';
   if (compra.estado === 'cancelado') return 'rechazado';
@@ -98,7 +104,9 @@ export default function ResultadoPagoScreen() {
 
   const [compra, setCompra] = useState<Compra | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Se guarda el error original: la tarjeta compartida lo normaliza con
+  // toApiError, para que un cambio de formato se arregle en un solo lugar.
+  const [error, setError] = useState<unknown>(null);
 
   const recargar = useCallback(async (): Promise<void> => {
     if (!compraId) {
@@ -120,8 +128,13 @@ export default function ResultadoPagoScreen() {
         estadoDelPago = pago.estado;
       } catch (thrown) {
         const apiError = toApiError(thrown as AxiosError<ApiProblem>);
-        if (apiError.status !== 404) {
-          console.warn('[ResultadoPago] No se pudo consultar /pago:', apiError.message);
+        if (apiError.status === 404) {
+          // Compra antigua sin pago: la compra puede dar una señal válida.
+          console.warn('[ResultadoPago] La compra todavía no tiene pago:', apiError.message);
+        } else {
+          // INT4-132: un fallo real de /pago NO habilita la navegación. Sube al
+          // catch exterior para mostrar el mismo error y permitir reintentar.
+          throw thrown;
         }
       }
 
@@ -130,7 +143,9 @@ export default function ResultadoPagoScreen() {
 
       // Navegación por estado REAL, no por el params con el que se abrió la
       // pantalla. replace para que volver atrás no reabra el checkout.
-      const resultado = estadoDelPago ?? resultadoDeCompra(actual);
+      const resultado = estadoDelPago
+        ? resultadoDeEstadoPago(estadoDelPago)
+        : resultadoDeCompra(actual);
       if (resultado === 'aprobado') {
         router.replace({
           pathname: '/(cliente)/qr-retiro',
@@ -145,9 +160,9 @@ export default function ResultadoPagoScreen() {
       }
     } catch (thrown) {
       const apiError = toApiError(thrown as AxiosError<ApiProblem>);
-      console.error('[ResultadoPago] No se pudo consultar la compra:', apiError.message);
+      console.error('[ResultadoPago] No se pudo consultar el estado:', apiError.message);
       setCompra(null);
-      setError(apiError.message);
+      setError(thrown);
     } finally {
       setCargando(false);
     }
@@ -171,6 +186,33 @@ export default function ResultadoPagoScreen() {
     );
   }
 
+  if (error !== null) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.contenido} showsVerticalScrollIndicator={false}>
+          <ErrorBackend
+            error={error}
+            mensaje={typeof error === 'string' ? error : undefined}
+            onReintentar={() => void recargar()}
+            testID="resultado-error"
+            tituloTestID="resultado-titulo"
+            mensajeTestID="resultado-mensaje"
+            reintentarTestID="resultado-reintentar"
+          />
+          <View style={styles.acciones}>
+            <Presionable
+              style={[styles.boton, styles.botonSecundario]}
+              onPress={() => router.replace('/mis-compras')}
+              testID="resultado-ir-compras"
+            >
+              <Text style={styles.botonSecundarioTexto}>Ver mis compras</Text>
+            </Presionable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.contenido} showsVerticalScrollIndicator={false}>
@@ -179,7 +221,7 @@ export default function ResultadoPagoScreen() {
           {contenido.titulo}
         </Text>
         <Text style={styles.mensaje} testID="resultado-mensaje">
-          {error ?? contenido.mensaje}
+          {contenido.mensaje}
         </Text>
 
         {!!compra && (
