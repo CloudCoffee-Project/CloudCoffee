@@ -31,6 +31,13 @@ durables en los consumidores y almacenamiento/configuración adecuados del broke
 Los reintentos/DLQ de consumidores siguen su topología existente. La salida local
 no descarta pendientes ni los mueve a una DLQ tras un número arbitrario de intentos.
 
+Notification persiste los envíos push en `notification_push_delivery` con una
+clave única por evento/canal/dispositivo. El envío FCM ocurre en un worker separado
+del listener RabbitMQ; un fallo de proveedor no vuelve a ejecutar correo ni
+WebSocket. Los fallos transitorios tienen hasta tres intentos y los tokens con
+respuesta `UNREGISTERED` se eliminan. La entrega push no forma parte del estado de
+éxito del evento RabbitMQ.
+
 ## Puntos de escritura y auditoría
 
 | Flujo | Escritura y estado de implementación |
@@ -41,6 +48,11 @@ no descarta pendientes ni los mueve a una DLQ tras un número arbitrario de inte
 | Preparación, entrega y no retirados | Las transiciones aún pertenecen a INT2-54/79/126/127. Deben reutilizar `OrderEventJournal` y `EventosRevision.orden` dentro del commit de estado; no crear otro publicador. |
 | Reserva, liberación y vencimiento de stock | `StockEventPublisher` toma el snapshot y escribe mediante `CatalogEventJournal`, dentro de la transacción de `StockReservationService`. Un replay de reserva/liberación no crea otro efecto ni evento. |
 | Eventos dirigidos de Catalog | El journal admite el envelope con destinatarios ya resueltos y los conserva al reintentar. La selección de seguidores y generación de reposición se implementan en INT2-117. |
+
+`catalog.producto.disponible.v1` lleva `payload.productoId` y la lista
+`payload.destinatarios` de UUID ya seleccionados por Catalog. Notification usa
+solo esa lista para el push de reposición; no consulta seguidores. El evento
+genérico `catalog.stock.actualizado.v1` permanece limitado a WebSocket.
 
 Ambos journals exigen una transacción existente (`MANDATORY`): no abren una
 transacción independiente para guardar el evento. Antes de construir un snapshot
@@ -83,6 +95,10 @@ como publicado para silenciar la alerta.
 | Order | `cloudcoffee.creation.publish-ms` | `2000` |
 | Catalog | `catalog.outbox.publish-enabled` / `CATALOG_OUTBOX_PUBLISH_ENABLED` | `true` |
 | Catalog | `catalog.outbox.publish-ms` / `CATALOG_OUTBOX_PUBLISH_MS` | `2000` |
+| Notification | `app.fcm.enabled` / `FCM_ENABLED` | `false` |
+| Notification | `app.fcm.credentials-file` / `FCM_CREDENTIALS_FILE` | vacío |
+| Notification | `app.fcm.credentials-json` / `FCM_CREDENTIALS_JSON` | vacío |
+| Notification | `app.fcm.dispatch-ms` / `FCM_DISPATCH_MS` | `5000` |
 
 En ambos servicios están habilitados `publisher-confirm-type=correlated`,
 `publisher-returns=true` y `template.mandatory=true`. No desactivar esas opciones:
