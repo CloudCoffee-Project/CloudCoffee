@@ -470,3 +470,10 @@ de endpoints ejecutables; las siguientes issues deberán implementar los escenar
    concurrentes registran solo una, sin repetir descuento de stock.
 8. Caída del broker tras persistir y antes de publicar → recuperación con eventId
    estable; consumidor duplicado no repite correo/efecto; HTTP reconcilia el estado.
+
+### Retención operativa (INT2-119)
+
+La retención de respuestas terminadas es de 30 días por defecto, configurable
+con mínimo 24 horas. Pendientes, conciliaciones y referencias activas prolongan
+la conservación. Ver [retención de idempotencias](retencion-idempotencias.md)
+para fechas de finalización, lotes, concurrencia y reuso después de la purga.

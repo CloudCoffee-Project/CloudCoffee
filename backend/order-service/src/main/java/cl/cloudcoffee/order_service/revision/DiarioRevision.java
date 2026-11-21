@@ -42,11 +42,15 @@ public class DiarioRevision {
         }
     }
     Registro buscar(UUID id) {
-        return jdbc.queryForObject("SELECT * FROM revisiones_compra WHERE id=?", (rs, n) ->
+        try { return jdbc.queryForObject("SELECT * FROM revisiones_compra WHERE id=?", (rs, n) ->
                 new Registro(rs.getObject("id", UUID.class), rs.getObject("compra_id", UUID.class),
                         rs.getObject("usuario_id", UUID.class), rs.getObject("orden_id", UUID.class),
                         rs.getString("accion"), rs.getString("ruta"), rs.getString("fase"), rs.getString("plan"),
                         (Integer) rs.getObject("status"), rs.getString("respuesta"), rs.getString("trace_id")), id);
+        } catch (org.springframework.dao.EmptyResultDataAccessException expirada) {
+            throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/idempotency-expired"), "Intención expirada",
+                    "La intención superó su retención. Consulta el estado actual de la compra.", "IDEMPOTENCY_EXPIRED");
+        }
     }
     List<UUID> previos(UUID usuario, String ruta, UUID clave) {
         return jdbc.queryForList("SELECT id FROM revisiones_compra WHERE usuario_id=? AND ruta=? AND clave=?",
@@ -65,8 +69,8 @@ public class DiarioRevision {
                 json.writeValueAsString(plan), utc(ahora), id);
     }
     void terminar(Registro registro, int status, String cuerpo, Instant ahora) {
-        jdbc.update("UPDATE revisiones_compra SET fase='TERMINADA', status=?, respuesta=?, updated_at=? WHERE id=?",
-                status, cuerpo, utc(ahora), registro.id());
+        jdbc.update("UPDATE revisiones_compra SET fase='TERMINADA', status=?, respuesta=?, updated_at=?, completed_at=? WHERE id=?",
+                status, cuerpo, utc(ahora), utc(ahora), registro.id());
         jdbc.update("UPDATE compras SET revision_pendiente=NULL WHERE id=? AND revision_pendiente=?",
                 registro.compraId(), registro.id());
     }
