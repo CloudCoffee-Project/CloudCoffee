@@ -7,6 +7,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import QrRetiroScreen from '../app/(cliente)/qr-retiro';
+import { TITULO_ERROR_BACKEND } from '../components/ErrorBackend';
 import { obtenerCompra } from '../services/compras';
 import { ApiError } from '../services/httpClient';
 import { obtenerOrden, obtenerQrRetiro } from '../services/ordenes';
@@ -144,6 +145,40 @@ describe('pantalla de Código de Retiro (QR del backend)', () => {
       pathname: '/(cliente)/seguimientos',
       params: { compraId: 'compra-1', ordenId: 'orden-1' },
     });
+
+    desmontar(tree);
+  });
+
+  it('INT4-132: un fallo de la orden muestra el error común y permite reintentar', async () => {
+    mockObtenerCompra
+      .mockRejectedValueOnce(new ApiError('Order no responde.', 503))
+      .mockResolvedValueOnce(COMPRA);
+
+    const tree = await renderizarQr();
+
+    expect(texto(tree, 'qr-retiro-error-titulo')).toBe(TITULO_ERROR_BACKEND);
+    expect(texto(tree, 'qr-retiro-error-mensaje')).toBe('Order no responde.');
+    expect(() => tree.root.findByProps({ testID: 'qr-retiro-cargando' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'qr-retiro-reintentar' })).not.toThrow();
+
+    await pulsar(tree, 'qr-retiro-reintentar');
+
+    expect(mockObtenerCompra).toHaveBeenCalledTimes(2);
+    expect(mockObtenerQrRetiro).toHaveBeenCalledWith('orden-1');
+    expect(tree.root.findAllByProps({ testID: 'qr-retiro-codigo' }).length).toBeGreaterThan(0);
+
+    desmontar(tree);
+  });
+
+  it('INT4-132: timeout al pedir el QR es error, no una degradación silenciosa', async () => {
+    mockObtenerQrRetiro.mockRejectedValue(new ApiError('Network Error', 0));
+
+    const tree = await renderizarQr();
+
+    expect(texto(tree, 'qr-retiro-error-titulo')).toBe(TITULO_ERROR_BACKEND);
+    expect(texto(tree, 'qr-retiro-error-mensaje')).toBe('Network Error');
+    expect(() => tree.root.findByProps({ testID: 'qr-retiro-sin-qr' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'qr-retiro-reintentar' })).not.toThrow();
 
     desmontar(tree);
   });

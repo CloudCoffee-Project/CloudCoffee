@@ -9,6 +9,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import ResultadoPagoScreen from '../app/(cliente)/resultado-pago';
+import { TITULO_ERROR_BACKEND } from '../components/ErrorBackend';
 import { obtenerCompra } from '../services/compras';
 import { ApiError } from '../services/httpClient';
 import { consultarPago } from '../services/pagos';
@@ -146,6 +147,25 @@ describe('pantalla resultado-pago (estado real de Order)', () => {
     desmontar(tree);
   });
 
+  it('con pago en conciliación sigue la orden en vivo aunque la compra diga pagado', async () => {
+    mockConsultarPago.mockResolvedValue(pagoSimulado('requiere_conciliacion'));
+    mockObtenerCompra.mockResolvedValue(
+      compraConPago('requiere_conciliacion', { estado: 'pagado' })
+    );
+
+    const tree = await renderizarResultado();
+
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/seguimientos',
+      params: { compraId: 'compra-123', ordenId: 'orden-1' },
+    });
+    expect(routerMock.replace).not.toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/(cliente)/qr-retiro' })
+    );
+
+    desmontar(tree);
+  });
+
   it('con pago rechazado ofrece volver al carrito sin vaciarlo', async () => {
     mockObtenerCompra.mockResolvedValue(compraConPago('rechazado'));
     mockConsultarPago.mockResolvedValue(pagoSimulado('rechazado'));
@@ -187,8 +207,9 @@ describe('pantalla resultado-pago (estado real de Order)', () => {
 
     const tree = await renderizarResultado();
 
-    expect(texto(tree, 'resultado-titulo')).toBe('No pudimos confirmar el estado');
+    expect(texto(tree, 'resultado-titulo')).toBe(TITULO_ERROR_BACKEND);
     expect(texto(tree, 'resultado-mensaje')).toContain('Servicio no disponible');
+    expect(() => tree.root.findByProps({ testID: 'resultado-cargando' })).toThrow();
 
     await pulsar(tree, 'resultado-reintentar');
 
@@ -254,7 +275,7 @@ describe('pantalla resultado-pago (estado real de Order)', () => {
     desmontar(tree);
   });
 
-  it('INT4-131: timeout en /pago con params exitosos no inventa una aprobación', async () => {
+  it('INT4-131/132: timeout en /pago con params exitosos no inventa una aprobación', async () => {
     mockUseLocalSearchParams.mockReturnValue({
       estado: 'exitoso',
       pagoId: 'pago-fabricado',
@@ -265,14 +286,37 @@ describe('pantalla resultado-pago (estado real de Order)', () => {
 
     const tree = await renderizarResultado();
 
-    expect(routerMock.replace).toHaveBeenCalledWith({
-      pathname: '/(cliente)/seguimientos',
-      params: { compraId: 'compra-123', ordenId: 'orden-1' },
-    });
-    expect(routerMock.replace).not.toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/(cliente)/qr-retiro' })
-    );
+    expect(texto(tree, 'resultado-titulo')).toBe(TITULO_ERROR_BACKEND);
+    expect(texto(tree, 'resultado-mensaje')).toContain('Network Error');
+    expect(routerMock.replace).not.toHaveBeenCalled();
     expect(() => tree.root.findByProps({ testID: 'resultado-ir-qr' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'resultado-cargando' })).toThrow();
+
+    await pulsar(tree, 'resultado-reintentar');
+    expect(mockConsultarPago).toHaveBeenCalledTimes(2);
+
+    desmontar(tree);
+  });
+
+  it('INT4-132: un 409 de /pago muestra el detail del problem+json y permite reintentar', async () => {
+    mockConsultarPago
+      .mockRejectedValueOnce(new ApiError('La compra ya tiene un pago en curso.', 409))
+      .mockResolvedValueOnce(pagoSimulado('aprobado'));
+    mockObtenerCompra.mockResolvedValue(compraConPago('aprobado'));
+
+    const tree = await renderizarResultado();
+
+    expect(texto(tree, 'resultado-titulo')).toBe(TITULO_ERROR_BACKEND);
+    expect(texto(tree, 'resultado-mensaje')).toBe('La compra ya tiene un pago en curso.');
+    expect(mockObtenerCompra).not.toHaveBeenCalled();
+
+    await pulsar(tree, 'resultado-reintentar');
+
+    expect(mockObtenerCompra).toHaveBeenCalledWith('compra-123');
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/qr-retiro',
+      params: { compraId: 'compra-123' },
+    });
 
     desmontar(tree);
   });

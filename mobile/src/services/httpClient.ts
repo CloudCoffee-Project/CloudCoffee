@@ -170,6 +170,27 @@ export function mensajeDeErrorApi(error: unknown): string {
   return campo ? campo.message : apiError.message;
 }
 
+// Texto de respaldo cuando ni el problem+json ni el error de red traen un
+// detalle útil. Las pantallas que consultan el backend comparten este mensaje.
+export const MENSAJE_ERROR_BACKEND = 'No pudimos conectar con el servicio. Intenta nuevamente.';
+
+/**
+ * Mensaje único para los fallos del backend. Pase lo que pase, la normalización
+ * sigue ocurriendo en `toApiError`/`mensajeDeErrorApi`: si el contrato de error
+ * cambia, se ajusta ahí y no en cada pantalla.
+ */
+export function mensajeErrorBackend(error: unknown): string {
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim();
+  }
+  if (!error || typeof error !== 'object') {
+    return MENSAJE_ERROR_BACKEND;
+  }
+
+  const mensaje = mensajeDeErrorApi(error).trim();
+  return mensaje || MENSAJE_ERROR_BACKEND;
+}
+
 // Decodifica la parte payload de un JWT (base64url) a un objeto plano.
 // Devuelve null si el token está malformado o no tiene payload.
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {

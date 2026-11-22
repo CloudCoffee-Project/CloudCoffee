@@ -407,4 +407,13 @@ describe('El botón de pagar (INT4-35: lleva al checkout)', () => {
     // Por ahora no hay alternativa: no hay control que pueda cambiar de método.
     expect(metodo).toContain('Tarjetas de débito, crédito o saldo en cuenta');
   });
+
+  it('INT4-132: sin peticiones HTTP no hay carga ni error de backend que reintentar', async () => {
+    const tree = await renderCarrito();
+    await agregar(tree, linea());
+
+    expect(() => tree.root.findByProps({ testID: 'carrito-cargando' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'carrito-error' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'carrito-reintentar' })).toThrow();
+  });
 });
