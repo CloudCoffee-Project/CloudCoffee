@@ -25,6 +25,8 @@ public class Orden {
     private UUID cafeteriaId;
     @Column(name = "cafeteria_nombre", nullable = false, updatable = false)
     private String cafeteriaNombre;
+    @Column(name = "campus_id", updatable = false)
+    private UUID campusId;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private EstadoOrden estado;
@@ -36,6 +38,8 @@ public class Orden {
     private Instant reservaExpiraAt;
     @Column(name = "retiro_hasta")
     private Instant retiroHasta;
+    @Column(name = "pagado_at")
+    private Instant pagadoAt;
     @Column(name = "entregado_at")
     private Instant entregadoAt;
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -103,11 +107,13 @@ public class Orden {
     public String getCodigoOrden() { return codigoOrden; }
     public UUID getCafeteriaId() { return cafeteriaId; }
     public String getCafeteriaNombre() { return cafeteriaNombre; }
+    public UUID getCampusId() { return campusId; }
     public EstadoOrden getEstado() { return estado; }
     public BigDecimal getMontoTotal() { return montoTotal; }
     public String getMoneda() { return moneda; }
     public Instant getReservaExpiraAt() { return reservaExpiraAt; }
     public Instant getRetiroHasta() { return retiroHasta; }
+    public Instant getPagadoAt() { return pagadoAt; }
     public Instant getEntregadoAt() { return entregadoAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
