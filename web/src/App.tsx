@@ -14,7 +14,9 @@ import { PasswordChangePage } from './pages/PasswordChangePage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
+import { PaymentResultPage } from './pages/PaymentResultPage';
 import { CashierOrdersPage } from './pages/CashierOrdersPage';
+import { AdminPanelPage } from './pages/AdminPanelPage';
 
 
 export function App() {
@@ -33,6 +35,7 @@ export function App() {
         <Route path="/verificar-correo" element={<VerificationPage />} />
         <Route path="/recuperar-contrasena" element={<PasswordRecoveryPage />} />
         <Route path="/restablecer-contrasena" element={<PasswordResetPage />} />
+        <Route path="/restaurar-contrasena" element={<PasswordResetPage />} />
 
         {/* Rutas privadas para cualquier usuario con sesión */}
         <Route element={<ProtectedRoute />}>
@@ -43,6 +46,8 @@ export function App() {
         {/* Rutas exclusivas de comprador (CLIENTE) */}
         <Route element={<ProtectedRoute allowedRoles={['CLIENTE']} />}>
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/pago/resultado" element={<PaymentResultPage />} />
+          <Route path="/pago/retorno" element={<PaymentResultPage />} />
           <Route
             path="/compras"
             element={
@@ -57,6 +62,24 @@ export function App() {
         {/* Rutas exclusivas de personal de cafetería (CAJERO) */}
         <Route element={<ProtectedRoute allowedRoles={['CAJERO']} />}>
           <Route path="/cajero" element={<CashierOrdersPage />} />
+        </Route>
+        {/* Rutas exclusivas de administrador de cafetería (ADMIN_CAFETERIA) */}
+        <Route element={<ProtectedRoute allowedRoles={['ADMIN_CAFETERIA']} />}>
+          <Route path="/admin" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="resumen" />} />
+          <Route path="/admin/cafeteria" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="cafeteria" />} />
+          <Route path="/admin/personal" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="personal" />} />
+          <Route path="/admin/ofertas" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="ofertas" />} />
+          <Route path="/admin/inventario" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="inventario" />} />
+          <Route path="/admin/ventas" element={<AdminPanelPage panelRole="ADMIN_CAFETERIA" section="ventas" />} />
+        </Route>
+
+        {/* Rutas exclusivas de superadministrador (SUPER_ADMIN) */}
+        <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+          <Route path="/superadmin" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="resumen" />} />
+          <Route path="/superadmin/cafeterias" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="cafeterias" />} />
+          <Route path="/superadmin/usuarios" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="usuarios" />} />
+          <Route path="/superadmin/catalogo" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="catalogo" />} />
+          <Route path="/superadmin/ventas" element={<AdminPanelPage panelRole="SUPER_ADMIN" section="ventas" />} />
         </Route>
 
         {/* Pagina 404 para rutas inexistentes */}

@@ -44,6 +44,11 @@ public class RegistroIdempotencia {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    public void completar(Instant ahora) { if (completedAt == null) completedAt = ahora; }
+
     protected RegistroIdempotencia() {}
 
     public RegistroIdempotencia(UUID usuarioId, String metodo, String ruta, UUID clave, String hashCuerpo,

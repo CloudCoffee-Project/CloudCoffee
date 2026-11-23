@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { PaymentCheckout } from '../components/PaymentCheckout';
+import { paymentSessionOwner } from '../services/payments';
 import {
   CART_UPDATED_EVENT,
   CART_STORAGE_KEY,
@@ -91,14 +93,20 @@ export function CheckoutPage() {
   purchaseRef.current = purchase;
 
   const reconcileActivePurchaseByHttp = useCallback(async (compraId: string) => {
+    const owner = paymentSessionOwner();
     try {
       const freshPurchase = await getPurchase(compraId);
+      if (owner !== paymentSessionOwner()) return;
       setPurchase((current) => {
         const reconciled = reconcilePurchaseFromHttp(current, freshPurchase);
         savePurchase(reconciled);
         return reconciled;
       });
-    } catch {
+    } catch (cause) {
+      if (owner !== paymentSessionOwner()) return;
+      if (cause instanceof ApiRequestError && [401, 403, 404].includes(cause.status ?? 0)) {
+        clearSavedPurchase(); setPurchase(null);
+      }
       // Conservar último estado válido si falla la relectura puntual
     }
   }, []);
@@ -181,6 +189,11 @@ export function CheckoutPage() {
     });
   }, [sessionUserId, activeCompraId, activeOrdenIdsKey, reconcileActivePurchaseByHttp]);
 
+  useEffect(() => {
+    const saved = readSavedPurchase();
+    if (saved) void reconcileActivePurchaseByHttp(saved.compraId);
+  }, [reconcileActivePurchaseByHttp]);
+
   const checkoutCafeteriaIdsKey = !purchase
     ? [...new Set(cartItems.map((item) => item.cafeteriaId))].sort().join(',')
     : '';
@@ -207,6 +220,7 @@ export function CheckoutPage() {
     if (!pendingIntent && cartItems.length === 0) return;
     setIsSubmitting(true);
     setErrorMessage('');
+    const owner = paymentSessionOwner();
 
     let intent = pendingIntent;
     try {
@@ -221,6 +235,7 @@ export function CheckoutPage() {
       }
 
       const createdPurchase = await createPurchase(intent.items, intent.idempotencyKey);
+      if (owner !== paymentSessionOwner()) return;
       savePurchase(createdPurchase);
       clearPendingPurchaseCreation();
       clearCart();
@@ -228,6 +243,7 @@ export function CheckoutPage() {
       setCartItems([]);
       setPurchase(createdPurchase);
     } catch (error) {
+      if (owner !== paymentSessionOwner()) return;
       if (!shouldReuseIdempotencyKey(error)) {
         clearPendingPurchaseCreation();
         setPendingIntent(null);
@@ -242,16 +258,19 @@ export function CheckoutPage() {
     if (!purchase) return;
     setIsSubmitting(true);
     setErrorMessage('');
+    const owner = paymentSessionOwner();
     const key = getPurchaseActionKey(purchase.compraId, action);
 
     try {
       const updatedPurchase = action === 'confirmar'
         ? await confirmPurchase(purchase.compraId, key)
         : await cancelPurchase(purchase.compraId, key);
+      if (owner !== paymentSessionOwner()) return;
       savePurchase(updatedPurchase);
       clearPurchaseActionKey(purchase.compraId, action);
       setPurchase(updatedPurchase);
     } catch (error) {
+      if (owner !== paymentSessionOwner()) return;
       if (error instanceof ApiRequestError && error.code === 'PRECIO_CAMBIO') {
         const updatedPurchase = error.extensions.compra;
         if (isPurchase(updatedPurchase)) {
@@ -325,7 +344,7 @@ export function CheckoutPage() {
             </button>
           )}
           {purchase.estado === 'pendiente_pago' && (
-            <p role="status">Compra confirmada. El siguiente paso de pago estará disponible en el flujo de pagos.</p>
+            <PaymentCheckout key={purchase.compraId} compraId={purchase.compraId} />
           )}
           {purchase.estado === 'cancelado' && <p role="status">La compra fue cancelada.</p>}
           <button type="button" className="checkout-new-purchase" onClick={startNewPurchase}>

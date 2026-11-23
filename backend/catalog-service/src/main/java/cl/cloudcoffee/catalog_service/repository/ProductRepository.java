@@ -29,6 +29,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
         JOIN Offer o ON o.product = p
         JOIN o.cafeteria c
         WHERE c.campus.id = :campusId
+          AND c.campus.active = true
+          AND c.active = true
           AND c.status = cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus.OPEN
           AND o.status = cl.cloudcoffee.catalog_service.model.enums.OfferStatus.AVAILABLE
           AND (:categoryId IS NULL OR p.category.id = :categoryId)

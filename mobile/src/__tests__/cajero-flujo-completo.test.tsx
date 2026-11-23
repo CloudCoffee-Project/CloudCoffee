@@ -35,12 +35,14 @@ import type { Orden } from '../types/domain';
 // pantallas se simula con los mocks de expo-router: el router.replace captura
 // la ruta destino y el test sigue el recorrido renderizando la pantalla
 // siguiente con los params que expo-router le habría pasado.
+const CODIGO_RETIRO = 'e'.repeat(43);
 const mockParams: Record<string, string | string[]> = {};
 
 jest.mock('../services/ordenes', () => ({
   fetchPedidosEntrantes: jest.fn(),
   marcarOrdenEntregada: jest.fn(),
   resolverOrdenNoRetirada: jest.fn(),
+  crearClaveIdempotencia: jest.fn(() => 'clave-idempotencia-test'),
 }));
 
 jest.mock('../services/httpClient', () => {
@@ -225,9 +227,11 @@ describe('Flujo completo del cajero (INT4-13)', () => {
     mockUseLocalSearchParams.mockReturnValue(mockParams);
     delete mockParams.pedido;
     delete mockParams.estado;
+    // El folio manual no conoce el token; solo el QR lo trae consigo.
+    delete mockParams.codigo;
   });
 
-  it('listado → búsqueda manual por folio → confirmación → entrega de la orden', async () => {
+  it('listado → búsqueda manual por folio → degrada sin token de retiro', async () => {
     const listado = await renderizar(<PedidosCajeroScreen />);
 
     // Listado (INT4-7): por defecto se ven solo los pedidos activos.
@@ -244,33 +248,25 @@ describe('Flujo completo del cajero (INT4-13)', () => {
       validar.props.onPress();
     });
 
-    // Navega a la confirmación con el estado de la orden encontrada.
+    // La búsqueda solo identifica la orden: no inventa el token que Order
+    // emitiría por GET /orders/{id}/qr (ruta aún no implementada).
     expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
       params: { pedido: 'o-1', estado: 'listo_para_retiro' },
     });
     act(() => listado.unmount());
 
-    // La pantalla siguiente recibe los params que expo-router le habría pasado.
     mockParams.pedido = 'o-1';
     mockParams.estado = 'listo_para_retiro';
     const confirmacion = await renderizar(<ConfirmacionEntregaScreen />);
 
-    // Confirmación (INT4-9): detalle con cliente e ítems de la orden.
-    const detalle = confirmacion.root.findByProps({ testID: 'cajero-confirmacion-detalle' });
-    expect(textoDe(detalle)).toContain('Ignacio Soto');
-    expect(textoDe(detalle)).toContain('Café Americano 12oz');
-    expect(textoDe(detalle)).toContain('Croissant Jamón y Queso');
-
-    const confirmar = confirmacion.root.findByProps({ testID: 'cajero-confirmacion-confirmar' });
-    await act(async () => {
-      confirmar.props.onPress();
-    });
-
-    // Entrega: la orden queda marcada y el backend simulado queda consistente.
-    expect(mockMarcarEntregada).toHaveBeenCalledWith('o-1', 'token-real');
-    confirmacion.root.findByProps({ testID: 'cajero-confirmacion-entregada' });
-    expect(backend.find((o) => o.ordenId === 'o-1')?.estado).toBe('entregado');
+    const invalida = confirmacion.root.findByProps({ testID: 'cajero-confirmacion-invalida' });
+    expect(textoDe(invalida)).toContain('no trae el código de retiro');
+    expect(mockMarcarEntregada).not.toHaveBeenCalled();
+    expect(
+      confirmacion.root.findAllByProps({ testID: 'cajero-confirmacion-entregada' })
+    ).toHaveLength(0);
+    expect(backend.find((o) => o.ordenId === 'o-1')?.estado).toBe('listo_para_retiro');
 
     act(() => confirmacion.unmount());
   }, 20000);
@@ -280,16 +276,20 @@ describe('Flujo completo del cajero (INT4-13)', () => {
 
     // Escaneo (INT4-8): un QR de retiro válido (serializado con el mismo
     // helper que usa el cliente) se valida y navega a la confirmación.
-    await escanear(escaner, serializarQrRetiro({ pedido: 'o-1', estado: 'listo_para_retiro' }));
+    await escanear(
+      escaner,
+      serializarQrRetiro({ pedido: 'o-1', estado: 'listo_para_retiro', codigo: CODIGO_RETIRO })
+    );
 
     expect(routerMock.replace).toHaveBeenCalledWith({
       pathname: '/(cajero)/confirmacion-entrega',
-      params: { pedido: 'o-1', estado: 'listo_para_retiro' },
+      params: { pedido: 'o-1', estado: 'listo_para_retiro', codigo: CODIGO_RETIRO },
     });
     act(() => escaner.unmount());
 
     mockParams.pedido = 'o-1';
     mockParams.estado = 'listo_para_retiro';
+    mockParams.codigo = CODIGO_RETIRO;
     const confirmacion = await renderizar(<ConfirmacionEntregaScreen />);
 
     const confirmar = confirmacion.root.findByProps({ testID: 'cajero-confirmacion-confirmar' });
@@ -297,7 +297,12 @@ describe('Flujo completo del cajero (INT4-13)', () => {
       confirmar.props.onPress();
     });
 
-    expect(mockMarcarEntregada).toHaveBeenCalledWith('o-1', 'token-real');
+    expect(mockMarcarEntregada).toHaveBeenCalledWith(
+      'o-1',
+      CODIGO_RETIRO,
+      'token-real',
+      expect.any(String)
+    );
     confirmacion.root.findByProps({ testID: 'cajero-confirmacion-entregada' });
     expect(backend.find((o) => o.ordenId === 'o-1')?.estado).toBe('entregado');
 
@@ -353,7 +358,8 @@ describe('Flujo completo del cajero (INT4-13)', () => {
     // Éxito: resumen visible, la orden sale del listado y el backend queda
     // consistente (pasó de pendiente de revisión a final).
     const exito = noRetirados.root.findByProps({ testID: 'cajero-nr-exito' });
-    expect(textoDe(exito)).toContain('1 ítem(s) reingresado(s) al stock, 1 descartado(s)');
+    expect(textoDe(exito)).toContain('Revisión registrada');
+    expect(textoDe(exito)).toContain('resolución final');
     expect(dataDe(noRetirados).map((o) => o.ordenId)).toEqual(['o-3']);
     expect(backend.find((o) => o.ordenId === 'o-2')?.estado).toBe('no_retirado_final');
 

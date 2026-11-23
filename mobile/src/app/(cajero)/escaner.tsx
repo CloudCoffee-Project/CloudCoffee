@@ -20,8 +20,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useIsFocused, useRouter } from 'expo-router';
 
 import { fetchPedidosEntrantes } from '../../services/ordenes';
-import { parsearQrRetiro } from '../../services/qrRetiro';
+import { esQrCodigoOpaco, parsearQrRetiro } from '../../services/qrRetiro';
 import { getAccessToken } from '../../services/httpClient';
+import { esCodigoRetiroValido } from '../../types/domain';
 import type { Orden, QrRetiro } from '../../types/domain';
 
 // Resultado de procesar un código escaneado. 'error' muestra un banner con el
@@ -34,9 +35,31 @@ export type ResultadoEscaneo =
 // pedidos (si está disponible). Función pura: se exporta para testearla sin
 // la cámara.
 export function procesarCodigo(contenido: string, pedidos: Orden[]): ResultadoEscaneo {
-  const payload = parsearQrRetiro(contenido);
+  const texto = contenido.trim();
+  const payload = parsearQrRetiro(texto);
   if (!payload) {
     return { tipo: 'error', mensaje: 'El código escaneado no es un QR de retiro válido.' };
+  }
+
+  // Token opaco del contrato: Order todavía no expone POST /validar-retiro, así
+  // que no podemos saber de qué orden es sin una llamada al backend. Degradación
+  // verificada: se dice qué falta y no se inventa el id de la orden.
+  if (esQrCodigoOpaco(texto) && !payload.pedido) {
+    return {
+      tipo: 'error',
+      mensaje:
+        'Este QR usa el formato del contrato, pero la validación previa (POST /v1/orders/validar-retiro) aún no está disponible. No se puede identificar la orden ni registrar la entrega.',
+    };
+  }
+
+  // QR legacy del mockup: sirve para mostrar el detalle, pero no habilita la
+  // entrega porque no trae el token que Order validaría en /entregar.
+  if (!esCodigoRetiroValido(payload.codigo)) {
+    return {
+      tipo: 'error',
+      mensaje:
+        'Este QR no trae el código de retiro emitido por el backend. Pide al cliente un QR vigente; no se registró ninguna entrega.',
+    };
   }
 
   const orden = pedidos.find((pedido) => pedido.ordenId === payload.pedido);
@@ -100,6 +123,7 @@ export default function EscanerQRScreen() {
         params: {
           pedido: validado.payload.pedido,
           estado: validado.payload.estado,
+          codigo: validado.payload.codigo,
         },
       });
     },

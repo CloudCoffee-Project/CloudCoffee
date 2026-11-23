@@ -1,0 +1,72 @@
+.admin-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.admin-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.admin-panel-badge {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.admin-panel-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.admin-panel-nav-link {
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #d1d5db);
+  text-decoration: none;
+  color: inherit;
+  font-weight: 500;
+}
+
+.admin-panel-nav-link.active {
+  background-color: var(--color-primary, #6f4e37);
+  color: #ffffff;
+  border-color: var(--color-primary, #6f4e37);
+}
+
+.admin-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.admin-panel-card {
+  padding: 1.25rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  background-color: var(--color-surface, #ffffff);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-panel-notice {
+  padding: 1.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  background-color: var(--color-surface, #ffffff);
+}

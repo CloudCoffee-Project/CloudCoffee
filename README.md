@@ -160,24 +160,44 @@ Un servicio específico:
 docker compose logs -f auth-service
 ```
 
-### Correo local con Mailpit
+### Correo local y SMTP externo
 
 El entorno de desarrollo usa Mailpit para capturar correos sin conectarse a un
 servidor SMTP real. Notification entrega internamente a `mailpit:1025` sin
 autenticación ni STARTTLS y la bandeja se consulta únicamente desde el computador
 en http://localhost:8025.
 
-Las direcciones incluidas en los mensajes se configuran en `.env`:
+Mailpit es el valor predeterminado local. Para probar SMTP externo, configura en
+`.env` (que no se versiona) el perfil y las credenciales de una cuenta de prueba:
 
 ```dotenv
-FRONTEND_URL=http://localhost:3000
-RESET_PASSWORD_URL=http://localhost:3000/restablecer-contrasena
-SMTP_FROM=noreply@cloudcoffee.local
+NOTIFICATION_SPRING_PROFILES=docker,smtp-external
+SMTP_HOST=smtp.example.net
+SMTP_PORT=587
+SMTP_USERNAME=cuenta-de-prueba
+SMTP_PASSWORD=secreto-guardado-fuera-de-Git
+SMTP_FROM=noreply@example.net
+FRONTEND_URL=https://web.example.net
+RESET_PASSWORD_URL=https://web.example.net/restaurar-contrasena
 ```
 
-`FRONTEND_URL` es la base del enlace `/verificar-correo`; la recuperación usa
-directamente `RESET_PASSWORD_URL`. Así las rutas pueden cambiar cuando la web
-implemente sus pantallas sin modificar Notification.
+El perfil `smtp-external` exige autenticación y STARTTLS, con conexión, lectura y
+escritura limitadas a cinco segundos. `FRONTEND_URL` es la base pública HTTPS del
+enlace `/verificar-correo`; la recuperación usa `RESET_PASSWORD_URL`. Ambos
+incluyen el token codificado en la query. El path `/restaurar-contrasena` es común
+a la app móvil y a la web; esta última también mantiene
+`/restablecer-contrasena` por compatibilidad. No usar la cuenta habitual ni compartir
+credenciales: configurar secretos de prueba fuera de Git y verificar la recepción
+en un buzón controlado. Sin el perfil externo, Compose conserva Mailpit en
+`mailpit:1025` y la bandeja local en http://localhost:8025.
+
+Los enlaces HTTPS abren la web como fallback. Para que el sistema operativo abra
+la app móvil, despliegue web y app deben asociar el mismo dominio: publicar
+`/.well-known/assetlinks.json` (Android) y `/apple-app-site-association` (iOS),
+configurar los dominios asociados en la app y mantener las rutas
+`/verificar-correo` y `/restaurar-contrasena` con el parámetro `token`. La
+asociación de dominios y los archivos dependen del dominio y del alojamiento; no
+se generan en este backend.
 
 Para generar y revisar un correo de recuperación usando la cuenta seed:
 

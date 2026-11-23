@@ -76,7 +76,23 @@ La paginación solicita 12 productos por página con índices desde cero y orden
 
 Se consumen `/v1/catalog/campus`, `/v1/catalog/categorias` y `/v1/catalog/productos` a través del Gateway. Como son consultas públicas, no se adjunta el token almacenado: explorar el catálogo no requiere iniciar sesión ni depende de que una sesión previa siga vigente. El catálogo contempla resultados vacíos, carga y errores con reintento.
 
-INT2-48 cubre la exploración pública del catálogo; INT2-96 añade búsqueda y paginación. La comparación de ofertas y el carrito quedan en sus respectivos issues.
+INT2-48 cubre la exploración pública del catálogo e INT2-96 añade búsqueda y paginación.
+
+### Verificación de la comparación de ofertas (INT2-49)
+
+Con los datos de desarrollo, `DevCatalogSeedIntegrationTests` comprueba que la
+API devuelve estas ofertas de **Café americano** en San Francisco, de menor a mayor precio.
+
+| Cafetería | Precio | Stock disponible |
+| --- | ---: | ---: |
+| Cafetería Biblioteca | $1.300 | 3 |
+| Cafetería Central | $1.500 | 40 |
+
+Al cambiar a San Juan Pablo II aparece Cafetería Patio Norte a $1.600.
+La prueba de integración también cubre stock agotado, cafeterías cerradas,
+productos inactivos y ausencia de ofertas. `ProductDetailPage.test.tsx` verifica
+que la web conserva el orden de la API, deshabilita las ofertas sin stock, permite
+reintentar una carga fallida y descarta respuestas tardías al cambiar de campus.
 
 ## Carrito web (INT2-60)
 
@@ -96,9 +112,9 @@ la compra.
 
 ## Verificación de correo
 
-El enlace enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado.
+El enlace HTTPS enviado al registrarse abre `/verificar-correo?token=...`. La página valida el token mediante `POST /v1/auth/verificacion`, muestra el resultado y ofrece solicitar otro enlace cuando el token falta, es inválido o expiró. El reenvío usa `POST /v1/auth/verificacion/reenviar`; el formulario informa carga, aceptación y errores. Registro y login enlazan a este flujo con el correo ya ingresado. El correo también incluye el token para ingresarlo manualmente en la app.
 
-En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. Para probar el flujo en otro origen, configura `FRONTEND_URL` antes de iniciar los servicios y asegúrate de que apunte al sitio web accesible desde el navegador.
+En Docker Compose, el servicio de notificaciones genera los enlaces web con `FRONTEND_URL`, cuyo valor local predeterminado es `http://localhost:3000`. En despliegues, configura esta variable con el origen HTTPS público. Los enlaces abren la web si el dominio no está asociado a la app; el teléfono abrirá la app solo cuando el alojamiento publique los archivos de asociación de Android/iOS y la app configure ese dominio.
 
 ## Perfil propio (INT2-47)
 
@@ -125,8 +141,10 @@ con el correo ingresado. El formulario solicita el enlace mediante
 `POST /v1/auth/password/recovery` y muestra carga, aceptación y errores, incluido
 el límite de solicitudes. La confirmación es la misma exista o no la cuenta.
 
-El correo abre `/restablecer-contrasena?token=...`. La página pide una nueva
-contraseña de al menos 8 caracteres y su confirmación; envía `{ token,
+El correo contiene un enlace HTTPS a `/restaurar-contrasena?token=...`, ruta
+compartida con la app móvil. La web conserva `/restablecer-contrasena` como alias.
+La página pide una nueva contraseña de al menos 8 caracteres y su confirmación;
+envía `{ token,
 nuevaPassword }` a `POST /v1/auth/password/reset`. Con la respuesta `204` muestra
 el éxito y el acceso al login. Los tokens inválidos, expirados o consumidos ofrecen
 solicitar otro enlace; los errores de conexión o del servicio permiten reintentar.
@@ -134,11 +152,14 @@ Sin token no se envía ninguna petición de reset. Ambas operaciones son públic
 y omiten el JWT local para permitir recuperar el acceso con una sesión vencida.
 
 La URL del correo se configura **en notification-service**, mediante
-`RESET_PASSWORD_URL`. Docker Compose y `.env.example` ya usan
-`http://localhost:3000/restablecer-contrasena`; para otro despliegue, usar el origen
-web público seguido de `/restablecer-contrasena` y reiniciar notification-service.
-La variable no es `VITE_*`. Se conserva el respaldo `mobile://restaurar-contrasena`
-del servicio cuando se ejecuta fuera de Compose sin configurar la variable.
+`RESET_PASSWORD_URL`. Docker Compose y `.env.example` usan
+`http://localhost:3000/restaurar-contrasena` para desarrollo; para otro
+despliegue, usar el origen HTTPS web seguido de `/restaurar-contrasena` y
+reiniciar notification-service. La variable no es `VITE_*`. El correo también
+muestra el token para copiarlo en la app o en el sitio web. La app móvil acepta
+las rutas `verificar-correo` y `restaurar-contrasena` con `token` cuando recibe un
+enlace asociado; publicar `assetlinks.json` y `apple-app-site-association` y
+configurar los dominios de la app son tareas del despliegue.
 
 Para comprobar el flujo con Mailpit y una cuenta verificada:
 
@@ -224,7 +245,7 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 
 ## Estructura
 
-- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena` y `/restablecer-contrasena`.
+- `src/pages/`: páginas asociadas a rutas; incluye `/`, `/catalogo`, `/registro`, `/login`, `/perfil`, `/verificar-correo`, `/recuperar-contrasena`, `/restaurar-contrasena` y el alias `/restablecer-contrasena`.
 - `src/components/`: componentes reutilizables.
 - `src/services/`: cliente HTTP común para acceder al API Gateway.
 - `src/hooks/`: hooks reutilizables.
@@ -232,4 +253,31 @@ Los valores `VITE_*` usados en CI son configuración pública incorporada al bun
 - `src/config/`: lectura centralizada de configuración pública.
 - `src/App.tsx`: definición de rutas. El layout y la navegación visual corresponden a INT2-42.
 
-Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.
+Para publicar la aplicación como SPA, el servidor que entregue `dist/` debe responder con `index.html` en rutas de la aplicación como `/catalogo`, `/restaurar-contrasena` y `/restablecer-contrasena`, conservando los parámetros del enlace recibido por correo.
+
+## Mercado Pago Sandbox en web (INT2-61)
+
+Después de resolver el stock y la revisión, **Pagar con Mercado Pago** consulta
+la compra en Order. Si todavía no hay pago, la web envía
+`{"canalRetorno":"web"}` a `POST /v1/compras/:compraId/pago` con un UUID de
+idempotencia por compra. Order fija el total CLP y Payment crea la preferencia
+Checkout Pro. La web abre el `initPoint` HTTPS devuelto por el servidor, vuelve
+a usar el checkout vigente y muestra el estado de conciliación si todavía
+se está creando la preferencia.
+
+Configurar `ORDER_PAYMENT_PROVIDER=mercadopago_sandbox` y
+`PAYMENT_PROVIDER=mercadopago_sandbox` en el entorno de pruebas. Payment requiere
+credenciales de vendedor de prueba, `PAYMENT_CHECKOUT_MODE` coherente con ellas,
+`PAYMENT_WEB_RETURN_URL` apuntando al dominio HTTPS de pruebas con ruta
+`/pago/retorno`, `PAYMENT_MOBILE_RETURN_URL` HTTPS según el contrato y
+`PAYMENT_WEBHOOK_PUBLIC_URL` apuntando a Gateway en
+`/v1/payments/webhooks/mercadopago`. Guardar el token y el secreto de firma solo
+en el entorno de Payment. Ver [configuración de Payment](../backend/payment-service/README.md).
+
+El retorno y `/pago/resultado` recuperan la sesión cuando corresponde y
+consultan compra y pago autenticados. La vista vuelve a consultar los pagos
+pendientes y en conciliación cada cinco segundos o al recibir eventos.
+La aprobación se muestra a partir del estado de Order. Los parámetros del proveedor
+en la URL no cambian el estado de la compra. Para verificar el recorrido externo,
+usar [cuentas de prueba](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/test-accounts)
+y [tarjetas de prueba de Chile](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/integration-test/test-purchases).

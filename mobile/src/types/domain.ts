@@ -83,6 +83,68 @@ export function puedeCancelarCompra(estado: EstadoCompra): boolean {
   return ESTADOS_COMPRA_CANCELABLES.includes(estado);
 }
 
+// --- INT4-128: pago simulado de Order y retiro -------------------------------
+//
+// EstadoPago es el enum del contrato (backend/docs/compra-pago-retiro.openapi.json
+// y order-service/model/EstadoPago). El pago ya no se decide en la app ni en un
+// redirect de Mercado Pago: Order devuelve este estado y la app solo lo lee.
+// La BD (order-db, CHECK de `pagos.estado`) también permite REQUIERE_CONCILIACION:
+// se incluye para no tratar ese pago real como un valor desconocido.
+export type EstadoPago = 'pendiente' | 'aprobado' | 'rechazado' | 'requiere_conciliacion';
+
+export const ESTADOS_PAGO: readonly EstadoPago[] = [
+  'pendiente',
+  'aprobado',
+  'rechazado',
+  'requiere_conciliacion',
+];
+
+export function esEstadoPago(valor: unknown): valor is EstadoPago {
+  return typeof valor === 'string' && (ESTADOS_PAGO as readonly string[]).includes(valor);
+}
+
+// Escenarios del pago simulado de Order (contrato INT2-50): cada uno produce
+// siempre el mismo EstadoPago. NO son una elección del cliente: el checkout usa
+// un escenario fijo por configuración y Order decide el estado real. Se mantienen
+// los tres para el contrato del servicio y sus tests deterministas.
+export type EscenarioPago = 'aprobar' | 'rechazar' | 'pendiente';
+
+export const ESCENARIOS_PAGO: readonly EscenarioPago[] = ['aprobar', 'rechazar', 'pendiente'];
+
+export function esEscenarioPago(valor: unknown): valor is EscenarioPago {
+  return typeof valor === 'string' && (ESCENARIOS_PAGO as readonly string[]).includes(valor);
+}
+
+// Motivos que el backend puede devolver en un Pago (enum del contrato).
+export type MotivoPago =
+  | 'aprobacion_simulada'
+  | 'rechazo_simulado'
+  | 'escenario_pendiente'
+  | 'procesando_stock'
+  | 'reserva_vencida'
+  | 'compra_cancelada'
+  // Valores del CHECK de `pagos.motivo` en order-db (proveedor y conciliación).
+  | 'esperando_proveedor'
+  | 'proveedor_confirmado'
+  | 'proveedor_rechazado'
+  | 'proveedor_cancelado'
+  | 'conciliacion_requerida';
+
+/** Pago embebido en una Compra (GET /v1/compras/{compraId}) y en el pago simulado. */
+export interface Pago {
+  pagoId: string;
+  compraId: string;
+  estado: EstadoPago;
+  motivo: MotivoPago;
+  montoTotal: number;
+  moneda: 'CLP';
+  simulado: boolean;
+  proveedor: string;
+  creadoAt: string;
+  actualizadoAt: string;
+  version: number;
+}
+
 // Estados en los que el cliente todavía puede actuar sobre UNA orden puntual de
 // su compra (INT4-37). Confirmar reintenta la reserva solo en
 // 'revision_requerida'; cancelar se permite en revisión o pendiente de pago. En
@@ -321,12 +383,42 @@ export interface StockCafeteriaEvento {
   stockActual: number;
 }
 
+// Token opaco del contrato (CodigoRetiro en
+// backend/docs/compra-pago-retiro.openapi.json): Base64URL de 43 caracteres,
+// sin datos personales ni estado codificado. Lo emite Order y viaja exactamente
+// igual en el QR del cliente y en el cuerpo de /orders/{id}/entregar.
+export interface CodigoRetiro {
+  codigo: string;
+}
+
+const FORMATO_CODIGO_RETIRO = /^[A-Za-z0-9_-]{43}$/;
+
+export function esCodigoRetiroValido(valor: unknown): valor is string {
+  return typeof valor === 'string' && FORMATO_CODIGO_RETIRO.test(valor);
+}
+
 // Payload que codifica el QR de retiro: lo escanea el cajero en el punto de
 // retiro para validar el pedido. El estado siempre es un valor del union
 // EstadoOrden (nunca un string inventado en la pantalla).
+//
+// `codigo` es el token del contrato. En el QR legacy del mockup no viene: en ese
+// caso el escáner lo rechaza con degradación verificada, porque el backend no
+// puede registrar una entrega sin el token que él mismo emitió.
 export interface QrRetiro {
   pedido: string;
   estado: EstadoOrden;
+  codigo?: string;
+}
+
+// QR REAL devuelto por GET /v1/orders/{ordenId}/qr (INT4-128). Es un código
+// opaco de 43 caracteres generado por Order; NO es el JSON que serializa
+// services/qrRetiro.ts para el escáner histórico. El endpoint solo responde 200
+// cuando el pago está aprobado y la orden está 'listo_para_retiro': si no, la
+// app no debe mostrar ningún QR (por eso el servicio no arma un fallback).
+export interface QrRetiroBackend {
+  ordenId: string;
+  codigo: string;
+  expiraAt: string;
 }
 
 export interface Compra {
@@ -335,6 +427,9 @@ export interface Compra {
   estado: EstadoCompra;
   initPoint?: string;
   ordenes: Orden[];
+  // pago es null hasta que se simula el pago. Viene en GET /v1/compras/{id}
+  // (y en el POST de creación); opcional para no romper mocks/DTOs antiguos.
+  pago?: Pago | null;
 }
 
 export interface Seguimiento {

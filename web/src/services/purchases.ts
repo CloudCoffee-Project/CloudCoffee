@@ -40,7 +40,7 @@ export interface PendingPurchaseCreation {
   cartSnapshot: CartItem[];
 }
 
-type PurchaseAction = 'confirmar' | 'cancelar';
+type PurchaseAction = 'confirmar' | 'cancelar' | 'pagar-sandbox';
 
 const pendingCreationKey = 'checkout:pending-creation';
 const savedPurchaseKey = 'checkout:last-purchase';

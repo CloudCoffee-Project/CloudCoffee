@@ -8,7 +8,9 @@ import {
   getRefreshToken,
   httpClient,
   isAccessTokenExpired,
+  MENSAJE_ERROR_BACKEND,
   mensajeDeErrorApi,
+  mensajeErrorBackend,
   onTokensCambiados,
   refreshAccessToken,
   setAccessToken,
@@ -68,6 +70,7 @@ describe('httpClient base (INT4-16)', () => {
         detail: 'El correo ya está registrado.',
         instance: '/v1/auth/register',
         timestamp: '2026-09-22T00:00:00Z',
+        code: 'ESTADO_INVALIDO',
       };
 
       const error = new Error('Request failed with status code 409') as any;
@@ -78,6 +81,7 @@ describe('httpClient base (INT4-16)', () => {
       expect(resultado.status).toBe(409);
       expect(resultado.message).toBe('El correo ya está registrado.');
       expect(resultado.problem?.instance).toBe('/v1/auth/register');
+      expect(resultado.problem?.code).toBe('ESTADO_INVALIDO');
     });
 
     it('sin respuesta (red caída) devuelve ApiError con status 0', () => {
@@ -145,6 +149,44 @@ describe('httpClient base (INT4-16)', () => {
 
       expect(mensajeDeErrorApi(apiError)).toBe('La contraseña actual es incorrecta.');
       expect(toApiError(apiError as never)).toBe(apiError);
+    });
+  });
+
+  describe('mensaje único del backend (INT4-132)', () => {
+    it('usa el detail del problem+json cuando viene con información', () => {
+      const error = new Error('Request failed with status code 503') as any;
+      error.response = {
+        status: 503,
+        data: {
+          type: 'about:blank',
+          title: 'Servicio no disponible',
+          status: 503,
+          detail: 'Order no está disponible en este momento.',
+        },
+      };
+
+      expect(mensajeErrorBackend(error)).toBe('Order no está disponible en este momento.');
+    });
+
+    it('respeta el 429 con Retry-After del normalizador', () => {
+      const error = new Error('Too Many Requests') as any;
+      error.response = {
+        status: 429,
+        headers: { 'retry-after': '45' },
+        data: { type: 'about:blank', title: 'Rate limit', status: 429, detail: 'Espera.' },
+      };
+
+      expect(mensajeErrorBackend(error)).toBe(
+        'Demasiadas solicitudes. Intenta de nuevo en 45 segundos.'
+      );
+    });
+
+    it('mantiene el mensaje de red y cae al respaldo si no hay detalle', () => {
+      const error = new Error('Network Error') as any;
+
+      expect(mensajeErrorBackend(error)).toBe('Network Error');
+      expect(mensajeErrorBackend(undefined)).toBe(MENSAJE_ERROR_BACKEND);
+      expect(mensajeErrorBackend(new ApiError('', 500))).toBe(MENSAJE_ERROR_BACKEND);
     });
   });
 });

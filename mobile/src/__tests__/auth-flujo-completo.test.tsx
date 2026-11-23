@@ -31,6 +31,7 @@ import { Text as RNText } from 'react-native';
 import type { ReactElement } from 'react';
 import { AxiosError } from 'axios';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams } from 'expo-router';
 
 import { AuthProvider, useAuth } from '../context/AuthContext';
@@ -43,7 +44,8 @@ import { requestNewTokens } from '../services/authRefresh';
 import { eliminarRegistroPush } from '../services/notificacionesPush';
 import { leerSesion } from '../services/sessionStorage';
 import { obtenerPerfil } from '../services/auth';
-import { listarProductos } from '../services/catalog';
+import { guardarCampusSeleccionado, listarProductos } from '../services/catalog';
+import { CAMPUS_STORAGE_KEY } from '../services/campus';
 import { escribirPorIndice, pulsarPorTexto, routerMock, textoDe } from '../test-utils';
 import type { LoginResponse, Producto } from '../types/domain';
 
@@ -670,10 +672,30 @@ describe('Flujo completo de autenticación (INT4-25)', () => {
     act(() => login.unmount());
   }, 20000);
 
+  it('iniciar sesión descarta el campus de la sesión anterior (INT4-125)', async () => {
+    await crearCuentaVerificada();
+    const login = await iniciarSesionEnPantalla();
+
+    // El guard debe encontrar la sede vacía y mandar al cliente a elegirla,
+    // aunque el dispositivo tuviera un campus guardado de antes.
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(CAMPUS_STORAGE_KEY);
+    expect(sesionEn(login)).toBe(`cliente:${USUARIO_ID}`);
+
+    act(() => login.unmount());
+  }, 20000);
+
   it('cerrar sesión revoca el refresh en el backend y borra los tokens del dispositivo', async () => {
     await crearCuentaVerificada();
     const login = await iniciarSesionEnPantalla();
     const tokensDelLogin = (await leerSesion())!;
+
+    // El cliente ya eligió su sede en esta sesión: al salir debe descartarse.
+    await guardarCampusSeleccionado({
+      id: 'campus-1',
+      nombre: 'Campus San Francisco',
+      direccion: 'Manuel Montt 056, Temuco',
+    });
+    (AsyncStorage.removeItem as jest.Mock).mockClear();
 
     // Se llega al botón real de la pantalla de perfil.
     const perfil = await renderizarConAuth(<PerfilScreen />);
@@ -691,6 +713,9 @@ describe('Flujo completo de autenticación (INT4-25)', () => {
 
     // El token push se borra del backend en el mismo cierre de sesión (INT4-42).
     expect(mockEliminarRegistroPush).toHaveBeenCalled();
+
+    // Y la sede elegida en esta sesión también se descarta (INT4-125).
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(CAMPUS_STORAGE_KEY);
 
     // Y el refresh revocado ya no sirve: ni para renovar ni para cerrar de nuevo.
     await expect(mockRequestNewTokens(tokensDelLogin.refreshToken)).rejects.toThrow(

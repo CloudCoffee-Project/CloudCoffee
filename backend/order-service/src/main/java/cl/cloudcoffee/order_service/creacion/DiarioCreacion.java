@@ -31,6 +31,10 @@ public class DiarioCreacion {
                         rs.getString("hash_cuerpo"), rs.getString("solicitud"), rs.getString("fase"),
                         rs.getString("plan"), rs.getString("respuesta"), (Integer) rs.getObject("status"),
                         rs.getString("location"), rs.getString("trace_id"), cl.cloudcoffee.order_service.persistence.JdbcInstants.read(rs, "created_at")), id);
+        } catch (org.springframework.dao.EmptyResultDataAccessException expirada) {
+            throw new cl.cloudcoffee.errors.BusinessException(org.springframework.http.HttpStatus.CONFLICT,
+                    java.net.URI.create("/problems/idempotency-expired"), "Intención expirada",
+                    "La intención superó su retención. Consulta tus compras antes de crear una intención nueva.", "IDEMPOTENCY_EXPIRED");
         } catch (org.springframework.jdbc.UncategorizedSQLException error) {
             // El traductor SQLState de Spring no clasifica lock_not_available (55P03).
             if (bloquear && "55P03".equals(error.getSQLException().getSQLState()))
@@ -45,8 +49,9 @@ public class DiarioCreacion {
     }
 
     void terminar(UUID id, int status, String body, String location) {
-        jdbc.update("UPDATE creacion_compras SET fase='TERMINADA', status=?, respuesta=?, location=?, updated_at=? WHERE id=?",
-                status, body, location, utc(Instant.now()), id);
+        var ahora = utc(Instant.now());
+        jdbc.update("UPDATE creacion_compras SET fase='TERMINADA', status=?, respuesta=?, location=?, updated_at=?, completed_at=? WHERE id=?",
+                status, body, location, ahora, ahora, id);
     }
 
     CompraResponse materializar(Registro registro, PlanCompra plan) {
