@@ -40,9 +40,10 @@ import {
   parsearRetornoPago,
   simularPago,
 } from '../services/pagos';
+import { obtenerPerfil } from '../services/auth';
 import { ApiError, getAccessToken } from '../services/httpClient';
 import { desmontar, escribir, limpiarRouter, pulsar, routerMock, texto } from '../test-utils';
-import type { NuevoItemCarrito } from '../types/domain';
+import type { NuevoItemCarrito, PerfilUsuario } from '../types/domain';
 
 // El provider se monta real (no mockeado) para que la pantalla vea de verdad
 // los grupos y el total que calcula el carrito. AuthContext se mockea porque el
@@ -106,6 +107,13 @@ jest.mock('../services/pagos', () => ({
   ESTADO_COMPRA_REVISION_REQUERIDA: 'revisión requerida',
 }));
 
+// A2 (INT4-127): el perfil se mockea aparte. Por defecto queda pendiente para
+// no alterar los tests históricos del formulario vacío; cada test de precarga
+// define su propia respuesta.
+jest.mock('../services/auth', () => ({
+  obtenerPerfil: jest.fn(),
+}));
+
 // Solo se reemplaza getAccessToken: toApiError y ApiProblem siguen siendo los
 // reales para que el camino de error pruebe la normalización de verdad.
 jest.mock('../services/httpClient', () => {
@@ -123,6 +131,7 @@ const mockSimularPago = simularPago as unknown as jest.Mock;
 const mockConsultarPago = consultarPago as unknown as jest.Mock;
 const mockAbrirCheckout = abrirCheckoutMercadoPago as unknown as jest.Mock;
 const mockParsearRetorno = parsearRetornoPago as unknown as jest.Mock;
+const mockObtenerPerfil = obtenerPerfil as unknown as jest.Mock;
 const mockGetAccessToken = getAccessToken as unknown as jest.Mock;
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 const mockGetItem = AsyncStorage.getItem as unknown as jest.Mock;
@@ -137,6 +146,17 @@ const FORM_VALIDO = {
   nombre: 'María Fernanda López',
   correo: 'maria@ca.cloudcoffee.cl',
   telefono: '+56912345678',
+};
+
+// A2 (INT4-127): respuesta de GET /v1/auth/users/me. El nombre completo del
+// checkout se arma con nombre + apellido del perfil.
+const PERFIL: PerfilUsuario = {
+  id: 'user-1',
+  email: FORM_VALIDO.correo,
+  nombre: 'María Fernanda',
+  apellido: 'López',
+  telefono: FORM_VALIDO.telefono,
+  rol: 'CLIENTE',
 };
 
 function linea(over: Partial<NuevoItemCarrito> = {}): NuevoItemCarrito {
@@ -193,6 +213,10 @@ function leerCarrito(tree: ReactTestRenderer): ValorCarrito {
   return tree.root.findAllByProps({ testID: 'carrito-sonda' })[0].props as ValorCarrito;
 }
 
+function valorCampo(tree: ReactTestRenderer, testID: string): string {
+  return tree.root.findByProps({ testID }).props.value as string;
+}
+
 async function agregar(
   tree: ReactTestRenderer,
   item: NuevoItemCarrito = linea(),
@@ -216,6 +240,10 @@ async function llenarFormulario(
 beforeEach(() => {
   limpiarRouter();
   mockUseLocalSearchParams.mockReturnValue(mockParams);
+  mockObtenerPerfil.mockReset();
+  // Los tests históricos arrancan con el formulario vacío: la consulta queda
+  // pendiente y no modifica el árbol fuera de `act`.
+  mockObtenerPerfil.mockImplementation(() => new Promise(() => {}));
   mockCrearCompra.mockClear();
   mockSimularPago.mockClear();
   mockConsultarPago.mockClear();
@@ -945,6 +973,104 @@ describe('Checkout (INT4-35)', () => {
     expect(mockSimularPago).not.toHaveBeenCalled();
     expect(mockAbrirCheckout).not.toHaveBeenCalled();
     expect(() => tree.root.findByProps({ testID: 'checkout-confirmar' })).toThrow();
+
+    desmontar(tree);
+  });
+});
+
+describe('Autocompletado del checkout con datos de la cuenta (A2 / INT4-127)', () => {
+  it('precarga nombre completo, correo y teléfono desde GET /v1/auth/users/me', async () => {
+    mockObtenerPerfil.mockResolvedValue(PERFIL);
+    const tree = await montarConEspera();
+    await agregar(tree, linea(), 1);
+
+    expect(mockObtenerPerfil).toHaveBeenCalledTimes(1);
+    expect(valorCampo(tree, 'checkout-nombre')).toBe(FORM_VALIDO.nombre);
+    expect(valorCampo(tree, 'checkout-correo')).toBe(FORM_VALIDO.correo);
+    expect(valorCampo(tree, 'checkout-telefono')).toBe(FORM_VALIDO.telefono);
+    expect(() => tree.root.findByProps({ testID: 'checkout-perfil-error' })).toThrow();
+    expect(() => tree.root.findByProps({ testID: 'checkout-usar-mis-datos' })).not.toThrow();
+
+    desmontar(tree);
+  });
+
+  it('los campos precargados son editables y "Usar mis datos" restaura la precarga', async () => {
+    mockObtenerPerfil.mockResolvedValue(PERFIL);
+    const tree = await montarConEspera();
+    await agregar(tree, linea(), 1);
+
+    await escribir(tree, 'checkout-nombre', 'Otro Nombre');
+    await escribir(tree, 'checkout-correo', 'otro@correo.cl');
+    await escribir(tree, 'checkout-telefono', '999');
+
+    expect(valorCampo(tree, 'checkout-nombre')).toBe('Otro Nombre');
+    expect(valorCampo(tree, 'checkout-correo')).toBe('otro@correo.cl');
+    expect(valorCampo(tree, 'checkout-telefono')).toBe('999');
+
+    await pulsar(tree, 'checkout-usar-mis-datos');
+
+    expect(valorCampo(tree, 'checkout-nombre')).toBe(FORM_VALIDO.nombre);
+    expect(valorCampo(tree, 'checkout-correo')).toBe(FORM_VALIDO.correo);
+    expect(valorCampo(tree, 'checkout-telefono')).toBe(FORM_VALIDO.telefono);
+
+    desmontar(tree);
+  });
+
+  it('si la consulta falla, deja el formulario vacío y permite completar la compra', async () => {
+    mockObtenerPerfil.mockRejectedValue(new Error('red caída'));
+    const tree = await montarConEspera();
+    await agregar(tree, linea(), 1);
+
+    expect(texto(tree, 'checkout-perfil-error')).toBe(
+      'No pudimos cargar tus datos. Podés completarlos igual.'
+    );
+    expect(valorCampo(tree, 'checkout-nombre')).toBe('');
+    expect(valorCampo(tree, 'checkout-correo')).toBe('');
+    expect(valorCampo(tree, 'checkout-telefono')).toBe('');
+    expect(() => tree.root.findByProps({ testID: 'checkout-usar-mis-datos' })).toThrow();
+
+    await llenarFormulario(tree);
+    await pulsar(tree, 'checkout-confirmar');
+
+    expect(mockCrearCompra).toHaveBeenCalledWith(
+      [{ ofertaId: 'of-central-cafe', cantidad: 1 }],
+      'token-de-prueba',
+      {
+        nombre: FORM_VALIDO.nombre,
+        correo: FORM_VALIDO.correo,
+        telefono: FORM_VALIDO.telefono,
+        metodoEntrega: 'retiro',
+      }
+    );
+
+    desmontar(tree);
+  });
+
+  it('muestra carga y no sobrescribe lo escrito mientras llega el perfil', async () => {
+    let resolverPerfil!: (perfil: PerfilUsuario) => void;
+    mockObtenerPerfil.mockImplementation(
+      () =>
+        new Promise<PerfilUsuario>((resolve) => {
+          resolverPerfil = resolve;
+        })
+    );
+
+    const tree = montar();
+    await agregar(tree, linea(), 1);
+
+    expect(() => tree.root.findByProps({ testID: 'checkout-perfil-cargando' })).not.toThrow();
+    expect(tree.root.findByProps({ testID: 'checkout-nombre' }).props.editable).toBe(true);
+
+    await escribir(tree, 'checkout-nombre', 'Nombre escrito a mano');
+
+    await act(async () => {
+      resolverPerfil(PERFIL);
+    });
+
+    expect(valorCampo(tree, 'checkout-nombre')).toBe('Nombre escrito a mano');
+    expect(valorCampo(tree, 'checkout-correo')).toBe(FORM_VALIDO.correo);
+    expect(valorCampo(tree, 'checkout-telefono')).toBe(FORM_VALIDO.telefono);
+    expect(() => tree.root.findByProps({ testID: 'checkout-perfil-cargando' })).toThrow();
 
     desmontar(tree);
   });

@@ -53,6 +53,11 @@
 // y order-service es un stub sin controller ni tablas): hoy el usuario ve la
 // vista de fallo (401 del gateway). Cuando el backend implemente su lado, esta
 // pantalla funciona sin cambios. Ver docs/contratos-backend.md, fila 6.
+//
+// A2 (INT4-127): al abrir se consulta GET /v1/auth/users/me y se precargan el
+// nombre completo, el correo y el teléfono de la cuenta. Los tres campos siguen
+// siendo editables, "Usar mis datos" restaura la precarga y un fallo del perfil
+// deja el formulario vacío sin bloquear la compra.
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -63,6 +68,7 @@ import { AxiosError } from 'axios';
 
 import { ESCENARIO_PAGO_CLIENTE } from '../../config/pagoSimulado';
 import { useCarrito } from '../../context/CarritoContext';
+import { obtenerPerfil } from '../../services/auth';
 import { ApiProblem, getAccessToken, toApiError } from '../../services/httpClient';
 // ItemCarrito de pagos es el payload de POST /v1/compras (solo ofertaId y
 // cantidad) y no la línea del carrito de types/domain, que trae además el nombre
@@ -83,6 +89,7 @@ import {
   type IntencionPago,
 } from '../../services/intencionPago';
 import { tokens } from '../../theme/tokens';
+import type { PerfilUsuario } from '../../types/domain';
 
 type Vista = 'revision' | 'revision_requerida' | 'realizada' | 'fallo';
 
@@ -100,6 +107,15 @@ interface FormularioEntrega {
   nombre: string;
   correo: string;
   telefono: string;
+}
+
+// El perfil trae nombre y apellido separados; el checkout pide un solo campo.
+function datosDesdePerfil(perfil: PerfilUsuario): FormularioEntrega {
+  return {
+    nombre: [perfil.nombre, perfil.apellido].filter(Boolean).join(' ').trim(),
+    correo: perfil.email ?? '',
+    telefono: perfil.telefono ?? '',
+  };
 }
 
 function textoUnico(valor: string | string[] | undefined): string | undefined {
@@ -174,6 +190,15 @@ export default function CheckoutScreen() {
   });
   const [errores, setErrores] = useState<Record<string, string>>({});
 
+  // A2 (INT4-127): copia original del perfil, usada por "Usar mis datos". No se
+  // reescribe cuando el usuario edita los campos, así que siempre se puede
+  // volver a los valores que trajo el backend.
+  const [perfilOriginal, setPerfilOriginal] = useState<FormularioEntrega | null>(null);
+  // Arranca en true porque la consulta se dispara al montar; el efecto solo lo
+  // cierra cuando llega la respuesta (o el error). Evita un setState síncrono.
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
+  const [errorPerfil, setErrorPerfil] = useState(false);
+
   // INT4-130: al reabrir el checkout se retoma la intención guardada. Si ya
   // existe la compra se consulta PRIMERO el pago (GET .../pago) y se navega al
   // resultado para mostrar siempre el estado real: con pago pendiente se
@@ -236,11 +261,55 @@ export default function CheckoutScreen() {
     };
   }, [compraIdParam, router]);
 
+  // A2 (INT4-127): precarga al abrir la pantalla. Si el perfil tarda o falla,
+  // el usuario puede escribir igual: no se bloquea la compra y nunca se pisa lo
+  // que ya haya tipeado cuando la consulta termina.
+  useEffect(() => {
+    let activo = true;
+
+    void (async (): Promise<void> => {
+      try {
+        const perfil = await obtenerPerfil();
+        if (!activo) {
+          return;
+        }
+
+        const datos = datosDesdePerfil(perfil);
+        setPerfilOriginal(datos);
+        setFormulario((prev) => ({
+          nombre: prev.nombre || datos.nombre,
+          correo: prev.correo || datos.correo,
+          telefono: prev.telefono || datos.telefono,
+        }));
+      } catch {
+        if (activo) {
+          setErrorPerfil(true);
+        }
+      } finally {
+        if (activo) {
+          setCargandoPerfil(false);
+        }
+      }
+    })();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
   const cambiarCampo = useCallback((campo: keyof FormularioEntrega, valor: string): void => {
     setFormulario((prev) => ({ ...prev, [campo]: valor }));
     // Al editar se limpia el error de ese campo: el usuario ya lo está viendo.
     setErrores((prev) => (prev[campo] ? { ...prev, [campo]: '' } : prev));
   }, []);
+
+  const usarMisDatos = useCallback((): void => {
+    if (!perfilOriginal) {
+      return;
+    }
+    setFormulario(perfilOriginal);
+    setErrores({});
+  }, [perfilOriginal]);
 
   const confirmar = useCallback(async (): Promise<void> => {
     // 1) Validación local antes de tocar el backend: no se envía un pedido sin
@@ -690,6 +759,18 @@ export default function CheckoutScreen() {
         <View style={styles.formSeccion} testID="checkout-form-entrega">
           <Text style={styles.seccionTitulo}>Datos de entrega y facturación</Text>
 
+          {cargandoPerfil && (
+            <View style={styles.perfilAviso} testID="checkout-perfil-cargando">
+              <ActivityIndicator size="small" color={tokens.colores.azul} />
+              <Text style={styles.perfilAvisoTexto}>Cargando tus datos…</Text>
+            </View>
+          )}
+          {errorPerfil && (
+            <Text style={styles.perfilAvisoError} testID="checkout-perfil-error">
+              No pudimos cargar tus datos. Podés completarlos igual.
+            </Text>
+          )}
+
           {/* Sin envío a domicilio no hay nada que elegir: el retiro en
               cafetería es el único método, así que se informa en vez de fingir
               un selector con una sola opción. */}
@@ -715,6 +796,7 @@ export default function CheckoutScreen() {
               placeholder="Ej: María Fernanda López"
               placeholderTextColor="#A89F95"
               autoCapitalize="words"
+              editable
               style={[styles.input, errores.nombre ? styles.inputError : null]}
               testID="checkout-nombre"
             />
@@ -735,6 +817,7 @@ export default function CheckoutScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              editable
               style={[styles.input, errores.correo ? styles.inputError : null]}
               testID="checkout-correo"
             />
@@ -753,6 +836,7 @@ export default function CheckoutScreen() {
               placeholder="+56 9 1234 5678"
               placeholderTextColor="#A89F95"
               keyboardType="phone-pad"
+              editable
               style={[styles.input, errores.telefono ? styles.inputError : null]}
               testID="checkout-telefono"
             />
@@ -762,6 +846,16 @@ export default function CheckoutScreen() {
               </Text>
             )}
           </View>
+
+          {!!perfilOriginal && (
+            <Presionable
+              style={styles.botonUsarDatos}
+              onPress={usarMisDatos}
+              testID="checkout-usar-mis-datos"
+            >
+              <Text style={styles.botonUsarDatosTexto}>Usar mis datos</Text>
+            </Presionable>
+          )}
         </View>
 
         {/* INT4-128/131: pago de Order, sin navegador ni pasarela externa.
@@ -1094,6 +1188,32 @@ const styles = StyleSheet.create({
     color: tokens.colores.errorFuerte,
     fontSize: tokens.tipografia.tamano.etiqueta,
     lineHeight: tokens.tipografia.interlineado.apretado,
+  },
+  perfilAviso: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.espaciado.sm,
+  },
+  perfilAvisoTexto: {
+    color: tokens.colores.textoGris,
+    fontSize: tokens.tipografia.tamano.etiqueta,
+  },
+  perfilAvisoError: {
+    color: tokens.colores.errorFuerte,
+    fontSize: tokens.tipografia.tamano.etiqueta,
+  },
+  botonUsarDatos: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: tokens.espaciado.lg,
+    paddingVertical: tokens.espaciado.sm,
+    borderRadius: tokens.radios.lg,
+    borderWidth: tokens.grosores.medio,
+    borderColor: tokens.colores.azul,
+  },
+  botonUsarDatosTexto: {
+    color: tokens.colores.azul,
+    fontSize: tokens.tipografia.tamano.etiqueta,
+    fontWeight: tokens.tipografia.peso.negrita,
   },
   opcionEntrega: {
     flexDirection: 'row',
