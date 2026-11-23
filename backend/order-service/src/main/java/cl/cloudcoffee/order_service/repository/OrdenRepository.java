@@ -1,15 +1,53 @@
 package cl.cloudcoffee.order_service.repository;
 
+import cl.cloudcoffee.order_service.dto.VentaResponse;
+import cl.cloudcoffee.order_service.model.EstadoOrden;
 import cl.cloudcoffee.order_service.model.Orden;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OrdenRepository extends JpaRepository<Orden, UUID> {
+    String FILTRO_VENTAS = """
+            from Orden o where o.cafeteriaId = :cafeteriaId and o.estado in :estados
+            and o.pagadoAt >= :inicio and o.pagadoAt < :fin
+            """;
+
+    @Query("select count(o) " + FILTRO_VENTAS)
+    long countVentas(UUID cafeteriaId, Collection<EstadoOrden> estados, Instant inicio, Instant fin);
+
+    @Query("""
+            select new cl.cloudcoffee.order_service.dto.VentaResponse(
+                o.id, o.compra.id, o.codigoOrden, o.cafeteriaId, o.cafeteriaNombre, o.campusId,
+                o.estado, o.montoTotal, o.moneda, size(o.items), o.pagadoAt, o.entregadoAt)
+            """ + FILTRO_VENTAS + " order by o.pagadoAt desc, o.id desc")
+    List<VentaResponse> findVentas(UUID cafeteriaId, Collection<EstadoOrden> estados, Instant inicio,
+            Instant fin, Pageable pageable);
+
+    @Query("select o.estado as estado, count(o) as ordenes, sum(o.montoTotal) as montoTotal "
+            + FILTRO_VENTAS + " group by o.estado order by o.estado")
+    List<TotalPorEstado> totalizarVentas(UUID cafeteriaId, Collection<EstadoOrden> estados, Instant inicio, Instant fin);
+
+    @Query("""
+            select distinct o from Orden o join fetch o.compra left join fetch o.items
+            where o.id = :id and o.cafeteriaId = :cafeteriaId
+            and o.pagadoAt is not null and o.estado in :estados
+            """)
+    Optional<Orden> findVentaConItems(UUID id, UUID cafeteriaId, Collection<EstadoOrden> estados);
+
+    interface TotalPorEstado {
+        EstadoOrden getEstado();
+        long getOrdenes();
+        BigDecimal getMontoTotal();
+    }
+
     // CAST tipa los filtros nulos también en PostgreSQL.
     @Query(value = """
             select count(*) from ordenes
