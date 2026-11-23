@@ -321,3 +321,63 @@ describe('pantalla resultado-pago (estado real de Order)', () => {
     desmontar(tree);
   });
 });
+
+// INT4-129: además de la navegación automática al ganar foco, cada botón de
+// salida debe llevar a una pantalla real con los parámetros que esa pantalla
+// necesita. Así no queda un resultado que solo "mira" el destino sin poder
+// llegar a él (ni un carrito vacío al que volver tras un rechazo).
+describe('INT4-129: salidas de resultado-pago sin pantallas huérfanas', () => {
+  it('aprobado: el botón de QR reenvía a qr-retiro con el compraId', async () => {
+    mockConsultarPago.mockResolvedValue(pagoSimulado('aprobado'));
+    mockObtenerCompra.mockResolvedValue(compraConPago('aprobado'));
+
+    const tree = await renderizarResultado();
+    limpiarRouter(); // descarta la navegación automática; acá se prueba el botón
+
+    await pulsar(tree, 'resultado-ir-qr');
+
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/qr-retiro',
+      params: { compraId: 'compra-123' },
+    });
+
+    desmontar(tree);
+  });
+
+  it('pendiente: el botón en vivo reenvía a seguimientos con el compraId', async () => {
+    mockConsultarPago.mockResolvedValue(pagoSimulado('pendiente'));
+    mockObtenerCompra.mockResolvedValue(compraConPago('pendiente'));
+
+    const tree = await renderizarResultado();
+    limpiarRouter();
+
+    await pulsar(tree, 'resultado-ir-seguimiento');
+
+    expect(routerMock.replace).toHaveBeenCalledWith({
+      pathname: '/(cliente)/seguimientos',
+      params: { compraId: 'compra-123' },
+    });
+
+    desmontar(tree);
+  });
+
+  it('rechazado: además del carrito, ofrece Mis compras y el catálogo', async () => {
+    mockConsultarPago.mockResolvedValue(pagoSimulado('rechazado'));
+    mockObtenerCompra.mockResolvedValue(compraConPago('rechazado'));
+
+    const tree = await renderizarResultado();
+
+    await pulsar(tree, 'resultado-ir-carrito');
+    expect(routerMock.replace).toHaveBeenCalledWith('/carrito');
+
+    limpiarRouter();
+    await pulsar(tree, 'resultado-ir-compras');
+    expect(routerMock.replace).toHaveBeenCalledWith('/mis-compras');
+
+    limpiarRouter();
+    await pulsar(tree, 'resultado-ir-catalogo');
+    expect(routerMock.replace).toHaveBeenCalledWith('/');
+
+    desmontar(tree);
+  });
+});

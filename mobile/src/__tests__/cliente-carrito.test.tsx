@@ -416,4 +416,22 @@ describe('El botón de pagar (INT4-35: lleva al checkout)', () => {
     expect(() => tree.root.findByProps({ testID: 'carrito-error' })).toThrow();
     expect(() => tree.root.findByProps({ testID: 'carrito-reintentar' })).toThrow();
   });
+
+  it('INT4-129: deja el carrito intacto para que el checkout destino pueda mostrarlo', async () => {
+    const tree = await renderCarrito();
+    await agregar(tree, linea(), 2);
+    await agregar(tree, norte());
+
+    await pulsar(tree, 'carrito-pagar');
+
+    // El carrito no se vacía al navegar: el checkout al que se llega necesita
+    // encontrar las mismas líneas y el mismo total que el usuario vio acá.
+    expect(routerMock.push).toHaveBeenCalledWith('/(cliente)/checkout');
+    expect(leerCarrito(tree).items.map((item) => item.ofertaId)).toEqual([
+      'of-central-cafe',
+      'of-norte-cafe',
+    ]);
+    expect(leerCarrito(tree).total).toBe(5700);
+    expect(texto(tree, 'carrito-pagar')).toBe('Pagar con Mercado Pago $5.700');
+  });
 });
