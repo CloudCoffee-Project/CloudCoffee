@@ -97,6 +97,12 @@ public class CafeteriaAdministrationController {
     public CafeteriaResponse reactivarCafeteria(@PathVariable UUID cafeteriaId, Authentication authentication) {
         return service.reactivarCafeteria(cafeteriaId, authentication);
     }
+    
+    @GetMapping("/cafeterias/{cafeteriaId}")
+    public CafeteriaResponse detalleCafeteriaOperativa(@PathVariable UUID cafeteriaId,
+                                                       Authentication authentication) {
+        return service.detalleCafeteriaOperativa(cafeteriaId, authentication);
+    }
 
     @PostMapping("/cafeterias/{cafeteriaId}/estado-operativo")
     public CafeteriaResponse cambiarEstadoOperativo(@PathVariable UUID cafeteriaId,

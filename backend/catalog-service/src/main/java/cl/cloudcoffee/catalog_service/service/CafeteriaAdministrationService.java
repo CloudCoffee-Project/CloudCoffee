@@ -177,8 +177,16 @@ public class CafeteriaAdministrationService {
         return CafeteriaResponse.from(cafeteria);
     }
 
+    @Transactional(readOnly = true)
+    public CafeteriaResponse detalleCafeteriaOperativa(UUID id, Authentication authentication) {
+        adminCafeteria(authentication);
+        cafeteriaAccess.verificar(authentication, id);
+        return detalleCafeteria(id);
+    }
+
     public CafeteriaResponse cambiarEstadoOperativo(UUID id, CambiarEstadoOperativoRequest request,
                                                     Authentication authentication) {
+        adminCafeteria(authentication);
         cafeteriaAccess.verificar(authentication, id);
         Cafeteria cafeteria = cafeteriaRepository.findById(id).orElseThrow(() -> notFound("Cafetería no encontrada"));
         if (!cafeteria.isActive()) throw conflict("La cafetería está dada de baja", "CAFETERIA_DADA_DE_BAJA");
@@ -191,7 +199,6 @@ public class CafeteriaAdministrationService {
                 "Estado operativo cambiado a " + request.estadoOperativo());
         return CafeteriaResponse.from(cafeteria);
     }
-
     @Transactional(readOnly = true)
     public CafeteriaResponse detalleCafeteria(UUID id) {
         return CafeteriaResponse.from(cafeteriaRepository.findById(id)
@@ -226,6 +233,12 @@ public class CafeteriaAdministrationService {
     private void superAdmin(Authentication authentication) {
         boolean allowed = authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_SUPER_ADMIN"));
+        if (!allowed) throw new org.springframework.security.access.AccessDeniedException("Rol no permitido");
+    }
+
+    private void adminCafeteria(Authentication authentication) {
+        boolean allowed = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN_CAFETERIA"));
         if (!allowed) throw new org.springframework.security.access.AccessDeniedException("Rol no permitido");
     }
 
