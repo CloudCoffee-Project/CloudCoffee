@@ -30,6 +30,9 @@ reservas y compensación durable; ver [Creación de compras](creacion-compras.md
 INT2-72 incorpora historial y detalle de compras
 y detalle de órdenes para el CLIENTE propietario. INT2-78 agrega el listado paginado
 del CAJERO y la búsqueda exacta por `codigoOrden`, limitados a su asignación en Auth.
+INT2-54 implementa `POST /orders/{ordenId}/listo` y `GET /orders/{ordenId}/qr`
+con el vencimiento fijado al aprobar el pago. La configuración de cifrado y las
+pruebas se describen en el README de backend.
 El detalle individual conserva por ahora el acceso del comprador.
 Ejemplos y errores en [Consultas del comprador](consultas-compras.md) y
 [Listado y búsqueda del cajero](../README.md#listado-y-búsqueda-de-pedidos-del-cajero-int2-78).

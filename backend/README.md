@@ -556,6 +556,32 @@ JWT ausente, vencido o inválido devuelve `401`.
 revocación y caída de Auth, búsqueda y paginación con ítems completos. Ejecutar
 desde `backend`: `./auth-service/mvnw -pl order-service -am clean verify`.
 
+## Preparación y credencial de retiro (INT2-54)
+
+`POST /v1/orders/{ordenId}/listo` prepara una orden pagada de la cafetería
+asignada al `CAJERO` en Auth. Requiere `Idempotency-Key` y cuerpo vacío.
+La preparación, auditoría y evento de estado se guardan en una transacción.
+Repetir la misma intención devuelve la respuesta original con
+`Idempotency-Replayed: true`.
+
+`GET /v1/orders/{ordenId}/qr` devuelve `{ordenId, codigo, expiraAt}` al
+`CLIENTE` propietario o al `CAJERO` asignado, con `Cache-Control: no-store`.
+El código contiene 32 bytes aleatorios en Base64URL. Las consultas conservan
+el mismo código y el vencimiento establecido al aprobar el pago, que es de
+dos horas. Las órdenes impagas, canceladas, entregadas o vencidas no permiten
+consultar una credencial vigente.
+
+Configurar `ORDER_PICKUP_ENCRYPTION_KEY` con 32 bytes en Base64, generados por
+ejemplo con `openssl rand -base64 32`. Debe conservarse entre reinicios y ser
+la misma en todas las instancias de Order. La migración V11 guarda el hash del
+código y su representación cifrada con AES-256-GCM, junto al cajero y fecha de
+preparación. El código solo se devuelve en la consulta privada de QR.
+Sin una clave válida, la preparación responde `503` y revierte la operación.
+
+`RetiroIntegrationTests` cubre el flujo de pago, preparación, consultas,
+idempotencia, concurrencia, vencimiento y permisos. `CredencialesRetiroTest`
+comprueba recuperación tras reinicio y rechazo de ciphertext alterado.
+
 ## OpenAPI y Swagger · API Sprint 1 (INT2-31)
 
 El contrato objetivo del Sprint 2 está en
