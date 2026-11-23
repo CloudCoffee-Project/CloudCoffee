@@ -126,7 +126,7 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
     }
 
     @Test
-    void detallePublicoOcultaProductosInactivosComoNoEncontrados() throws Exception {
+    void detallePublicoOcultaProductosInactivosYSusOfertas() throws Exception {
         UUID productId = UUID.fromString(CAFE_AMERICANO);
         jdbcTemplate.update("UPDATE product SET status = 'INACTIVE' WHERE id = ?", productId);
         try {
@@ -135,6 +135,7 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.detail").value(
                             "No existe un producto activo con el identificador indicado."));
+            ofertas(CAFE_AMERICANO, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$").isEmpty());
         } finally {
             jdbcTemplate.update("UPDATE product SET status = 'ACTIVE' WHERE id = ?", productId);
         }

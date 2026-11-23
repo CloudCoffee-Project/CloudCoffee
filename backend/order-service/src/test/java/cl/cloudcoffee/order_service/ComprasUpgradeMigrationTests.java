@@ -123,7 +123,7 @@ class ComprasUpgradeMigrationTests {
 
     @Test
     void conservaVentaHistoricaConFechaDelPagoYCampusDeLaCotizacionOriginal() throws SQLException {
-        flyway = Flyway.configure().configuration(flyway.getConfiguration()).target("7").load();
+        flyway = Flyway.configure().configuration(flyway.getConfiguration()).target("10").load();
         flyway.migrate();
 
         UUID idCompra = compra("3900");

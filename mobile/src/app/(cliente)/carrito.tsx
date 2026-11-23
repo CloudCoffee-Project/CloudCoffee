@@ -15,6 +15,11 @@
 // vive en memoria. El precio y el stock de cada línea son los que tenía la
 // oferta cuando se agregó; el backend los revalida al crear la orden.
 //
+// INT4-132: por eso acá no hay `toApiError`, indicador de carga ni tarjeta de
+// reintento: no existe una petición que pueda fallar. El patrón unificado de
+// error del backend vive en components/ErrorBackend y lo usan las pantallas
+// que sí consultan Order (resultado-pago y qr-retiro).
+//
 // Lo que NO se toca: el flujo de pago (INT4-38/39) vive en services/pagos.ts y
 // sigue siendo el de ese compañero. Acá solo se le da el lugar que le corresponde
 // en la pantalla —método de pago, resumen y botón—. El botón ya no abre el

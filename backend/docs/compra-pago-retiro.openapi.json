@@ -1658,6 +1658,63 @@
           }
         }
       }
+    },
+    "/orders/{ordenId}/boleta": {
+      "get": {
+        "tags": [
+          "Compras"
+        ],
+        "summary": "Descargar comprobante interno de orden pagada (INT2-128)",
+        "description": "Solo CLIENTE propietario. Folio CC-<ordenId> estable, snapshots históricos y fecha de compra. Sin validez tributaria. No incluye credenciales de retiro.",
+        "parameters": [
+          {
+            "name": "ordenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF con Content-Disposition attachment; filename=\"comprobante-CC-<ordenId>.pdf\" y Cache-Control no-store",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Rol no permitido"
+          },
+          "404": {
+            "description": "Orden inexistente o ajena"
+          },
+          "409": {
+            "description": "COMPROBANTE_NO_DISPONIBLE: orden sin pago confirmado"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1673,7 +1730,7 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": true,
-        "description": "UUID por intención; misma clave/carga reproduce resultado durante al menos 24 h desde finalizar. Otra carga entra en conflicto. Ver reglas de concurrencia en el documento.",
+        "description": "Obligatoria: UUID por intención. Misma clave/carga reproduce resultado durante la retención desde finalizar (30 días por defecto, mínimo 24 h). Pendientes y referencias activas no se purgan. Tras purga la creación puede ser una intención nueva: consultar historial antes de reusar. El pago único por compra impide un segundo cobro.",
         "schema": {
           "type": "string",
           "format": "uuid"

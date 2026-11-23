@@ -1,5 +1,5 @@
 // src/services/ordenes.test.ts
-import { httpClient } from './httpClient';
+import { ApiError, httpClient } from './httpClient';
 import {
   cancelarOrden,
   confirmarOrden,
@@ -11,12 +11,19 @@ import {
 } from './ordenes';
 import type { Orden, PaginaOrdenes } from '../types/domain';
 
-jest.mock('./httpClient', () => ({
-  httpClient: { get: jest.fn(), post: jest.fn() },
-}));
+jest.mock('./httpClient', () => {
+  const actual = jest.requireActual('./httpClient');
+  return {
+    ...actual,
+    httpClient: { get: jest.fn(), post: jest.fn() },
+  };
+});
 
 const mockedGet = httpClient.get as unknown as jest.Mock;
 const mockedPost = httpClient.post as unknown as jest.Mock;
+
+// Token opaco del contrato: Base64URL de 43 caracteres.
+const CODIGO_RETIRO = 'a'.repeat(43);
 
 const ordenesMock: Orden[] = [
   {
@@ -130,15 +137,55 @@ describe('marcarOrdenEntregada', () => {
     mockedPost.mockReset();
   });
 
-  it('marca la orden como entregada en el endpoint del gateway', async () => {
+  it('envía el código del contrato y una Idempotency-Key UUID al endpoint real', async () => {
     mockedPost.mockResolvedValue({ data: ordenesMock[0] });
 
-    const resultado = await marcarOrdenEntregada('o-1', 'token-real');
+    const resultado = await marcarOrdenEntregada('o-1', CODIGO_RETIRO, 'token-real', 'clave-fija');
 
-    expect(mockedPost).toHaveBeenCalledWith(`${ORDENES_ENDPOINT}/o-1/entregar`, undefined, {
-      headers: { Authorization: 'Bearer token-real' },
-    });
+    expect(mockedPost).toHaveBeenCalledWith(
+      `${ORDENES_ENDPOINT}/o-1/entregar`,
+      { codigo: CODIGO_RETIRO },
+      {
+        headers: {
+          Authorization: 'Bearer token-real',
+          'Idempotency-Key': 'clave-fija',
+        },
+      }
+    );
     expect(resultado).toEqual(ordenesMock[0]);
+  });
+
+  it('genera una clave UUID cuando la pantalla no reutiliza ninguna', async () => {
+    mockedPost.mockResolvedValue({ data: ordenesMock[0] });
+
+    await marcarOrdenEntregada('o-1', CODIGO_RETIRO, 'token-real');
+
+    const clave = mockedPost.mock.calls[0][2].headers['Idempotency-Key'];
+    expect(clave).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it('no llama al backend si el QR no trae el token del contrato', async () => {
+    await expect(marcarOrdenEntregada('o-1', 'folio-no-token', 'token-real')).rejects.toMatchObject(
+      {
+        name: 'ApiError',
+        status: 400,
+        problem: { code: 'QR_INVALIDO' },
+      }
+    );
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it('propaga el error normalizado del backend', async () => {
+    const error = new ApiError('QR usado', 409, {
+      type: 'about:blank',
+      title: 'Conflict',
+      status: 409,
+      detail: 'QR usado',
+      code: 'QR_UTILIZADO',
+    });
+    mockedPost.mockRejectedValue(error);
+
+    await expect(marcarOrdenEntregada('o-1', CODIGO_RETIRO, 'token-real')).rejects.toBe(error);
   });
 });
 
@@ -192,18 +239,16 @@ describe('resolverOrdenNoRetirada', () => {
     mockedPost.mockReset();
   });
 
-  it('envía la decisión ítem por ítem al endpoint de revisión de la orden', async () => {
-    const resuelta = { ...ordenesMock[0], estado: 'no_retirado_final' as const };
-    mockedPost.mockResolvedValue({ data: resuelta });
-
+  it('degrada con error normalizado: el backend no expone ruta de revisión', async () => {
     const decisiones = [{ ordenItemId: 'itm-1', accion: 'descartar' as const }];
-    const resultado = await resolverOrdenNoRetirada('o-1', decisiones, 'token-real');
 
-    expect(mockedPost).toHaveBeenCalledWith(
-      `${ORDENES_ENDPOINT}/o-1/no-retirado/revisar`,
-      { items: decisiones },
-      { headers: { Authorization: 'Bearer token-real' } }
-    );
-    expect(resultado).toEqual(resuelta);
+    await expect(resolverOrdenNoRetirada('o-1', decisiones, 'token-real')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+      problem: { code: 'RUTA_NO_DISPONIBLE' },
+    });
+
+    // No se dispara una petición a un endpoint inventado ni se simula éxito.
+    expect(mockedPost).not.toHaveBeenCalled();
   });
 });

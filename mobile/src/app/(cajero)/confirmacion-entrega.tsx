@@ -13,16 +13,26 @@
 // POST /v1/orders/{id}/entregar (mismo contrato TODO que INT4-7/INT4-8: la
 // ruta aún no está ruteada por el gateway).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Presionable } from '../../components/Presionable';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { fetchPedidosEntrantes, marcarOrdenEntregada } from '../../services/ordenes';
-import { getAccessToken, toApiError } from '../../services/httpClient';
-import { esEstadoOrden } from '../../types/domain';
+import {
+  crearClaveIdempotencia,
+  fetchPedidosEntrantes,
+  marcarOrdenEntregada,
+} from '../../services/ordenes';
+import { getAccessToken } from '../../services/httpClient';
+import { esCodigoRetiroValido, esEstadoOrden } from '../../types/domain';
 import type { Orden } from '../../types/domain';
+import {
+  MENSAJE_SIN_CONFIRMACION,
+  mensajeErrorAccionOrden,
+  resultadoEntrega,
+} from '../../utils/accionesOrden';
+import type { ResultadoAccionOrden } from '../../utils/accionesOrden';
 
 function formatearMonto(monto: number): string {
   return `$${monto.toLocaleString('es-CL')}`;
@@ -37,12 +47,22 @@ export default function ConfirmacionEntregaScreen() {
   const params = useLocalSearchParams();
 
   const pedido = textoUnico(params.pedido) ?? '';
+  const codigo = textoUnico(params.codigo) ?? '';
   const estadoValido = esEstadoOrden(textoUnico(params.estado));
+  const codigoValido = esCodigoRetiroValido(codigo);
 
   const [orden, setOrden] = useState<Orden | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [errorEntrega, setErrorEntrega] = useState<string | null>(null);
-  const [entregada, setEntregada] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoAccionOrden | null>(null);
+
+  // Una intención = una clave. Los reintentos de este mismo QR reutilizan la
+  // clave, así que el backend reproduce el éxito previo en vez de crear otra
+  // entrega (Idempotency-Key del contrato).
+  const claveIdempotencia = useRef<string | null>(null);
+  if (claveIdempotencia.current == null) {
+    claveIdempotencia.current = crearClaveIdempotencia();
+  }
 
   // Enriquece con los datos de la orden (cliente, ítems, total). Si el
   // listado no responde (backend aún sin /v1/orders), se muestra la orden
@@ -73,18 +93,28 @@ export default function ConfirmacionEntregaScreen() {
     setConfirmando(true);
     setErrorEntrega(null);
     try {
-      await marcarOrdenEntregada(pedido, getAccessToken() ?? '');
-      setEntregada(true);
+      const respuesta = await marcarOrdenEntregada(
+        pedido,
+        codigo,
+        getAccessToken() ?? '',
+        claveIdempotencia.current ?? crearClaveIdempotencia()
+      );
+      const confirmado = resultadoEntrega(respuesta);
+      if (!confirmado) {
+        setErrorEntrega(MENSAJE_SIN_CONFIRMACION);
+        return;
+      }
+      setResultado(confirmado);
     } catch (errorApi) {
-      setErrorEntrega(toApiError(errorApi as never).message);
+      setErrorEntrega(mensajeErrorAccionOrden(errorApi, 'entrega'));
     } finally {
       setConfirmando(false);
     }
-  }, [pedido]);
+  }, [pedido, codigo]);
 
   // Defensivo: el escáner valida el payload antes de navegar, pero esta
   // pantalla también puede abrirse con params inválidos desde la URL.
-  if (!pedido || !estadoValido) {
+  if (!pedido || !estadoValido || !codigoValido) {
     return (
       <SafeAreaView style={styles.contenedor} edges={['top']} testID="cajero-confirmacion-invalida">
         <View style={styles.header}>
@@ -95,7 +125,9 @@ export default function ConfirmacionEntregaScreen() {
           <Text style={styles.cardIcono}>⚠️</Text>
           <Text style={styles.cardTitulo}>QR no válido</Text>
           <Text style={styles.cardTexto}>
-            El código escaneado no corresponde a un retiro válido.
+            {codigoValido
+              ? 'El código escaneado no corresponde a un retiro válido.'
+              : 'Este retiro no trae el código de retiro emitido por el backend. No se puede registrar la entrega.'}
           </Text>
           <Presionable
             style={styles.botonPrimario}
@@ -109,8 +141,8 @@ export default function ConfirmacionEntregaScreen() {
     );
   }
 
-  // Entrega confirmada contra el backend.
-  if (entregada) {
+  // Entrega confirmada contra el backend con la respuesta real (Orden).
+  if (resultado) {
     return (
       <SafeAreaView
         style={styles.contenedor}
@@ -126,7 +158,7 @@ export default function ConfirmacionEntregaScreen() {
             <Text style={styles.checkCircleTexto}>✓</Text>
           </View>
           <Text style={styles.cardTitulo}>Entrega registrada</Text>
-          <Text style={styles.cardTexto}>La orden #{pedido} fue marcada como entregada.</Text>
+          <Text style={styles.cardTexto}>{resultado.mensaje}</Text>
           <Presionable
             style={styles.botonPrimario}
             onPress={volverAlEscaner}

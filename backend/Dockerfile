@@ -21,9 +21,14 @@ COPY --from=build \
     /workspace/application.jar \
     ./application.jar
 
+# Si JWT_PUBLIC_KEY_B64 esta definida, escribe la llave publica en /tmp antes de arrancar.
+COPY docker/jwt-public-entrypoint.sh /usr/local/bin/jwt-public-entrypoint.sh
+RUN chmod 0555 /usr/local/bin/jwt-public-entrypoint.sh
+
 USER spring:spring
 
-ENTRYPOINT ["java", "-jar", "/app/application.jar"]
+ENTRYPOINT ["/usr/local/bin/jwt-public-entrypoint.sh"]
+CMD ["java", "-jar", "/app/application.jar"]
 
 # Solo Auth necesita preparar la llave privada antes de bajar privilegios.
 FROM runtime AS auth-runtime

@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 
 import { clearTokens, getRefreshToken, onTokensCambiados, setTokens } from '../services/httpClient';
 import { decodificarSesion, logout } from '../services/auth';
+import { limpiarCampusSeleccionado } from '../services/catalog';
 import { eliminarSesion, guardarSesion, leerSesion } from '../services/sessionStorage';
 import { eliminarRegistroPush } from '../services/notificacionesPush';
 import type { LoginResponse, SesionDecodificada } from '../types/domain';
@@ -44,6 +45,18 @@ async function revocarSesionEnBackend(): Promise<void> {
     await logout(refreshToken);
   } catch (error) {
     console.warn('[Auth] No se pudo revocar la sesión en el backend:', error);
+  }
+}
+
+// INT4-125: la sede es obligatoria en cada inicio de sesión. Se descarta al
+// entrar y al salir para que ningún login herede el campus de la sesión anterior
+// (ni otro usuario el de quien usó el dispositivo antes). Es mejor esfuerzo:
+// un fallo del almacén no puede impedir el login ni dejar el logout a medias.
+async function descartarCampusGuardado(): Promise<void> {
+  try {
+    await limpiarCampusSeleccionado();
+  } catch (error) {
+    console.warn('[Auth] No se pudo limpiar el campus guardado:', error);
   }
 }
 
@@ -104,6 +117,11 @@ export function AuthProvider({ children }: Props) {
         return null;
       }
 
+      // La sede se exige de nuevo en cada login: se limpia antes de publicar
+      // la sesión para que el guard no pueda mostrar el catálogo con una sede
+      // elegida en una sesión anterior.
+      await descartarCampusGuardado();
+
       setTokens(tokens);
 
       setSesion(sesionDecodificada);
@@ -121,6 +139,7 @@ export function AuthProvider({ children }: Props) {
     await revocarSesionEnBackend();
     await eliminarRegistroPush();
     clearTokens();
+    await descartarCampusGuardado();
     setSesion(null);
   }, []);
 

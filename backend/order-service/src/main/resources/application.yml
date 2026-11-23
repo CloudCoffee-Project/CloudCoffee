@@ -22,6 +22,7 @@ spring:
   application:
     name: order-service
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
@@ -67,6 +68,11 @@ info:
     description: Servicio de pedidos de CloudCoffee
 
 cloudcoffee:
+  idempotencia:
+    enabled: ${ORDER_IDEMPOTENCY_CLEANUP_ENABLED:true}
+    retention: ${ORDER_IDEMPOTENCY_RETENTION:P30D}
+    batch-size: ${ORDER_IDEMPOTENCY_BATCH_SIZE:100}
+    cleanup-interval: ${ORDER_IDEMPOTENCY_CLEANUP_INTERVAL:PT1H}
   pagos:
     # INT2-113: "simulado" (por defecto, contrato INT2-50 con escenarios) o "mercadopago_sandbox"
     # (checkout de payment-service; sin escenarios ni otro proveedor de respaldo).

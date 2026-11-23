@@ -1,22 +1,29 @@
 // src/app/(cliente)/seguimientos.tsx
 //
-// Seguimiento en vivo de una orden. Rediseñado siguiendo el mockup de
-// SEGUIMIENTO (cloudcoffee-react: Mi_Pedido): badge de seguimiento, tarjeta
-// con N° de pedido + pill de estado y timeline de pasos.
+// Seguimiento en vivo de una orden (INT4-6, adaptado a INT4-128). El estado BASE
+// se consulta por HTTP al enfocar (GET /v1/orders/{ordenId}, resolviendo la
+// orden desde compraId cuando hace falta) y los CAMBIOS llegan por WebSocket
+// vía useOrdenEstado. Así, recargar o reabrir siempre muestra el estado real y
+// no depende de un parámetro que pueda quedar viejo.
 //
-// El estado viene en tiempo real via useOrdenEstado (WebSocket, INT4-6) y se
-// mapea al union EstadoOrden de src/types/domain.ts con el helper
-// pasoDelEstado (sin índices mágicos). No hay timers ni datos mockeados.
+// El botón de QR aparece SOLO en 'listo_para_retiro', el único estado en que
+// Order habilita GET /v1/orders/{ordenId}/qr. La pantalla de QR vuelve a pedirlo
+// al backend: acá no se arma ni se guarda ningún código.
 
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Presionable } from '../../components/Presionable';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { AxiosError } from 'axios';
 
 import { useOrdenEstado } from '../../hooks/useOrdenEstado';
+import { obtenerCompra } from '../../services/compras';
+import { ApiProblem, toApiError } from '../../services/httpClient';
+import { obtenerOrden } from '../../services/ordenes';
 import { esEstadoOrden } from '../../types/domain';
 import { etiquetaEstadoOrden, visualEstadoOrden } from '../../utils/estadosOrden';
-import type { EstadoOrden } from '../../types/domain';
+import type { EstadoOrden, Orden } from '../../types/domain';
 
 const PASOS_SEGUIMIENTO = [
   {
@@ -33,12 +40,8 @@ const PASOS_SEGUIMIENTO = [
   },
 ] as const;
 
-// Estados desde los que el cliente puede presentar el QR en el punto de retiro.
-const ESTADOS_DE_RETIRO: readonly EstadoOrden[] = [
-  'listo_para_retiro',
-  'no_retirado_pendiente_revision',
-  'no_retirado_final',
-];
+// Order solo habilita el QR cuando la orden alcanzó este estado.
+const ESTADO_CON_QR: EstadoOrden = 'listo_para_retiro';
 
 // Devuelve el índice (0-based) del hito actual del timeline según el estado
 // real de la orden. `pasos.length` significa "todos completados" (entregado)
@@ -65,28 +68,95 @@ function textoUnico(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
+function elegirOrden(ordenes: Orden[]): Orden | undefined {
+  return (
+    ordenes.find((orden) => orden.estado !== 'cancelado') ??
+    (ordenes.length > 0 ? ordenes[ordenes.length - 1] : undefined)
+  );
+}
+
 export default function SeguimientosScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams();
-  const ordenId = textoUnico(params.id) ?? '';
+  const compraId = textoUnico(params.compraId) ?? '';
+  const ordenParam = textoUnico(params.ordenId) ?? textoUnico(params.id) ?? '';
+  const estadoParam = textoUnico(params.estado);
 
-  // Estado en tiempo real: llega por el topic /topic/orden/{ordenId}/estado.
-  // Antes del primer mensaje es null y el timeline se muestra completo en
-  // pendiente, sin datos inventados.
-  const estadoEnVivo = useOrdenEstado(ordenId);
-  const estado: EstadoOrden | null = esEstadoOrden(estadoEnVivo) ? estadoEnVivo : null;
+  const [orden, setOrden] = useState<Orden | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const recargar = useCallback(async (): Promise<void> => {
+    if (!ordenParam && !compraId) {
+      setOrden(null);
+      setError('No hay una orden asociada a esta compra.');
+      setCargando(false);
+      return;
+    }
+
+    setCargando(true);
+    setError(null);
+    try {
+      let ordenResuelta: Orden | undefined;
+      if (ordenParam) {
+        ordenResuelta = await obtenerOrden(ordenParam);
+      } else {
+        const compra = await obtenerCompra(compraId);
+        ordenResuelta = elegirOrden(compra.ordenes);
+        if (ordenResuelta) {
+          // La compra trae un snapshot; GET /orders/{id} da el estado actual.
+          ordenResuelta = await obtenerOrden(ordenResuelta.ordenId);
+        }
+      }
+
+      if (!ordenResuelta) {
+        setOrden(null);
+        setError('No hay una orden asociada a esta compra.');
+        return;
+      }
+      setOrden(ordenResuelta);
+    } catch (thrown) {
+      const apiError = toApiError(thrown as AxiosError<ApiProblem>);
+      console.error('[Seguimientos] No se pudo cargar la orden:', apiError.message);
+      setOrden(null);
+      setError(apiError.message);
+    } finally {
+      setCargando(false);
+    }
+  }, [compraId, ordenParam]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void recargar();
+    }, [recargar])
+  );
+
+  // Suscripción en vivo: se conecta apenas conocemos el id (param o respuesta
+  // del GET) y el último evento gana sobre el estado base de HTTP.
+  const estadoEnVivo = useOrdenEstado(orden?.ordenId ?? ordenParam);
+  const estadoBase: EstadoOrden | null = orden
+    ? orden.estado
+    : esEstadoOrden(estadoParam)
+      ? estadoParam
+      : null;
+  const estado: EstadoOrden | null = esEstadoOrden(estadoEnVivo) ? estadoEnVivo : estadoBase;
+
   const pasoActual = estado === null ? null : pasoDelEstado(estado);
-  const puedeVerQr = estado !== null && ESTADOS_DE_RETIRO.includes(estado);
+  const puedeVerQr = estado === ESTADO_CON_QR;
   const pill = estado === null ? { fondo: '#F3F4F6', texto: '#6B7280' } : visualEstadoOrden(estado);
   const etiqueta = estado === null ? 'Esperando estado…' : etiquetaEstadoOrden(estado);
+  const ordenId = orden?.ordenId ?? ordenParam;
 
-  const abrirQrRetiro = () => {
-    if (!estado) return;
+  const abrirQrRetiro = (): void => {
+    if (!ordenId) return;
     router.push({
       pathname: '/(cliente)/qr-retiro',
-      params: { id: ordenId, estado },
+      params: {
+        ...(compraId ? { compraId } : {}),
+        ordenId,
+      },
     });
   };
 
@@ -101,13 +171,21 @@ export default function SeguimientosScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {!ordenId ? (
-          <View style={styles.emptyCard}>
+        {cargando ? (
+          <View style={styles.emptyCard} testID="seguimiento-cargando">
+            <ActivityIndicator size="large" color="#0052CC" />
+            <Text style={styles.emptyText}>Consultando el estado de tu orden…</Text>
+          </View>
+        ) : error || !ordenId ? (
+          <View style={styles.emptyCard} testID="seguimiento-error">
             <Text style={styles.emptyIcon}>☕</Text>
-            <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
+            <Text style={styles.emptyTitle}>No pudimos cargar tu orden</Text>
             <Text style={styles.emptyText}>
-              Cuando realices una compra en el carrito, aquí verás el seguimiento de tu pedido.
+              {error ?? 'Cuando realices una compra en el carrito, aquí verás su seguimiento.'}
             </Text>
+            <Presionable style={styles.primaryButton} onPress={() => void recargar()}>
+              <Text style={styles.primaryButtonText}>Reintentar</Text>
+            </Presionable>
           </View>
         ) : (
           <>
@@ -118,10 +196,17 @@ export default function SeguimientosScreen() {
 
             <View style={styles.ticketCard}>
               <Text style={styles.orderLabel}>N° DE PEDIDO</Text>
-              <Text style={styles.orderId}>#{ordenId}</Text>
+              <Text style={styles.orderId} testID="seguimiento-orden">
+                #{orden?.codigoOrden || ordenId}
+              </Text>
               <View style={styles.divider} />
               <View style={[styles.statusPill, { backgroundColor: pill.fondo }]}>
-                <Text style={[styles.statusPillText, { color: pill.texto }]}>{etiqueta}</Text>
+                <Text
+                  style={[styles.statusPillText, { color: pill.texto }]}
+                  testID="seguimiento-estado"
+                >
+                  {etiqueta}
+                </Text>
               </View>
             </View>
 
@@ -131,7 +216,7 @@ export default function SeguimientosScreen() {
               </View>
             )}
 
-            <View style={styles.timelineContainer}>
+            <View style={styles.timelineContainer} testID="seguimiento-timeline">
               {PASOS_SEGUIMIENTO.map((paso, index) => {
                 const completado = pasoActual !== null && index < pasoActual;
                 const activo = pasoActual === index;
@@ -173,10 +258,20 @@ export default function SeguimientosScreen() {
               })}
             </View>
 
-            {puedeVerQr && (
-              <Presionable style={styles.primaryButton} onPress={abrirQrRetiro}>
+            {puedeVerQr ? (
+              <Presionable
+                style={styles.primaryButton}
+                onPress={abrirQrRetiro}
+                testID="seguimiento-ver-qr"
+              >
                 <Text style={styles.primaryButtonText}>Ver código de retiro</Text>
               </Presionable>
+            ) : (
+              <View style={styles.qrPendiente} testID="seguimiento-sin-qr">
+                <Text style={styles.qrPendienteTexto}>
+                  El código de retiro se habilita cuando tu orden esté lista para retiro.
+                </Text>
+              </View>
             )}
           </>
         )}
@@ -389,6 +484,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  qrPendiente: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE9DE',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  qrPendienteTexto: {
+    color: '#6B7280',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',

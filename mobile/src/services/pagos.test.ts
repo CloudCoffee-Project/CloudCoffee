@@ -3,6 +3,12 @@ import * as Linking from 'expo-linking';
 
 import { parsearRetornoPago } from './pagos';
 
+// INT4-130: pagos.ts importa la intención persistida; en Jest AsyncStorage se
+// reemplaza por el mock del proyecto (no hay módulo nativo).
+jest.mock(
+  '@react-native-async-storage/async-storage',
+  () => jest.requireActual('../test-utils').asyncStorageMock
+);
 jest.mock('expo-linking');
 
 const mockedLinking = Linking as jest.Mocked<typeof Linking>;

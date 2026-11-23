@@ -63,4 +63,16 @@ public class DeviceToken {
         this.tokenType = tokenType;
         this.updatedAt = now;
     }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public DeviceTokenType getTokenType() {
+        return tokenType;
+    }
 }

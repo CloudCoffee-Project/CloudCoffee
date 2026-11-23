@@ -143,8 +143,10 @@ public class SimulacionPagoService {
 
         String cuerpo = jsonMapper.writeValueAsString(PagoResponse.from(pago));
         String location = "/v1" + ruta;
-        idempotencia.save(new RegistroIdempotencia(usuarioId, METODO, ruta, clave, hash,
-                HttpStatus.CREATED.value(), cuerpo, location));
+        var registro = new RegistroIdempotencia(usuarioId, METODO, ruta, clave, hash,
+                HttpStatus.CREATED.value(), cuerpo, location);
+        if (pago.getEstado() == EstadoPago.APROBADO || pago.getEstado() == EstadoPago.RECHAZADO) registro.completar(clock.instant());
+        idempotencia.save(registro);
         return new Inicio(new Respuesta(HttpStatus.CREATED.value(), cuerpo, location, false),
                 porConfirmar ? pago.getId() : null);
     }

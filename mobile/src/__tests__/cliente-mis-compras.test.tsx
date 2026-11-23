@@ -195,6 +195,26 @@ describe('pantalla de Mis Compras', () => {
     act(() => tree.unmount());
   });
 
+  it('abre la orden en vivo desde el historial con compraId y ordenId', async () => {
+    mockListar.mockResolvedValue([compra('c1')]);
+
+    const tree = await renderizarMisCompras();
+
+    const boton = tree.root.findByProps({ testID: 'seguir-orden-orden-c1' });
+    expect(textoDe(boton)).toContain('En vivo');
+
+    await act(async () => {
+      boton.props.onPress();
+    });
+
+    expect(routerMock.push).toHaveBeenCalledWith({
+      pathname: '/(cliente)/seguimientos',
+      params: { compraId: 'compra-c1', ordenId: 'orden-c1' },
+    });
+
+    act(() => tree.unmount());
+  });
+
   it('no ofrece boleta para compras que aún no están pagadas', async () => {
     mockListar.mockResolvedValue([compra('c1', { estado: 'pendiente_pago' })]);
 

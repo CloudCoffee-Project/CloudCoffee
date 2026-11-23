@@ -7,26 +7,18 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
+      "android": { "buildType": "apk" }
     },
     "preview": {
       "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "ios": {
-        "simulator": true
-      }
+      "env": { "EXPO_PUBLIC_API_URL": "https://api-cloudcoffee.inf.uct.cl" },
+      "android": { "buildType": "apk" },
+      "ios": { "simulator": true }
     },
     "production": {
-      "android": {
-        "buildType": "app-bundle"
-      }
+      "env": { "EXPO_PUBLIC_API_URL": "https://api-cloudcoffee.inf.uct.cl" },
+      "android": { "buildType": "app-bundle" }
     }
   },
-  "submit": {
-    "production": {}
-  }
+  "submit": { "production": {} }
 }

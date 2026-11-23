@@ -21,6 +21,12 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// INT4-125: el root layout lee la sede del cliente, pero este guard es de
+// cajero y no debe arrastrar AsyncStorage (nativo) a la suite.
+jest.mock('../services/catalog', () => ({
+  leerCampusSeleccionado: jest.fn(async () => null),
+}));
+
 const mockUseAuth = jest.fn();
 jest.mock('../context/AuthContext', () => ({
   useAuth: () => mockUseAuth(),

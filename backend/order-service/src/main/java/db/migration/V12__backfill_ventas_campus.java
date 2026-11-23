@@ -7,7 +7,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Recupera el campus de la cotización original de las compras creadas antes de INT2-125. */
-public class V9__backfill_ventas_campus extends BaseJavaMigration {
+public class V12__backfill_ventas_campus extends BaseJavaMigration {
     @Override
     public Integer getChecksum() {
         return 1;

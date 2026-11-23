@@ -3,6 +3,7 @@ package cl.cloudcoffee.catalog_service.model.entity;
 import cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus;
 import jakarta.persistence.*;
 import java.util.UUID;
+import java.time.Instant;
 import lombok.Getter; import lombok.Setter;
 
 @Entity
@@ -23,4 +24,10 @@ public class Cafeteria {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private CafeteriaStatus status;
+    @Column(nullable = false)
+    private boolean active = true;
+    private Instant bajaAt;
+    @Version
+    @Column(nullable = false)
+    private Long version;
 }
