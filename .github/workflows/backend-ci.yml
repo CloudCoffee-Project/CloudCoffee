@@ -93,7 +93,14 @@ jobs:
           MODULE: ${{ matrix.module }}
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
-          expected=$(find "$MODULE/src/main/resources/db/migration" -maxdepth 1 -type f \( -name 'V*__*.sql' -o -name 'R__*.sql' \) | wc -l | tr -d '[:space:]')
+          expected=$(
+            {
+              find "$MODULE/src/main/resources/db/migration" -maxdepth 1 -type f \( -name 'V*__*.sql' -o -name 'R__*.sql' \)
+              if [ -d "$MODULE/src/main/java/db/migration" ]; then
+                find "$MODULE/src/main/java/db/migration" -maxdepth 1 -type f -name 'V*__*.java'
+              fi
+            } | wc -l | tr -d '[:space:]'
+          )
           actual=$(docker exec -e PGPASSWORD=cloudcoffee_test "$POSTGRES_CONTAINER" \
             psql -h 127.0.0.1 -U cloudcoffee -d cloudcoffee_test -tAc \
             'SELECT count(*) FROM flyway_schema_history WHERE success = true')
