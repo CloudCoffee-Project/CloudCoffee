@@ -70,3 +70,128 @@
   border: 1px solid var(--color-border, #e5e7eb);
   background-color: var(--color-surface, #ffffff);
 }
+.admin-cafeterias-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  align-items: end;
+  margin-top: 1rem;
+}
+
+.admin-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 500;
+}
+
+.admin-form-grid input,
+.admin-form-grid select,
+.admin-filters-bar select {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 8px;
+}
+
+.admin-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-btn-secondary {
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #d1d5db);
+  background-color: #ffffff;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.admin-btn-danger {
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #dc2626;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.admin-list-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.admin-filters-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.admin-cafeterias-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-cafeteria-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+}
+
+.admin-confirm-box {
+  border-color: #f59e0b;
+  background-color: #fffbeb;
+}
+
+.admin-feedback-success {
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background-color: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.admin-feedback-error {
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.admin-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
