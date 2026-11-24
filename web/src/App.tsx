@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router';
-import { CatalogPage } from './pages/CatalogPage';
+import { CampusPage, CatalogEntry } from './pages/CampusPage';
 import { HomePage } from './pages/HomePage';
 import { MainLayout } from './components/layout/MainLayout';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -15,6 +15,8 @@ import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { PaymentResultPage } from './pages/PaymentResultPage';
+import { PurchasesPage } from './pages/PurchasesPage';
+import { PurchaseDetailPage } from './pages/PurchaseDetailPage';
 import { CashierOrdersPage } from './pages/CashierOrdersPage';
 import { AdminPanelPage } from './pages/AdminPanelPage';
 
@@ -27,7 +29,9 @@ export function App() {
 
         {/* Rutas públicas */}
         <Route path="/" element={<HomePage />} />
-        <Route path="/catalogo" element={<CatalogPage />} />
+        <Route path="/campus" element={<CampusPage key="select" />} />
+        <Route path="/campus/cambiar" element={<CampusPage key="change" mode="change" />} />
+        <Route path="/catalogo" element={<CatalogEntry />} />
         <Route path="/catalogo/productos/:id" element={<ProductDetailPage />} />
         <Route path="/carrito" element={<CartPage />} />
         <Route path="/registro" element={<RegisterPage />} />
@@ -48,15 +52,8 @@ export function App() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/pago/resultado" element={<PaymentResultPage />} />
           <Route path="/pago/retorno" element={<PaymentResultPage />} />
-          <Route
-            path="/compras"
-            element={
-              <section style={{ padding: '2rem' }}>
-                <h1>Mis Compras</h1>
-                <p>Historial y seguimiento de pedidos del cliente.</p>
-              </section>
-            }
-          />
+          <Route path="/compras" element={<PurchasesPage />} />
+          <Route path="/compras/:compraId" element={<PurchaseDetailPage />} />
         </Route>
 
         {/* Rutas exclusivas de personal de cafetería (CAJERO) */}

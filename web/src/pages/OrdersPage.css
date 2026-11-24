@@ -1,0 +1,28 @@
+
+.orders-page { overflow-wrap:anywhere; }
+.orders-page>.eyebrow { display:table; margin:1.4rem 0 .9rem; }
+.orders-page>h1 { font-size:clamp(2.2rem,4.5vw,3.4rem); letter-spacing:-.04em; }
+.orders-back { color:var(--color-text-muted); font-weight:600; }
+.orders-intro { color:var(--color-text-muted); margin:.8rem 0 2rem !important; }
+.orders-layout,.orders-history-layout { display:grid; grid-template-columns:280px minmax(0,1fr); gap:2rem; align-items:start; }
+.orders-sidebar>h2 { text-transform:uppercase; font-size:.75rem; letter-spacing:.06em; color:var(--color-text-muted); margin-bottom:.8rem; }
+.order-tabs { display:grid; gap:.75rem; }
+.order-tab { display:grid; gap:.55rem; text-align:left; border:1px solid var(--color-border); border-radius:20px; background:white; padding:1.1rem; color:var(--color-text-main); font-size:.9rem; }
+.order-tab.selected { border-color:#b8804e; box-shadow:inset 0 0 0 1px #b8804e; background:#fcf3e9; }
+.order-tab>strong { font-size:1rem; }.order-tab>span:last-child { color:var(--color-text-muted); }
+.order-status { display:inline-block; width:fit-content; border-radius:999px; background:#f4ebdf; color:#74512f; padding:.3rem .7rem; font-size:.75rem; font-weight:700; text-transform:uppercase; }
+.status-pagado,.status-entregado { background:#dff8e8; color:#246043; }.status-listo_para_retiro { background:#fff0c9; color:#775316; }.status-cancelado { background:#ffe5e2; color:#8b3026; }
+.orders-art { min-height:260px; max-width:280px; margin-top:1.5rem; }.orders-art img { max-height:280px; }
+.orders-content { display:grid; gap:1.25rem; min-width:0; }
+.order-detail { border:1px solid var(--color-border); border-radius:28px; background:white; padding:2rem; }
+.order-detail-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.3rem; }
+.order-detail-header h2 { font-size:1.6rem; margin-top:.6rem; }.order-detail h3 { margin:1.5rem 0 .6rem; font-size:1.05rem; }
+.order-folio { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem 1rem; padding:1rem 1.2rem; border-radius:15px; color:#fffaf4; background:#3e322b; }.order-folio span { font-size:.8rem; }.order-folio strong { font-size:1.25rem; }
+.order-products { list-style:none; }.order-products li { display:flex; align-items:center; gap:.8rem; padding:.85rem 0; }.order-products li>div { flex:1; min-width:0; }.order-products li>div>span { display:block; color:var(--color-text-muted); font-size:.85rem; }.order-products .product-thumbnail { width:58px; height:58px; flex:0 0 58px; }
+.order-total { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1rem; border-top:1px solid var(--color-border); margin-top:1rem; padding-top:1rem; font-weight:600; }.order-total>strong { font-size:1.7rem; }
+.order-pickup { color:var(--color-text-muted); margin-top:1rem; }.order-receipt { margin-top:1rem; padding:1rem; border-radius:16px; background:#e4f8eb; }.order-receipt>p { font-weight:600; margin-bottom:.5rem; }
+.purchase-summary { border:1px solid var(--color-border); border-radius:24px; background:#f7efe5; padding:1.5rem; }.purchase-summary h2 { font-size:1rem; }.purchase-summary>p { font-size:.9rem; margin-top:.6rem; }.purchase-actions { display:flex; flex-wrap:wrap; gap:.75rem; margin-top:1rem; }
+.orders-history-layout aside>p { color:var(--color-text-muted); margin-top:.7rem; }.main-content .orders-history-layout .purchase-history { grid-template-columns:1fr; }.purchase-card { position:relative; }.purchase-card h2 a:after { content:''; position:absolute; inset:0; border-radius:28px; }.purchase-card:focus-within { outline:2px solid #b8804e; outline-offset:3px; }.orders-page>nav { margin-top:2rem; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:.75rem; }
+@media(max-width:760px) { .orders-layout,.orders-history-layout { grid-template-columns:1fr; gap:1.2rem; }.orders-art { display:none; }.order-tabs { grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); }.order-detail { padding:1.2rem; }.order-products li { flex-wrap:wrap; }.order-products li>strong { margin-left:auto; }.purchase-summary { padding:1.2rem; } }
+
+.order-tab .order-code { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:.75rem; color:var(--color-text-muted); min-width:0; }

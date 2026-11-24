@@ -1,3 +1,5 @@
+import { productImageUrl } from '../services/productImages';
+import { selectedCampusId as savedCampusId, selectCampus } from '../services/selectedCampus';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
@@ -45,7 +47,7 @@ function formatPrice(price: number): string {
 export function ProductDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialCampusId = searchParams.get('campusId') ?? '';
+  const initialCampusId = searchParams.get('campusId') ?? savedCampusId();
 
   const [productState, setProductState] = useState<ProductLoadState>({ status: 'loading' });
   const [selectedCampusId, setSelectedCampusId] = useState<string>(initialCampusId);
@@ -237,6 +239,10 @@ export function ProductDetailPage() {
   }, [sessionUserId, selectedCampusId, offerCafeteriaIdsKey]);
 
   function handleCampusChange(campusId: string) {
+    if (productState.status === 'success') {
+      const campus = productState.campusList.find(campus => campus.id === campusId);
+      if (campus) selectCampus(campus);
+    }
     setSelectedCampusId(campusId);
     setCartFeedback('');
     if (campusId) {
@@ -311,12 +317,12 @@ export function ProductDetailPage() {
             {productState.product.imagenUrl && (
               <img
                 className="product-detail-image"
-                src={productState.product.imagenUrl}
+                src={productImageUrl(productState.product.imagenUrl)}
                 alt={productState.product.nombre}
               />
             )}
             <div className="product-detail-info">
-              <span className="product-detail-category">
+              <span className="product-detail-category eyebrow">
                 {productState.product.categoria.nombre}
               </span>
               <h1 id="product-detail-title">{productState.product.nombre}</h1>
