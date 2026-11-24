@@ -26,7 +26,7 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(21);
+        assertThat(api.path("paths").size()).isEqualTo(29);
         var adjustment = api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}/ajustes-stock")
                 .path("post");
         assertThat(adjustment.at("/security/0/bearerAuth").isArray()).isTrue();
@@ -34,6 +34,15 @@ class OpenApiAccessTests extends JwtTestSupport {
         assertThat(adjustment.at("/responses/409/content/application~1problem+json/schema/$ref").asText())
                 .endsWith("/Problem");
         assertThat(api.path("paths").path("/catalog/admin/cafeterias").isObject()).isTrue();
+        assertThat(api.path("paths").path("/catalog/admin/categorias").isObject()).isTrue();
+        assertThat(api.path("paths").path("/catalog/admin/productos").isObject()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1admin~1productos/get/security/0/bearerAuth").isArray()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1admin~1productos/post/parameters").toString())
+                .contains("Idempotency-Key");
+        assertThat(api.at("/components/schemas/CrearProductoRequest/properties/imagenUrl/format").asText())
+                .isEqualTo("uri");
+        assertThat(api.at("/components/schemas/CrearProductoRequest/properties/imagenUrl/pattern").asText())
+                .isEqualTo("^https://");
         assertThat(api.path("paths").path("/catalog/cafeterias/{cafeteriaId}").isObject()).isTrue();
         assertThat(api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/estado-operativo").isObject()).isTrue();
         for (String method : new String[]{"get", "post"}) {

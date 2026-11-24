@@ -487,12 +487,12 @@ class StockReservationIntegrationTests extends JwtTestSupport {
                 .andExpect(jsonPath("$[0].productoNombre").isNotEmpty()).andExpect(jsonPath("$[0].campusId").isNotEmpty());
         Product producto = productRepository.findById(offer.getProduct().getId()).orElseThrow();
         producto.setStatus(ProductStatus.INACTIVE);
-        productRepository.saveAndFlush(producto);
+        producto = productRepository.saveAndFlush(producto);
         mvc.perform(post("/internal/servicios/catalogo/cotizaciones")
                         .header("X-Internal-Service-Token", INTERNAL_TOKEN).contentType(MediaType.APPLICATION_JSON).content(ids))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFERTA_NO_DISPONIBLE"));
         producto.setStatus(ProductStatus.ACTIVE);
-        productRepository.saveAndFlush(producto);
+        producto = productRepository.saveAndFlush(producto);
         Cafeteria cafeteria = cafeteriaRepository.findById(offer.getCafeteria().getId()).orElseThrow();
         cafeteria.setStatus(CafeteriaStatus.CLOSED);
         cafeteriaRepository.saveAndFlush(cafeteria);
