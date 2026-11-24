@@ -52,6 +52,10 @@ public class CatalogOpenApiConfiguration {
                     stockAdjustmentErrors(operation, path);
                     return;
                 }
+                if (path.startsWith("/catalog/admin/categorias") || path.startsWith("/catalog/admin/productos")) {
+                    catalogAdministrationErrors(operation, method.name(), path);
+                    return;
+                }
                 if (path.startsWith("/catalog/seguimientos")) {
                     seguimientoErrors(operation, method.name(), path);
                     return;
@@ -89,6 +93,23 @@ public class CatalogOpenApiConfiguration {
                 "Stock negativo, total fuera de rango o clave de idempotencia reutilizada con otros datos", 409, path));
         responses.addApiResponse("415", problem("Se requiere application/json", 415, path));
         responses.addApiResponse("500", problem("Error interno; no expone detalles sensibles", 500, path));
+    }
+
+    private static void catalogAdministrationErrors(io.swagger.v3.oas.models.Operation operation, String method,
+            String path) {
+        var responses = operation.getResponses();
+        responses.addApiResponse("400", problem("Validación, parámetros o clave de idempotencia inválidos", 400, path));
+        responses.addApiResponse("401", problem("JWT ausente, inválido o vencido", 401, path));
+        responses.addApiResponse("403", problem("Se requiere el rol SUPER_ADMIN", 403, path));
+        if (!path.equals("/catalog/admin/categorias") && !path.equals("/catalog/admin/productos")) {
+            responses.addApiResponse("404", problem("Categoría o producto no encontrado", 404, path));
+        }
+        if ("POST".equals(method) || "PATCH".equals(method)) {
+            responses.addApiResponse("409", problem(
+                    "Nombre duplicado, recurso en uso, versión desactualizada o clave de idempotencia conflictiva",
+                    409, path));
+            responses.addApiResponse("415", problem("Se requiere application/json", 415, path));
+        }
     }
 
     // INT2-116: rutas que siempre exigen un JWT de CLIENTE.
