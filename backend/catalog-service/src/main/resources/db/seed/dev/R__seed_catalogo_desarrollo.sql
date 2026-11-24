@@ -33,9 +33,10 @@ USING (VALUES
 ) AS s (id, name, description)
 ON t.id = CAST(s.id AS UUID)
 WHEN MATCHED THEN
-    UPDATE SET name = s.name, description = s.description
+    UPDATE SET name = s.name, description = s.description, name_key = LOWER(s.name)
 WHEN NOT MATCHED THEN
-    INSERT (id, name, description) VALUES (CAST(s.id AS UUID), s.name, s.description);
+    INSERT (id, name, description, name_key)
+    VALUES (CAST(s.id AS UUID), s.name, s.description, LOWER(s.name));
 
 MERGE INTO cafeteria t
 USING (VALUES
@@ -70,10 +71,10 @@ USING (VALUES
 ON t.id = CAST(s.id AS UUID)
 WHEN MATCHED THEN
     UPDATE SET category_id = CAST(s.category_id AS UUID), name = s.name,
-               description = s.description, status = 'ACTIVE'
+               description = s.description, status = 'ACTIVE', name_key = LOWER(s.name)
 WHEN NOT MATCHED THEN
-    INSERT (id, category_id, name, description, status)
-    VALUES (CAST(s.id AS UUID), CAST(s.category_id AS UUID), s.name, s.description, 'ACTIVE');
+    INSERT (id, category_id, name, description, status, name_key)
+    VALUES (CAST(s.id AS UUID), CAST(s.category_id AS UUID), s.name, s.description, 'ACTIVE', LOWER(s.name));
 
 MERGE INTO offer t
 USING (VALUES
