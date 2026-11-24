@@ -96,6 +96,7 @@ services:
             args:
                 SERVICE_NAME: catalog-service
         environment:
+            CATALOG_IMAGE_STORAGE_PATH: /var/lib/cloudcoffee/product-images
             OPENAPI_ENABLED: ${OPENAPI_ENABLED:-false}
             ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
             TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
@@ -115,6 +116,8 @@ services:
             SPRING_RABBITMQ_PORT: 5672
             SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
             SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+        volumes:
+            - catalog_product_images:/var/lib/cloudcoffee/product-images
         secrets:
             - jwt_public_key
         ports:
@@ -491,6 +494,7 @@ networks:
     driver: bridge
 
 volumes:
+  catalog_product_images:
   web_node_modules:
   mailpit_data:
   rabbitmq_data:

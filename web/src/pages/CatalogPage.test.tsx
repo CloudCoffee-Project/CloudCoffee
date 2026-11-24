@@ -55,6 +55,7 @@ async function nextPage() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  localStorage.clear();
   vi.mocked(request).mockImplementation(async (path) => {
     if (path === '/v1/catalog/campus') return campus;
     if (path === '/v1/catalog/categorias') return categories;
@@ -253,4 +254,12 @@ describe('catálogo web', () => {
     await screen.findByText('No hay campus disponibles.');
     expect(productRequests()).toHaveLength(0);
   });
+});
+
+it('la imagen, descripción y espacios de la tarjeta comparten el enlace de producto', async () => {
+  await selectCampus();
+  const link = screen.getByRole('link', { name:/Producto página 1/ });
+  expect(screen.getByRole('img', { name:/Sin foto de Producto página 1/ }).closest('a')).toBe(link);
+  expect(screen.getByText('Recién preparado').closest('a')).toBe(link);
+  expect(link.getAttribute('href')).toContain(`campusId=${campusA}`);
 });
