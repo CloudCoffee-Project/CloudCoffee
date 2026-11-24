@@ -1,3 +1,4 @@
+import { CafeteriaSalesSection } from '../components/admin/CafeteriaSalesSection';
 import {
   AdminCafeteriaOperationalSection,
   SuperAdminCafeteriasSection,
@@ -211,6 +212,8 @@ export function AdminPanelPage({ panelRole, section }: AdminPanelPageProps) {
           <SuperAdminCafeteriasSection />
         ) : panelRole === 'ADMIN_CAFETERIA' && section === 'cafeteria' && context.cafeteriaId ? (
           <AdminCafeteriaOperationalSection cafeteriaId={context.cafeteriaId} />
+        ) : panelRole === 'ADMIN_CAFETERIA' && section === 'ventas' && context.cafeteriaId ? (
+          <CafeteriaSalesSection />
         ) : (
           <section className="admin-panel-notice" aria-labelledby="admin-section-heading">
             <h2 id="admin-section-heading">{activeItem.label}</h2>
