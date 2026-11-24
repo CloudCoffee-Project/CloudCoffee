@@ -26,7 +26,7 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(29);
+        assertThat(api.path("paths").size()).isEqualTo(24);
         var adjustment = api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}/ajustes-stock")
                 .path("post");
         assertThat(adjustment.at("/security/0/bearerAuth").isArray()).isTrue();
@@ -45,6 +45,10 @@ class OpenApiAccessTests extends JwtTestSupport {
                 .isEqualTo("^https://");
         assertThat(api.path("paths").path("/catalog/cafeterias/{cafeteriaId}").isObject()).isTrue();
         assertThat(api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/estado-operativo").isObject()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1imagenes~1{key}/get/security").isMissingNode()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1imagenes~1{key}/get/responses/200/content/image~1png").isMissingNode()).isFalse();
+        assertThat(api.at("/paths/~1catalog~1productos~1{id}~1imagen/post/security/0/bearerAuth").isArray()).isTrue();
+        assertThat(api.at("/paths/~1catalog~1admin~1imagenes~1productos/get/security/0/bearerAuth").isArray()).isTrue();
         for (String method : new String[]{"get", "post"}) {
             assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/security/0/bearerAuth").isArray()).isTrue();
             assertThat(api.at("/paths/~1catalog~1seguimientos/" + method + "/responses/403/content/application~1problem+json/schema/$ref")

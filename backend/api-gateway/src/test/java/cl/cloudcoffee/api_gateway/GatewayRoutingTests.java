@@ -177,6 +177,15 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         assertThat(received.query()).isEqualTo("none".equals(expectedQuery) ? null : expectedQuery);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"GET", "HEAD"})
+    void popularProductsArePublicAndForwardedToOrders(String method) throws Exception {
+        mvc.perform(request(HttpMethod.valueOf(method), "/v1/orders/productos-populares"))
+                .andExpect(status().isOk());
+        assertThat(BACKENDS.get("orders").take().path()).isEqualTo("/orders/productos-populares");
+        mvc.perform(post("/v1/orders/productos-populares")).andExpect(status().isUnauthorized());
+    }
+
     @Test
     void preservesBodyQueryParametersAndAuthorizationHeader() throws Exception {
         String authorization = "Bearer " + token();
@@ -407,7 +416,7 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
                         "authorization, content-type, idempotency-key"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
-                        "Location, Idempotency-Replayed, Retry-After"))
+                        "Location, Idempotency-Replayed, Retry-After, Content-Disposition"))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
         assertNoBackendRequests();
     }
@@ -424,7 +433,7 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.example.com"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
-                        "Location, Idempotency-Replayed, Retry-After"))
+                        "Location, Idempotency-Replayed, Retry-After, Content-Disposition"))
                 .andExpect(header().string(HttpHeaders.LOCATION, "/v1/compras/42/pago"))
                 .andExpect(header().string(GatewayCorsConfig.IDEMPOTENCY_REPLAYED, "true"))
                 .andExpect(header().string(HttpHeaders.RETRY_AFTER, "2"));
@@ -432,6 +441,19 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
         RecordedRequest received = BACKENDS.get("orders").take();
         assertThat(received.path()).isEqualTo("/compras/42/pago");
         assertThat(received.idempotencyKey()).isEqualTo(idempotencyKey);
+        assertNoBackendRequests();
+    }
+
+    @Test
+    void receiptPreservesPdfBytesAndDownloadFilename() throws Exception {
+        mvc.perform(get("/v1/orders/42/boleta").with(user("cliente"))
+                        .header(HttpHeaders.ORIGIN, "https://app.example.com").accept(MediaType.APPLICATION_PDF))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(content().bytes("%PDF-1.7\ncomprobante".getBytes(StandardCharsets.UTF_8)))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"comprobante.pdf\""))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        "Location, Idempotency-Replayed, Retry-After, Content-Disposition"));
+        assertThat(BACKENDS.get("orders").take().path()).isEqualTo("/orders/42/boleta");
         assertNoBackendRequests();
     }
 
@@ -612,6 +634,11 @@ class GatewayRoutingTests extends cl.cloudcoffee.security.testing.JwtTestSupport
                                 .getBytes(StandardCharsets.UTF_8);
                         exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE,
                                 reject ? MediaType.APPLICATION_PROBLEM_JSON_VALUE : MediaType.APPLICATION_JSON_VALUE);
+                        if (exchange.getRequestURI().getPath().endsWith("/boleta")) {
+                            response = "%PDF-1.7\ncomprobante".getBytes(StandardCharsets.UTF_8);
+                            exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE);
+                            exchange.getResponseHeaders().set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"comprobante.pdf\"");
+                        }
                         if (reject) {
                             exchange.getResponseHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
                         }

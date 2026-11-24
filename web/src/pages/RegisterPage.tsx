@@ -1,3 +1,4 @@
+import { AuthShell } from '../components/AuthShell';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { request, ApiRequestError } from '../services/httpClient';
@@ -68,8 +69,8 @@ export function RegisterPage() {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '0 auto', paddingTop: '2rem' }}>
-      <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Crear una cuenta</h2>
+    <AuthShell register>
+      <h2 style={{ marginBottom: '1.5rem', textAlign: 'left' }}>Crear una cuenta</h2>
 
       {successMsg && (
         <div style={{ padding: '1rem', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #bbf7d0' }}>
@@ -123,6 +124,6 @@ export function RegisterPage() {
           </button>
         </form>
       )}
-    </div>
+    </AuthShell>
   );
 }

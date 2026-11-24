@@ -45,7 +45,7 @@ class GatewayCorsConfigTests {
                     assertThat(config.getExposedHeaders()).containsExactly(
                             HttpHeaders.LOCATION,
                             GatewayCorsConfig.IDEMPOTENCY_REPLAYED,
-                            HttpHeaders.RETRY_AFTER);
+                            HttpHeaders.RETRY_AFTER, HttpHeaders.CONTENT_DISPOSITION);
                     assertThat(config.getAllowCredentials()).isFalse();
                 });
     }

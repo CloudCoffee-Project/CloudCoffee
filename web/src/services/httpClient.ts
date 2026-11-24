@@ -7,6 +7,7 @@ export interface ValidationError {
 
 export interface GatewayRequestInit extends RequestInit {
   omitAccessToken?: boolean;
+  responseType?: 'response';
 }
 
 interface RefreshTokenResponse {
@@ -238,7 +239,7 @@ export function createHttpClient(
     refreshSession: refreshAccessToken,
 
     async request<T>(path: string, options: GatewayRequestInit = {}): Promise<T> {
-      const { omitAccessToken = false, ...fetchOptions } = options;
+      const { omitAccessToken = false, responseType, ...fetchOptions } = options;
       const url = gatewayUrl(origin, path);
       const headers = new Headers(fetchOptions.headers);
       if (!headers.has('Accept')) {
@@ -291,6 +292,8 @@ export function createHttpClient(
       if (!response.ok) {
         throw await responseError(response);
       }
+
+      if (responseType === 'response') return response as T;
 
       if (response.status === 204 || response.status === 205) {
         return undefined as T;

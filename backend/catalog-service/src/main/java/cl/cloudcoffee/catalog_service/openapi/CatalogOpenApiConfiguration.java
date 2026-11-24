@@ -60,6 +60,19 @@ public class CatalogOpenApiConfiguration {
                     seguimientoErrors(operation, method.name(), path);
                     return;
                 }
+                if (path.startsWith("/catalog/imagenes/") || path.startsWith("/catalog/admin/imagenes/") || path.endsWith("/imagen")) {
+                    operation.getResponses().addApiResponse("404", problem("Producto o imagen inexistente", 404, path));
+                    if (!path.startsWith("/catalog/imagenes/")) {
+                        operation.getResponses().addApiResponse("400", problem("Página, UUID o imagen inválida (IMAGE_INVALID)", 400, path));
+                        operation.getResponses().addApiResponse("401", problem("JWT ausente, inválido o vencido", 401, path));
+                        operation.getResponses().addApiResponse("403", problem("Solo SUPER_ADMIN puede gestionar imágenes", 403, path));
+                    }
+                    if (path.endsWith("/imagen")) {
+                        operation.getResponses().addApiResponse("413", problem("Archivo o solicitud multipart demasiado grande", 413, path));
+                        operation.getResponses().addApiResponse("503", problem("Almacenamiento temporalmente no disponible", 503, path));
+                    }
+                    return;
+                }
                 if (path.startsWith("/catalog/productos")) {
                     operation.getResponses().addApiResponse("400", problem("Falta campusId o un UUID/parámetro tiene formato inválido", 400, path));
                     if ("/catalog/productos/{id}".equals(path)) {

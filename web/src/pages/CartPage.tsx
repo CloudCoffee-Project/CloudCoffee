@@ -13,6 +13,7 @@ import {
 import { AUTH_SESSION_EVENT } from '../services/httpClient';
 import { decodeSessionToken } from '../utils/jwt';
 import './CartPage.css';
+import { ProductImage } from '../components/ProductImage';
 
 const clpFormatter = new Intl.NumberFormat('es-CL', {
   style: 'currency',
@@ -160,6 +161,7 @@ export function CartPage() {
                   <ul className="cart-items">
                     {cafeteriaItems.map((item) => (
                       <li className="cart-item" key={item.offerId}>
+                        <ProductImage productId={item.productId} src={item.productImageUrl} name={item.productName} />
                         <div className="cart-item-details">
                           <h3>{item.productName}</h3>
                           <p>{formatPrice(item.price)} por unidad</p>
@@ -222,13 +224,13 @@ export function CartPage() {
               );
             })}
           </div>
-          <aside className="cart-total" aria-label="Estimación del carrito">
+          <aside className="cart-summary"><h2>Resumen de tu pedido</h2><div className="cart-total" aria-label="Estimación del carrito">
             <span>Estimación</span>
             <strong>{formatPrice(total)}</strong>
-          </aside>
+          </div>
           <Link className="btn-primary cart-checkout-link" to="/checkout">
             Continuar al checkout
-          </Link>
+          </Link><p>El total definitivo y la disponibilidad se validan al crear la compra.</p></aside>
         </>
       )}
     </section>
