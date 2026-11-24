@@ -1,12 +1,55 @@
 import { Link } from 'react-router';
-import { env } from '../config/env';
+import { BrandArt } from '../components/BrandArt';
+import { PopularProducts } from '../components/PopularProducts';
+import { useAuth } from '../hooks/useAuth';
 
 export function HomePage() {
+  const { isLoggedIn, isLoading } = useAuth();
+  const showGuestActions = !isLoggedIn && !isLoading;
+
   return (
-    <main>
-      <h1>{env.appTitle}</h1>
-      <p>Aplicación web de CloudCoffee.</p>
-      <Link to="/catalogo">Ir al catálogo</Link>
-    </main>
+    <section className="home-page">
+      <div className="home-hero">
+        <div className="home-copy">
+          <span className="eyebrow">☕ Universidad Católica de Temuco</span>
+          <h1>Tu café listo,<br /><em>sin filas.</em></h1>
+          <p>Pide tu café y snacks con anticipación y retíralos en tu campus. Un descanso que se disfruta desde el primer sorbo.</p>
+          <div className="home-actions">
+            {showGuestActions && (
+              <>
+                <Link className="btn-primary" to="/registro">Registrarme gratis</Link>
+                <Link className="btn-outline" to="/login">Iniciar sesión</Link>
+              </>
+            )}
+            <Link className={showGuestActions ? 'home-catalog-link' : 'btn-primary'} to="/campus" state={{ fromHome: true }}>
+              Explorar el catálogo →
+            </Link>
+          </div>
+          <span className="home-note">Hecho para tu día en la UCT</span>
+        </div>
+        <BrandArt className="home-art" />
+      </div>
+      <PopularProducts />
+      <section className="home-steps">
+        <h2>Así de fácil <span>✦</span></h2>
+        <div>
+          <article>
+            <span>01 / ELIGE</span>
+            <h3>Encuentra tu campus</h3>
+            <p>Consulta los productos disponibles en las cafeterías de tu sede.</p>
+          </article>
+          <article>
+            <span>02 / PIDE</span>
+            <h3>Arma tu pedido</h3>
+            <p>Compara ofertas y paga tu pedido con Mercado Pago.</p>
+          </article>
+          <article>
+            <span>03 / DISFRUTA</span>
+            <h3>Revisa tus compras</h3>
+            <p>Consulta el estado de tu pedido y sus comprobantes.</p>
+          </article>
+        </div>
+      </section>
+    </section>
   );
 }

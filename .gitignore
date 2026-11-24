@@ -26,3 +26,6 @@ target/
 .classpath
 .settings/
 bin/
+
+# Imágenes persistidas localmente: se guardan en volumen, no en Git.
+**/data/product-images/

@@ -2,6 +2,10 @@
   color: var(--color-text-main);
 }
 
+.purchase-history { display: grid; gap: 1rem; padding: 0; margin: 1.5rem 0; list-style: none; }
+.purchase-history h2, .purchase-history h3 { overflow-wrap: anywhere; margin-bottom: .75rem; }
+.purchase-history p, .purchase-history li li { margin-top: .5rem; }
+
 .checkout-header {
   display: flex;
   flex-wrap: wrap;
