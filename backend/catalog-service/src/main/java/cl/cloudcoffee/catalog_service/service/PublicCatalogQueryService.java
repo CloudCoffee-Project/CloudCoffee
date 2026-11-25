@@ -44,7 +44,7 @@ public class PublicCatalogQueryService {
     }
 
     public List<CategoryResponse> findAllCategories() {
-        return categoryRepository.findAllByOrderByNameAsc().stream()
+        return categoryRepository.findAllByActiveTrueOrderByNameAsc().stream()
                 .map(CategoryResponse::from)
                 .toList();
     }

@@ -98,7 +98,7 @@ class PublicCatalogQueryServiceTest {
         category.setName("Bebidas");
         category.setDescription("Bebidas frías y calientes");
 
-        when(categoryRepository.findAllByOrderByNameAsc()).thenReturn(List.of(category));
+        when(categoryRepository.findAllByActiveTrueOrderByNameAsc()).thenReturn(List.of(category));
 
         assertThat(queryService.findAllCategories()).containsExactly(
                 new CategoryResponse(categoryId, "Bebidas")

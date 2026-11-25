@@ -32,6 +32,7 @@ public class InternalPurchaseCatalogController {
         // OUT_OF_STOCK sigue siendo una oferta válida para cotizar: dará revisión al reservar.
         if (resultado.size() != ids.size() || resultado.stream().anyMatch(o ->
                 o.getProduct().getStatus() != ProductStatus.ACTIVE
+                || !o.getProduct().getCategory().isActive()
                 || o.getCafeteria().getStatus() != CafeteriaStatus.OPEN)
                 || resultado.stream().map(o -> o.getCafeteria().getCampus().getId()).distinct().count() != 1) {
             throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/oferta-no-disponible"),

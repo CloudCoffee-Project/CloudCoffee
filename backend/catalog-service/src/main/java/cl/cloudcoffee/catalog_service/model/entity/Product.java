@@ -3,6 +3,7 @@ package cl.cloudcoffee.catalog_service.model.entity;
 import cl.cloudcoffee.catalog_service.model.enums.ProductStatus;
 import jakarta.persistence.*;
 import java.util.UUID;
+import java.util.Locale;
 import lombok.Getter; import lombok.Setter;
 
 @Entity
@@ -21,10 +22,23 @@ public class Product {
     private String name;
     private String description;
 
+    @Column(name = "name_key", length = 150)
+    private String nameKey;
+
     @Column(name = "image_url")
     private String imageUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ProductStatus status;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
+    @PrePersist
+    @PreUpdate
+    private void updateNameKey() {
+        nameKey = name == null ? null : name.toLowerCase(Locale.ROOT);
+    }
 }

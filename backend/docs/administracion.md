@@ -2,8 +2,9 @@
 
 Versión **1.0.0**. [Decisión de arquitectura](decisiones/0002-administracion-cuatro-roles.md) ·
 [OpenAPI](administracion.openapi.json) · [Eventos](administracion.eventos.json).
-Define lo que implementarán las issues de administración de Sprint 3; no afirma que
-estas rutas existan hoy. Reutiliza `common-security`, Problem Details de
+Define el contrato compartido de las issues de administración de Sprint 3. Las rutas
+de campus, cafeterías, categorías y productos de Catalog ya están implementadas;
+las demás operaciones siguen el estado de sus issues. Reutiliza `common-security`, Problem Details de
 `common-errors` y las convenciones de paginación e idempotencia de
 [INT2-50](compra-pago-retiro.md), que no cambian.
 
