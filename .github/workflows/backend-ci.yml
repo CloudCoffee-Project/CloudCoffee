@@ -171,20 +171,24 @@ jobs:
             psql -h 127.0.0.1 -U cloudcoffee -d postgres -v ON_ERROR_STOP=1 \
             -c 'CREATE DATABASE cloudcoffee_order_integration'
       - name: Test auth publisher with RabbitMQ
+        id: auth_rabbit
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl auth-service -am clean verify
       - name: Test notification consumer with RabbitMQ and PostgreSQL
+        id: notification_rabbit
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_test
           SPRING_DATASOURCE_USERNAME: cloudcoffee
           SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl notification-service -am clean verify
       - name: Test catalog stock outbox with RabbitMQ and PostgreSQL
+        id: catalog_rabbit
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_catalog_integration
           SPRING_DATASOURCE_USERNAME: cloudcoffee
           SPRING_DATASOURCE_PASSWORD: cloudcoffee_test
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl catalog-service -am clean verify
       - name: Test order simulated payment and outbox with RabbitMQ and PostgreSQL
+        id: order_rabbit
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/cloudcoffee_order_integration
           SPRING_DATASOURCE_USERNAME: cloudcoffee
@@ -195,9 +199,27 @@ jobs:
       # H2 en vez del PostgreSQL del job: esa base ya tiene el historial Flyway de notification-service.
       # Payment conserva su suite histórica, pero no participa en el flujo final simulado de Order.
       - name: Test historical payment result outbox with RabbitMQ
+        id: payment_history
         env:
           PAYMENT_PROVIDER: disabled
         run: ./auth-service/mvnw --batch-mode --no-transfer-progress -pl payment-service -am clean verify
+      - name: Publish RabbitMQ integration results
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## RabbitMQ integration
+
+          | Scope | Database | Result |
+          | --- | --- | --- |
+          | Auth publisher | Test defaults | `${{ steps.auth_rabbit.outcome }}` |
+          | Notification consumer | PostgreSQL 16 | `${{ steps.notification_rabbit.outcome }}` |
+          | Catalog outbox | PostgreSQL 16 isolated | `${{ steps.catalog_rabbit.outcome }}` |
+          | Order simulated payment + outbox | PostgreSQL 16 isolated | `${{ steps.order_rabbit.outcome }}` |
+          | Historical Payment outbox | H2, provider disabled | `${{ steps.payment_history.outcome }}` |
+
+          Final acceptance uses `ORDER_PAYMENT_PROVIDER=simulado` and
+          `PAYMENT_PROVIDER=disabled`; no external payment provider is contacted.
+          EOF
 
   docker:
     name: Docker image (${{ matrix.service }})
