@@ -67,7 +67,8 @@ public class GatewaySecurityConfig {
                                 "/v1/auth/verificacion",
                                 "/v1/auth/verificacion/reenviar",
                                 "/v1/auth/password/recovery",
-                                "/v1/auth/password/reset").permitAll()
+                                "/v1/auth/password/reset",
+                                "/v1/auth/activacion").permitAll()
                         // Consultas publicas de catalogo; solo lectura y rutas explicitas.
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/catalog/campus", "/v1/catalog/categorias",

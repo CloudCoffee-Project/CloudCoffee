@@ -140,7 +140,9 @@ public class JwtSecurityAutoConfiguration {
                             .permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh",
                                 "/auth/verificacion", "/auth/verificacion/reenviar",
-                                "/auth/password/recovery", "/auth/password/reset").permitAll()
+                                "/auth/password/recovery", "/auth/password/reset",
+                                // INT2-121: la persona invitada aún no tiene sesión; se autentica con el token.
+                                "/auth/activacion").permitAll()
                         .requestMatchers(HttpMethod.GET, "/catalog/campus", "/catalog/categorias",
                                 "/catalog/productos", "/catalog/productos/*",
                                 "/catalog/productos/*/ofertas", "/catalog/imagenes/*").permitAll()

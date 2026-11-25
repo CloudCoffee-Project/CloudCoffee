@@ -17,6 +17,8 @@ public class AuthEventPublisher {
             "auth.verificacion.solicitud-correo.v1";
     public static final String SOLICITUD_RECUPERACION_PASSWORD_EVENT =
             "auth.recuperacion.solicitud-password.v1";
+    public static final String INVITACION_PERSONAL_EVENT = "auth.personal.invitacion.v1";
+    public static final String USUARIO_ANONIMIZADO_EVENT = "auth.usuario.anonimizado.v1";
 
     private final RabbitTemplate rabbitTemplate;
 
@@ -93,6 +95,28 @@ public class AuthEventPublisher {
 
         rabbitTemplate.convertAndSend(RabbitTopologyConfig.EVENTS_EXCHANGE,
                 SOLICITUD_RECUPERACION_PASSWORD_EVENT, event);
+        return event;
+    }
+
+    /** INT2-121 (contrato INT2-109): Notification envía el enlace de activación al personal invitado. */
+    public CloudCoffeeEvent publishInvitacionPersonal(String usuarioId, String email, String nombre, String rol,
+            String cafeteriaId, String token, Instant expiresAt, String traceId) {
+        CloudCoffeeEvent event = new CloudCoffeeEvent(UUID.randomUUID(), Instant.now(), traceId,
+                INVITACION_PERSONAL_EVENT,
+                Map.of("usuarioId", usuarioId, "email", email, "nombre", nombre, "rol", rol,
+                        "cafeteriaId", cafeteriaId, "token", token, "expiresAt", expiresAt.toString()));
+        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EVENTS_EXCHANGE, INVITACION_PERSONAL_EVENT, event);
+        return event;
+    }
+
+    /** INT2-121: la cuenta se anonimizó; no lleva datos personales, solo el id pseudónimo. */
+    public CloudCoffeeEvent publishUsuarioAnonimizado(String usuarioId, String rolAnterior, Instant anonimizadoAt,
+            String origen, String traceId) {
+        CloudCoffeeEvent event = new CloudCoffeeEvent(UUID.randomUUID(), Instant.now(), traceId,
+                USUARIO_ANONIMIZADO_EVENT,
+                Map.of("usuarioId", usuarioId, "rolAnterior", rolAnterior,
+                        "anonimizadoAt", anonimizadoAt.toString(), "origen", origen));
+        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EVENTS_EXCHANGE, USUARIO_ANONIMIZADO_EVENT, event);
         return event;
     }
 }
