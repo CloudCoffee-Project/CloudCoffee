@@ -65,6 +65,10 @@ public class NotificationEventConsumer {
                     procesarRecuperacionPassword(event);
                     historyService.registerSuccess(event);
                     break;
+                case "auth.personal.invitacion.v1":
+                    procesarInvitacionPersonal(event);
+                    historyService.registerSuccess(event);
+                    break;
                 case "order.compra.creada.v1":
                 case "order.compra.estado-cambiado.v1":
                 case "order.pago.resultado.v1":
@@ -131,6 +135,32 @@ public class NotificationEventConsumer {
         context.setVariable("token", token);
 
         emailService.enviarCorreo(email, "Recuperación de contraseña - CloudCoffee", "recuperacion", context);
+    }
+
+    /** INT2-121: enlace de activación del personal invitado; la persona define su propia contraseña. */
+    private void procesarInvitacionPersonal(CloudCoffeeEvent event) {
+        String email = (String) event.payload().get("email");
+        String token = (String) event.payload().get("token");
+        if (email == null || email.isBlank() || token == null || token.isBlank()) {
+            throw new IllegalArgumentException("La invitación no contiene correo o token");
+        }
+
+        LOGGER.info("Enviando invitación de personal: eventId={}", event.eventId());
+
+        Context context = new Context();
+        String activacionUrl = UriComponentsBuilder.fromUriString(frontendUrl)
+                .pathSegment("activar-cuenta")
+                .queryParam("token", "{token}")
+                .encode()
+                .buildAndExpand(token)
+                .toUriString();
+        context.setVariable("activacionUrl", activacionUrl);
+        context.setVariable("token", token);
+        context.setVariable("nombre", event.payload().get("nombre"));
+        context.setVariable("rol", "ADMIN_CAFETERIA".equals(event.payload().get("rol"))
+                ? "administrador de cafetería" : "cajero");
+
+        emailService.enviarCorreo(email, "Te invitaron a CloudCoffee", "invitacion", context);
     }
 
     private void validate(CloudCoffeeEvent event) {

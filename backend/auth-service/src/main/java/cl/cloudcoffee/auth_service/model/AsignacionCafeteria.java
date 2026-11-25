@@ -30,4 +30,7 @@ public class AsignacionCafeteria {
     public UUID getUsuarioId() { return usuarioId; }
     public UUID getCafeteriaId() { return cafeteriaId; }
     public Instant getCreatedAt() { return createdAt; }
+
+    /** INT2-121: solo SUPER_ADMIN reasigna; rige en la siguiente solicitud del personal. */
+    public void reasignar(UUID cafeteriaId) { this.cafeteriaId = cafeteriaId; }
 }
