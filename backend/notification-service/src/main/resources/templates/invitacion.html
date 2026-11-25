@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Invitación a CloudCoffee</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>Te invitaron a CloudCoffee</h2>
+    <p>Hola <span th:text="${nombre}">Ana</span>:</p>
+    <p>Se creó una cuenta de <strong th:text="${rol}">cajero</strong> para ti en CloudCoffee. Para empezar a usarla, define tu contraseña con el siguiente enlace. Si la app CloudCoffee está instalada y el dominio tiene habilitados los enlaces asociados, se abrirá la app; de lo contrario, continuarás en el navegador.</p>
+    <p>
+        <a th:href="${activacionUrl}" style="display: inline-block; padding: 10px 20px; color: #fff; background-color: #28a745; text-decoration: none; border-radius: 5px;">Activar mi cuenta</a>
+    </p>
+    <p>Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+    <p><a th:href="${activacionUrl}" th:text="${activacionUrl}"></a></p>
+    <p>Si el enlace no funciona, copia y pega este token en la pantalla de activación de la app o del sitio web:</p>
+    <p><strong th:text="${token}"></strong></p>
+    <p>El enlace y el token expiran en 72 horas y solo se pueden usar una vez. Nadie de CloudCoffee te pedirá tu contraseña.</p>
+    <p>Si no esperabas esta invitación, puedes ignorar este correo.</p>
+    <p>Saludos,<br>El equipo de CloudCoffee</p>
+</body>
+</html>

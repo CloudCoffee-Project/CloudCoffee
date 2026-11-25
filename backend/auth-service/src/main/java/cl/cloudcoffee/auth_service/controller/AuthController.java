@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 
+import cl.cloudcoffee.auth_service.dto.ActivacionResponse;
+import cl.cloudcoffee.auth_service.dto.ActivarCuentaRequest;
 import cl.cloudcoffee.auth_service.dto.LoginRequest;
 import cl.cloudcoffee.auth_service.dto.LoginResponse;
 import cl.cloudcoffee.auth_service.dto.PasswordRecoveryRequest;
@@ -32,6 +34,7 @@ import cl.cloudcoffee.auth_service.dto.RegistroClienteRequest;
 import cl.cloudcoffee.auth_service.dto.RegistroClienteResponse;
 import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
 import cl.cloudcoffee.auth_service.dto.VerificarCorreoRequest;
+import cl.cloudcoffee.auth_service.service.ActivacionCuentaService;
 import cl.cloudcoffee.auth_service.service.LoginService;
 import cl.cloudcoffee.auth_service.service.LogoutService;
 import cl.cloudcoffee.auth_service.service.PasswordRecoveryService;
@@ -50,16 +53,19 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final PasswordRecoveryService passwordRecoveryService;
     private final LogoutService logoutService;
+    private final ActivacionCuentaService activacionCuentaService;
 
     public AuthController(RegistroService registroService, VerificacionService verificacionService,
             LoginService loginService, RefreshTokenService refreshTokenService,
-            PasswordRecoveryService passwordRecoveryService, LogoutService logoutService) {
+            PasswordRecoveryService passwordRecoveryService, LogoutService logoutService,
+            ActivacionCuentaService activacionCuentaService) {
         this.registroService = registroService;
         this.verificacionService = verificacionService;
         this.loginService = loginService;
         this.refreshTokenService = refreshTokenService;
         this.passwordRecoveryService = passwordRecoveryService;
         this.logoutService = logoutService;
+        this.activacionCuentaService = activacionCuentaService;
     }
 
     @Operation(operationId = "iniciarSesion", summary = "Iniciar sesión", description = "Devuelve un access token JWT RS256 y un refresh token opaco por dispositivo. Requiere una cuenta con correo verificado.")
@@ -128,6 +134,13 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void reset(@Valid @RequestBody PasswordResetRequest request) {
         passwordRecoveryService.restablecer(request.token(), request.nuevaPassword());
+    }
+
+    @Operation(operationId = "activarCuenta", summary = "Activar cuenta invitada",
+            description = "INT2-121: la persona invitada define su contraseña (8 a 72 caracteres) con el token de un solo uso del correo, válido 72 horas. La cuenta queda activa y con el correo verificado. Token desconocido, vencido o usado: 400 TOKEN_ACTIVACION_INVALIDO. Cuenta desactivada o dada de baja: 409 ESTADO_INVALIDO.")
+    @PostMapping("/activacion")
+    public ActivacionResponse activar(@Valid @RequestBody ActivarCuentaRequest request) {
+        return activacionCuentaService.activar(request.getToken(), request.getPassword());
     }
 
     private static String traceIdEfectivo(String traceId) {

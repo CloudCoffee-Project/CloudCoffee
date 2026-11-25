@@ -22,4 +22,3 @@ public interface TokenAuthRepository extends JpaRepository<TokenAuth, UUID> {
     List<TokenAuth> findByUsuarioIdAndRevokedAtIsNull(UUID usuarioId);
     List<TokenAuth> findByUsuarioIdAndTipoAndRevokedAtIsNull(UUID usuarioId, TipoToken tipo);
 }
-
