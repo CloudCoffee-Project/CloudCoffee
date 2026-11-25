@@ -38,7 +38,17 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractMatchesImplementedAuthOperationsAndSecurity() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(10); // /users/me contiene GET y PATCH.
+        // /users/me contiene GET y PATCH; INT2-121 agrega /auth/activacion y ocho rutas /auth/admin.
+        assertThat(api.path("paths").size()).isEqualTo(19);
+        assertThat(api.at("/paths/~1auth~1activacion/post/security").isMissingNode()).isTrue();
+        for (String path : new String[]{"/auth/admin/usuarios", "/auth/admin/usuarios/{usuarioId}",
+                "/auth/admin/personal", "/auth/admin/usuarios/{usuarioId}/baja"}) {
+            var item = api.path("paths").path(path);
+            assertThat(item.isMissingNode()).isFalse();
+            item.properties().forEach(entry -> assertThat(entry.getValue().at("/security/0/bearerAuth").isArray()).isTrue());
+        }
+        assertThat(api.at("/components/schemas/CrearPersonal/properties").has("password")).isFalse();
+        assertThat(api.at("/components/schemas/CrearPersonal/properties").has("sinCamposDesconocidos")).isFalse();
         assertThat(api.at("/servers/0/url").asText()).isEqualTo("/v1");
         assertThat(api.at("/paths/~1auth~1login/post/responses/200/content/application~1json/schema/$ref").asText())
                 .endsWith("/LoginResponse");

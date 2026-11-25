@@ -47,6 +47,8 @@ services:
             JWT_PRIVATE_KEY_LOCATION: file:/run/cloudcoffee-jwt/jwt_private_key
             # INT2-65/INT2-50: token para consultar asignaciones entre servicios.
             INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Definir INTERNAL_SERVICE_TOKEN en .env}
+            # INT2-121: valida la cafetería con Catalog al invitar o reasignar personal.
+            CATALOG_SERVICE_URL: http://catalog-service:8082
             # INT2-65: "docker,dev" carga las cuentas de prueba; por defecto no se cargan.
             SPRING_PROFILES_ACTIVE: ${AUTH_SPRING_PROFILES:-docker}
             SERVER_PORT: 8081

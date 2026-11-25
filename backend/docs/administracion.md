@@ -4,7 +4,7 @@ Versión **1.0.0**. [Decisión de arquitectura](decisiones/0002-administracion-c
 [OpenAPI](administracion.openapi.json) · [Eventos](administracion.eventos.json).
 Define el contrato compartido de las issues de administración de Sprint 3. Las rutas
 de campus, cafeterías, categorías y productos de Catalog ya están implementadas;
-las demás operaciones siguen el estado de sus issues. Reutiliza `common-security`, Problem Details de
+las demás operaciones siguen el estado de sus issues (ver [Estado en Auth](#estado-en-auth-int2-121)). Reutiliza `common-security`, Problem Details de
 `common-errors` y las convenciones de paginación e idempotencia de
 [INT2-50](compra-pago-retiro.md), que no cambian.
 
@@ -139,6 +139,35 @@ Reglas de seguridad:
 * `SUPER_ADMIN` no puede desactivarse ni darse de baja a sí mismo
   (`409 OPERACION_SOBRE_SI_MISMO`). Dar de baja al último `SUPER_ADMIN` activo:
   `409 ULTIMO_SUPER_ADMIN`.
+
+### Estado en Auth (INT2-121)
+
+INT2-121 implementa en Auth las rutas de cuentas para `SUPER_ADMIN`: listar y ver, invitar
+personal (`CAJERO` o `ADMIN_CAFETERIA`), reenviar la invitación, editar contacto, reasignar,
+desactivar, reactivar y dar de baja, además de `POST /v1/auth/activacion` (pública en Gateway).
+Notification envía el correo de invitación. Detalles de la implementación:
+
+* **Actor verificado en cada solicitud:** además del rol del JWT, la cuenta `SUPER_ADMIN` debe
+  seguir activa en Auth. Si se desactiva, pierde la administración en la siguiente solicitud.
+* **Estado derivado:** `pendiente_activacion` es una cuenta activa con el correo sin verificar;
+  `inactiva`, `activo=false`. El personal invitado no puede usar el reenvío de verificación de
+  clientes: debe activar su cuenta con el token.
+* **Último `SUPER_ADMIN`:** desactivar o dar de baja bloquea a los `SUPER_ADMIN` activos antes de
+  decidir, así que dos administradores que se desactivan a la vez nunca dejan la plataforma sin uno.
+* **Eventos:** se publican después del commit. Si la invitación no llega al broker, la cuenta
+  queda `pendiente_activacion` y se usa «Reenviar invitación».
+* **Anonimización:** nombre `Usuario`, apellido `eliminado`, teléfono `000000` y el email descrito
+  abajo; se conserva el `usuarioId`.
+
+Pendiente en otras issues:
+
+* **INT2-122:** el alcance de `ADMIN_CAFETERIA` sobre los `CAJERO` de su cafetería. Hasta entonces
+  esas rutas responden `403 ROL_NO_PERMITIDO` a cualquier rol distinto de `SUPER_ADMIN`.
+* **INT2-129:** la baja de cuentas `CLIENTE` (propia y administrativa), que exige la consulta de
+  compras en curso a Order. Hasta entonces la baja administrativa de un `CLIENTE` responde
+  `409 ESTADO_INVALIDO`, sin cambios.
+* El consumo de `auth.usuario.anonimizado.v1` en Notification (borrar datos personales del
+  historial). Auth ya publica el evento.
 
 ## Baja propia, anonimización y conservación
 

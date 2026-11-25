@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cl.cloudcoffee.auth_service.dto.VerificacionCorreoResponse;
 import cl.cloudcoffee.auth_service.messaging.AuthEventPublisher;
+import cl.cloudcoffee.auth_service.model.Rol;
 import cl.cloudcoffee.auth_service.model.TipoToken;
 import cl.cloudcoffee.auth_service.model.TokenAuth;
 import cl.cloudcoffee.auth_service.model.Usuario;
@@ -63,7 +64,10 @@ public class VerificacionService {
 
     @Transactional
     public void reenviarVerificacion(String email, String traceId) {
+        // INT2-121: el personal invitado no verifica su correo por esta vía; define su contraseña con
+        // el token de activación. Se responde como una cuenta inexistente para no revelar el rol.
         Usuario usuario = usuarioRepository.findByEmail(email)
+                .filter(u -> u.getRol() == Rol.CLIENTE)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND,
                         URI.create("/problems/usuario-no-encontrado"), "Usuario no encontrado",
                         "No existe una cuenta asociada a este correo electrónico."));

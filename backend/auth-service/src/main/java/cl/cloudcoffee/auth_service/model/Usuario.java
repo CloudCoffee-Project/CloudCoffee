@@ -46,6 +46,11 @@ public class Usuario {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    /** INT2-121: versión optimista expuesta a la administración; parte en 1. */
+    @Version
+    @Column(nullable = false)
+    private long version = 1;
+
     protected Usuario() {}
 
     public Usuario(String email, String passwordHash, Rol rol, String nombre, String apellido, String telefono) {
@@ -70,9 +75,39 @@ public class Usuario {
     public boolean isEliminado() { return eliminado; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public long getVersion() { return version; }
+
+    /** Personal invitado que aún no define su contraseña (o cliente sin verificar su correo). */
+    public boolean isPendienteActivacion() { return activo && !eliminado && !verificado; }
 
     public void verificar() { this.verificado = true; this.updatedAt = Instant.now(); }
     public void desactivar() { this.activo = false; this.updatedAt = Instant.now(); }
+    public void reactivar() { this.activo = true; this.updatedAt = Instant.now(); }
+
+    /** Marca un cambio que no toca columnas de la fila (p. ej. la asignación) para incrementar la versión. */
+    public void registrarCambio() { this.updatedAt = Instant.now(); }
+
+    /** La persona invitada define su contraseña: la cuenta queda activa y con el correo verificado. */
+    public void activarConPassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.verificado = true;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Baja irreversible (contrato INT2-109): conserva el id, que Order y Payment usan como referencia
+     * pseudónima, y reemplaza los datos personales. El correo anonimizado libera el original.
+     */
+    public void anonimizar(String passwordHashAleatorio) {
+        this.eliminado = true;
+        this.activo = false;
+        this.email = "eliminado+" + id + "@anonimo.invalid";
+        this.nombre = "Usuario";
+        this.apellido = "eliminado";
+        this.telefono = "000000";
+        this.passwordHash = passwordHashAleatorio;
+        this.updatedAt = Instant.now();
+    }
     public void actualizarPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
         this.updatedAt = Instant.now();
