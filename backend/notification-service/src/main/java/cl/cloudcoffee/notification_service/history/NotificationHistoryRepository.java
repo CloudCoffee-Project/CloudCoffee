@@ -14,4 +14,7 @@ public interface NotificationHistoryRepository
     java.util.Optional<NotificationHistory> findByEventId(UUID eventId);
 
     Page<NotificationHistory> findAllByOrderByProcessedAtDesc(Pageable pageable);
+
+    /** INT2-129: solo los eventos de Auth llevan datos personales (correo, nombre). */
+    java.util.List<NotificationHistory> findAllByEventTypeStartingWith(String prefijo);
 }

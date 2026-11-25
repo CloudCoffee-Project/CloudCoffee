@@ -100,6 +100,27 @@ public class NotificationHistory {
         this.processedAt = Instant.now();
     }
 
+    /**
+     * INT2-129: la cuenta fue dada de baja. Se conservan el evento, su estado y los ids pseudónimos;
+     * se reemplazan los datos personales del payload. Devuelve true si cambió algo.
+     */
+    public boolean anonimizarDatosPersonales() {
+        Map<String, Object> copia = new java.util.LinkedHashMap<>(payload);
+        boolean cambio = false;
+        for (String campo : CAMPOS_PERSONALES) {
+            if (copia.containsKey(campo) && !ELIMINADO.equals(copia.get(campo))) {
+                copia.put(campo, ELIMINADO);
+                cambio = true;
+            }
+        }
+        if (cambio) this.payload = copia;
+        return cambio;
+    }
+
+    /** Datos personales que los eventos de Auth incluyen en el payload. */
+    static final java.util.List<String> CAMPOS_PERSONALES = java.util.List.of("email", "nombre", "apellido", "telefono");
+    static final String ELIMINADO = "[ELIMINADO]";
+
     public void markFailure(String detail) {
         this.payload = sanitizedPayload(payload);
         this.status = "FAILED";

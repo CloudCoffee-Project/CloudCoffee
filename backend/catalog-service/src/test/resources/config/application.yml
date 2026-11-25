@@ -2,3 +2,6 @@
 catalog:
   outbox:
     publish-enabled: false
+  # Sin broker en las pruebas: el consumidor de bajas de cuenta se invoca directamente.
+  cuentas:
+    consumer-enabled: false

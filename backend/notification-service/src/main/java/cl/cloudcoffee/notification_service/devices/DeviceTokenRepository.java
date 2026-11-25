@@ -13,4 +13,7 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, UUID> 
     List<DeviceToken> findAllByUserIdAndTokenType(UUID userId, DeviceTokenType tokenType);
 
     long deleteByTokenHashAndUserIdAndPlatform(String tokenHash, UUID userId, DevicePlatform platform);
+
+    /** INT2-129: una cuenta dada de baja deja de recibir push en todos sus dispositivos. */
+    long deleteByUserId(UUID userId);
 }

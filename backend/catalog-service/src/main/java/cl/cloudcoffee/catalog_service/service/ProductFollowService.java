@@ -112,6 +112,16 @@ public class ProductFollowService {
         });
     }
 
+    /**
+     * INT2-129: la cuenta fue dada de baja (auth.usuario.anonimizado.v1). Retira sus seguimientos para que no
+     * reciba avisos de reposición; repetirlo no cambia nada. Devuelve cuántos seguimientos retiró.
+     */
+    public int retirarSeguimientosDe(UUID usuarioId) {
+        Integer retirados = tx.execute(status ->
+                follows.retirarTodosDe(usuarioId, clock.instant().truncatedTo(ChronoUnit.MICROS)));
+        return retirados == null ? 0 : retirados;
+    }
+
     private static BusinessException error(HttpStatus status, String title, String detail, String code) {
         return new BusinessException(status, URI.create("/problems/" + code.toLowerCase().replace('_', '-')),
                 title, detail, code);
