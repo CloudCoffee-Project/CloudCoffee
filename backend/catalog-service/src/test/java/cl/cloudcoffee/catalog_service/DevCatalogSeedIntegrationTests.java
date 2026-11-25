@@ -78,6 +78,8 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
         mvc.perform(get("/catalog/campus"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].nombre", contains("Campus San Francisco", "Campus San Juan Pablo II")))
+                .andExpect(jsonPath("$[0].cafeteriasActivas").value(2))
+                .andExpect(jsonPath("$[1].cafeteriasActivas").value(1))
                 .andExpect(jsonPath("$[0].cafeterias[*].nombre",
                         contains("Cafetería Biblioteca", "Cafetería Central", "Cafetería Ingeniería")))
                 .andExpect(jsonPath("$[1].cafeterias[*].nombre",

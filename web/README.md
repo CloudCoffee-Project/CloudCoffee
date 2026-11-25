@@ -281,3 +281,39 @@ La aprobación se muestra a partir del estado de Order. Los parámetros del prov
 en la URL no cambian el estado de la compra. Para verificar el recorrido externo,
 usar [cuentas de prueba](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/test-accounts)
 y [tarjetas de prueba de Chile](https://www.mercadopago.cl/developers/es/docs/checkout-pro-preferences/integration-test/test-purchases).
+
+## Historial y detalle de compras (INT2-90)
+
+`/compras?page=0` consulta veinte compras propias por página con el cliente
+HTTP común. Usa totales, fechas y paginación del servidor; incluye carga, vacío
+y reintento. `/compras/:compraId` recarga el detalle al abrirse, recuperar foco,
+recibir eventos de compra/órdenes o reconectar. Un cambio de sesión desmonta
+los datos anteriores y cancela sus consultas.
+
+El detalle separa cafeterías, ítems y subtotales. Confirmar/cancelar reutiliza
+las claves idempotentes del checkout y solo aplica estados devueltos por el
+backend; un cambio de precio muestra la compra actualizada para revisar antes
+de confirmar otra vez. El pago enlaza al flujo de Mercado Pago Sandbox de INT2-61. El estado y
+plazo de retiro se muestran desde Order; la credencial QR depende de INT2-89 y
+su backend INT2-54. La descarga del comprobante se incorpora en INT2-138.
+
+Esta rama se apila sobre INT2-61: integrar primero el pago y luego el historial.
+
+## Descarga de comprobantes (INT2-138)
+
+El detalle de una compra pagada ofrece un PDF por orden cuyo pago está aprobado.
+La descarga usa `GET /v1/orders/:ordenId/boleta` con el JWT en la cabecera y
+`Accept: application/pdf`. El cliente HTTP conserva renovación de sesión y
+Problem Details incluso cuando el cuerpo de error llega como bytes. Una
+respuesta que no sea PDF nunca se guarda como documento.
+
+Se preserva el nombre de `Content-Disposition` (saneado); Gateway lo expone por
+CORS. La URL del archivo descargado es un blob local temporal, se revoca tras
+iniciar la descarga y nunca contiene bearer. Hay estado de carga, exclusión de
+clics duplicados y reintento de errores, sin generar otro folio. El documento se
+identifica como comprobante interno sin validez tributaria.
+
+Depende del historial INT2-90 y del endpoint PDF INT2-128. La rama web se apila
+sobre INT2-90; integrar INT2-128 antes de verificar el recorrido completo contra
+el entorno compartido. Las pruebas cubren transferencia binaria, CORS/headers,
+sesión renovada, orden ajena, error Problem Details, repetición y multicafetería.

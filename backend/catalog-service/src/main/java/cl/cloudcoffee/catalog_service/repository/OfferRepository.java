@@ -16,6 +16,11 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
     @Query("SELECT o FROM Offer o WHERE o.id = :offerId")
     java.util.Optional<Offer> findByIdForUpdate(@Param("offerId") UUID offerId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Offer o WHERE o.id = :offerId AND o.cafeteria.id = :cafeteriaId")
+    java.util.Optional<Offer> findForUpdateInCafeteria(
+            @Param("offerId") UUID offerId, @Param("cafeteriaId") UUID cafeteriaId);
+
     @Modifying
     @Query(value = """
         UPDATE offer
@@ -31,6 +36,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
               JOIN cafeteria c ON c.id = offer.cafeteria_id
               WHERE p.id = offer.product_id
                 AND p.status = 'ACTIVE'
+                AND EXISTS (SELECT 1 FROM category cat WHERE cat.id = p.category_id AND cat.active = true)
                 AND c.status = 'OPEN'
                 AND c.active = true
           )
@@ -42,6 +48,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         JOIN FETCH o.cafeteria c
         WHERE o.product.id = :productId
           AND o.product.status = cl.cloudcoffee.catalog_service.model.enums.ProductStatus.ACTIVE
+          AND o.product.category.active = true
           AND c.campus.id = :campusId
           AND c.campus.active = true
           AND c.active = true

@@ -5,6 +5,10 @@ Backend de CloudCoffee construido con arquitectura de microservicios.
 La [guía de eventos durables (INT2-64)](docs/eventos-durables.md) documenta las
 transacciones y publicadores de Order/Catalog, recuperación, configuración y pruebas.
 
+La [integración CI de Catalog y Order (INT2-103)](docs/integracion-ci-catalog-order.md)
+explica la cobertura con PostgreSQL y RabbitMQ reales, el pago simulado sin proveedor
+externo y los comandos equivalentes para reproducir la prueba localmente.
+
 El contrato objetivo de Sprint 3 para Payment y Mercado Pago sandbox está en
 [Payment (INT2-108)](docs/payment-service.md), con OpenAPI, eventos y decisión de
 arquitectura. El contrato del simulador de INT2-50 se conserva como historial;

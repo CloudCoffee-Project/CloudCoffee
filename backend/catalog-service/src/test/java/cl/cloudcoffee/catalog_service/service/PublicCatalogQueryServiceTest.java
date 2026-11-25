@@ -23,6 +23,7 @@ import cl.cloudcoffee.catalog_service.dto.CategoryResponse;
 import cl.cloudcoffee.catalog_service.dto.ProductOfferResponse;
 import cl.cloudcoffee.catalog_service.dto.ProductResponse;
 import cl.cloudcoffee.catalog_service.model.entity.Cafeteria;
+import cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus;
 import cl.cloudcoffee.catalog_service.model.entity.Campus;
 import cl.cloudcoffee.catalog_service.model.entity.Category;
 import cl.cloudcoffee.catalog_service.model.entity.Offer;
@@ -65,10 +66,12 @@ class PublicCatalogQueryServiceTest {
         Cafeteria cafeteriaSur = new Cafeteria();
         cafeteriaSur.setId(cafeteriaSurId);
         cafeteriaSur.setName("Cafetería Sur");
+        cafeteriaSur.setStatus(CafeteriaStatus.CLOSED);
 
         Cafeteria cafeteriaCentral = new Cafeteria();
         cafeteriaCentral.setId(cafeteriaCentralId);
         cafeteriaCentral.setName("Cafetería Central");
+        cafeteriaCentral.setStatus(CafeteriaStatus.OPEN);
 
         campus.setCafeterias(List.of(cafeteriaSur, cafeteriaCentral));
         when(campusRepository.findAllWithCafeteriasOrderByName()).thenReturn(List.of(campus));
@@ -81,7 +84,8 @@ class PublicCatalogQueryServiceTest {
                         List.of(
                                 new CafeteriaSummaryResponse(cafeteriaCentralId, "Cafetería Central"),
                                 new CafeteriaSummaryResponse(cafeteriaSurId, "Cafetería Sur")
-                        )
+                        ),
+                        1
                 )
         );
     }
@@ -94,7 +98,7 @@ class PublicCatalogQueryServiceTest {
         category.setName("Bebidas");
         category.setDescription("Bebidas frías y calientes");
 
-        when(categoryRepository.findAllByOrderByNameAsc()).thenReturn(List.of(category));
+        when(categoryRepository.findAllByActiveTrueOrderByNameAsc()).thenReturn(List.of(category));
 
         assertThat(queryService.findAllCategories()).containsExactly(
                 new CategoryResponse(categoryId, "Bebidas")

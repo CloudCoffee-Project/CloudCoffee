@@ -1,3 +1,9 @@
+import { CafeteriaSalesSection } from '../components/admin/CafeteriaSalesSection';
+import {
+  AdminCafeteriaOperationalSection,
+  SuperAdminCafeteriasSection,
+} from '../components/admin/CafeteriaManagementSections';
+import { ProductImageManager } from '../components/ProductImageManager';
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
@@ -203,14 +209,23 @@ export function AdminPanelPage({ panelRole, section }: AdminPanelPageProps) {
       </nav>
 
       {activeItem ? (
-        <section className="admin-panel-notice" aria-labelledby="admin-section-heading">
-          <h2 id="admin-section-heading">{activeItem.label}</h2>
-          <p>{activeItem.description}</p>
-          <p>
-            Módulo habilitado para <strong>{panelRole}</strong>
-            {context.cafeteriaId ? ` en cafetería ${context.cafeteriaId}` : ' a nivel global'}.
-          </p>
-        </section>
+        panelRole === 'SUPER_ADMIN' && section === 'cafeterias' ? (
+          <SuperAdminCafeteriasSection />
+        ) : panelRole === 'ADMIN_CAFETERIA' && section === 'cafeteria' && context.cafeteriaId ? (
+          <AdminCafeteriaOperationalSection cafeteriaId={context.cafeteriaId} />
+        ) : panelRole === 'ADMIN_CAFETERIA' && section === 'ventas' && context.cafeteriaId ? (
+          <CafeteriaSalesSection />
+        ) : (
+          <section className="admin-panel-notice" aria-labelledby="admin-section-heading">
+            <h2 id="admin-section-heading">{activeItem.label}</h2>
+            <p>{activeItem.description}</p>
+            {panelRole === 'SUPER_ADMIN' && section === 'catalogo' && <ProductImageManager key={userId} />}
+            <p>
+              Módulo habilitado para <strong>{panelRole}</strong>
+              {context.cafeteriaId ? ` en cafetería ${context.cafeteriaId}` : ' a nivel global'}.
+            </p>
+          </section>
+        )
       ) : (
         <div className="admin-panel-grid" role="region" aria-label="Módulos administrativos disponibles">
           {context.permissions.map((item) => (
