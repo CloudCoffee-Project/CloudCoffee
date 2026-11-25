@@ -3,5 +3,6 @@ package cl.cloudcoffee.auth_service.model;
 public enum TipoToken {
     REFRESH,
     VERIFICACION_CORREO,
-    RECUPERACION_PASSWORD
+    RECUPERACION_PASSWORD,
+    ACTIVACION_CUENTA
 }
