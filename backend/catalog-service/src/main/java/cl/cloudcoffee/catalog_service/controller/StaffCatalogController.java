@@ -1,9 +1,10 @@
 package cl.cloudcoffee.catalog_service.controller;
 
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,9 +29,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import cl.cloudcoffee.catalog_service.dto.AdjustStockRequest;
+import cl.cloudcoffee.catalog_service.dto.AdminPageResponse;
 import cl.cloudcoffee.catalog_service.dto.CafeteriaInventoryItemResponse;
+import cl.cloudcoffee.catalog_service.dto.CrearOfertaRequest;
+import cl.cloudcoffee.catalog_service.dto.EditarOfertaRequest;
+import cl.cloudcoffee.catalog_service.dto.OfertaAdminResponse;
 import cl.cloudcoffee.catalog_service.dto.StockAdjustmentResponse;
 import cl.cloudcoffee.catalog_service.service.CafeteriaInventoryService;
+import cl.cloudcoffee.catalog_service.service.OfferAdministrationService;
 import cl.cloudcoffee.catalog_service.service.StockAdjustmentService;
 import cl.cloudcoffee.errors.BusinessException;
 import cl.cloudcoffee.security.CafeteriaAccess;
@@ -45,12 +53,14 @@ public class StaffCatalogController {
     private final CafeteriaInventoryService inventoryService;
     private final CafeteriaAccess cafeteriaAccess;
     private final StockAdjustmentService stockAdjustments;
+    private final OfferAdministrationService offerAdministration;
 
     public StaffCatalogController(CafeteriaInventoryService inventoryService, CafeteriaAccess cafeteriaAccess,
-            StockAdjustmentService stockAdjustments) {
+            StockAdjustmentService stockAdjustments, OfferAdministrationService offerAdministration) {
         this.inventoryService = inventoryService;
         this.cafeteriaAccess = cafeteriaAccess;
         this.stockAdjustments = stockAdjustments;
+        this.offerAdministration = offerAdministration;
     }
 
     @Operation(operationId = "inventarioCafeteria", summary = "Inventario de la cafetería asignada",
@@ -61,12 +71,53 @@ public class StaffCatalogController {
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponse(responseCode = "200", description = "Ofertas de la cafetería")
     @GetMapping("/{cafeteriaId}/ofertas")
-    public List<CafeteriaInventoryItemResponse> findInventory(
+    public AdminPageResponse<CafeteriaInventoryItemResponse> findInventory(
             @Parameter(description = "UUID de la cafetería", example = "44444444-4444-4444-8444-444444444444")
             @PathVariable UUID cafeteriaId,
+            @RequestParam(required = false) Boolean activa,
+            @ParameterObject Pageable pageable,
             Authentication authentication) {
         cafeteriaAccess.verificar(authentication, cafeteriaId);
-        return inventoryService.findInventory(cafeteriaId);
+        return AdminPageResponse.from(inventoryService.findInventory(cafeteriaId, activa, pageable));
+    }
+
+    @Operation(operationId = "crearOferta", summary = "Crear una oferta de cafetería")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping(path = "/{cafeteriaId}/ofertas", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<OfertaAdminResponse> crearOferta(@PathVariable UUID cafeteriaId,
+            @RequestHeader(IDEMPOTENCY_KEY) String key,
+            @jakarta.validation.Valid @RequestBody CrearOfertaRequest request,
+            Authentication authentication) {
+        var result = offerAdministration.crear(cafeteriaId, request, idempotencyKey(key), authentication);
+        URI location = URI.create("/catalog/cafeterias/" + cafeteriaId + "/ofertas/" + result.response().ofertaId());
+        ResponseEntity.BodyBuilder response = ResponseEntity.created(location);
+        if (result.replayed()) response.header(IDEMPOTENCY_REPLAYED, "true");
+        return response.body(result.response());
+    }
+
+    @Operation(operationId = "editarPrecioOferta", summary = "Cambiar el precio de una oferta")
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping(path = "/{cafeteriaId}/ofertas/{ofertaId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public OfertaAdminResponse editarOferta(@PathVariable UUID cafeteriaId, @PathVariable UUID ofertaId,
+            @jakarta.validation.Valid @RequestBody EditarOfertaRequest request,
+            Authentication authentication) {
+        return offerAdministration.editar(cafeteriaId, ofertaId, request, authentication);
+    }
+
+    @Operation(operationId = "bajaOferta", summary = "Retirar administrativamente una oferta")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/{cafeteriaId}/ofertas/{ofertaId}/baja")
+    public OfertaAdminResponse bajaOferta(@PathVariable UUID cafeteriaId, @PathVariable UUID ofertaId,
+            Authentication authentication) {
+        return offerAdministration.baja(cafeteriaId, ofertaId, authentication);
+    }
+
+    @Operation(operationId = "reactivarOferta", summary = "Reactivar una oferta retirada")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/{cafeteriaId}/ofertas/{ofertaId}/reactivar")
+    public OfertaAdminResponse reactivarOferta(@PathVariable UUID cafeteriaId, @PathVariable UUID ofertaId,
+            Authentication authentication) {
+        return offerAdministration.reactivar(cafeteriaId, ofertaId, authentication);
     }
 
     @Operation(operationId = "ajustarStock", summary = "Ajustar stock con registro auditado",

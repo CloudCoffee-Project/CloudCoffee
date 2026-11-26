@@ -24,6 +24,8 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
     boolean existsByOrderIdAndOfferIdAndStatusIn(UUID orderId, UUID offerId,
             List<StockReservationStatus> statuses);
 
+    boolean existsByOfferIdAndStatusIn(UUID offerId, List<StockReservationStatus> statuses);
+
     @Query("SELECT r.offer.id FROM StockReservation r WHERE r.id = :reservationId")
     Optional<UUID> findOfferIdByReservationId(@Param("reservationId") UUID reservationId);
 
