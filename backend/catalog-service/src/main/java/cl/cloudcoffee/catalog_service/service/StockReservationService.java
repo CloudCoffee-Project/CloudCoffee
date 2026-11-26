@@ -88,6 +88,7 @@ public class StockReservationService {
         // INT2-71: comprobar la cotización bajo el mismo bloqueo que descuenta stock.
         // Los replays se resuelven antes: un cambio posterior nunca altera una reserva anterior.
         if (request.expectedPrice() != null && (offer.getPrice().compareTo(request.expectedPrice()) != 0
+                || !offer.isAdministrativeActive()
                 || offer.getProduct().getStatus() != ProductStatus.ACTIVE
                 || offer.getCafeteria().getStatus() != CafeteriaStatus.OPEN)) {
             throw error(HttpStatus.CONFLICT, "Oferta no disponible",
@@ -107,7 +108,8 @@ public class StockReservationService {
                     "RESERVA_INTENTO_CONFLICTIVO");
         }
 
-        if (offer.getStatus() != OfferStatus.AVAILABLE
+        if (!offer.isAdministrativeActive()
+                || offer.getStatus() != OfferStatus.AVAILABLE
                 || offerRepository.reserveStock(request.offerId(), request.quantity()) != 1) {
             throw error(HttpStatus.CONFLICT, "Stock no disponible",
                     "La oferta no está activa o no tiene stock suficiente para la cantidad solicitada.",
@@ -262,7 +264,7 @@ public class StockReservationService {
 
     private void restoreStock(Offer offer, int quantity) {
         offer.setStock(offer.getStock() + quantity);
-        offer.setStatus(OfferStatus.AVAILABLE);
+        offer.setStatus(offer.getStock() == 0 ? OfferStatus.OUT_OF_STOCK : OfferStatus.AVAILABLE);
     }
 
     private static BusinessException invalidTransition(String detail) {

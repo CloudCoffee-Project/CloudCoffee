@@ -33,6 +33,7 @@ public class InternalPurchaseCatalogController {
         if (resultado.size() != ids.size() || resultado.stream().anyMatch(o ->
                 o.getProduct().getStatus() != ProductStatus.ACTIVE
                 || !o.getProduct().getCategory().isActive()
+                || !o.isAdministrativeActive()
                 || o.getCafeteria().getStatus() != CafeteriaStatus.OPEN)
                 || resultado.stream().map(o -> o.getCafeteria().getCampus().getId()).distinct().count() != 1) {
             throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/oferta-no-disponible"),
