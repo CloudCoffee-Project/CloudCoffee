@@ -24,6 +24,8 @@ public class ProductOfferResponse {
     private Integer stock;
     @Schema(description = "Indica stock mayor que cero", example = "true")
     private Boolean disponible;
+    @Schema(description = "Indica si la oferta está activa administrativamente", example = "true")
+    private Boolean activa;
 
     public static ProductOfferResponse from(Offer offer) {
         ProductOfferResponse response = new ProductOfferResponse();
@@ -33,6 +35,7 @@ public class ProductOfferResponse {
         response.setPrice(offer.getPrice());
         response.setStock(offer.getStock());
         response.setDisponible(offer.getStock() > 0);
+        response.setActiva(offer.isAdministrativeActive());
         return response;
     }
 }

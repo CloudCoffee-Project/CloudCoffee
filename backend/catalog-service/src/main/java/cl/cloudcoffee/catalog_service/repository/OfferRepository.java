@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface OfferRepository extends JpaRepository<Offer, UUID> {
 
@@ -30,6 +32,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         WHERE id = :offerId
           AND status = 'AVAILABLE'
           AND stock >= :quantity
+          AND administrative_active = true
           AND EXISTS (
               SELECT 1
               FROM product p
@@ -53,7 +56,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
           AND c.campus.active = true
           AND c.active = true
           AND c.status = cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus.OPEN
-          AND o.status = cl.cloudcoffee.catalog_service.model.enums.OfferStatus.AVAILABLE
+          AND o.administrativeActive = true
         ORDER BY o.price ASC
     """)
     List<Offer> findOffersByProductAndCampus(
@@ -66,9 +69,11 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
         SELECT o FROM Offer o
         JOIN FETCH o.product p
         WHERE o.cafeteria.id = :cafeteriaId
-        ORDER BY p.name ASC
+          AND (:administrativa IS NULL OR o.administrativeActive = :administrativa)
+        ORDER BY p.name ASC, o.id ASC
     """)
-    List<Offer> findInventoryByCafeteria(@Param("cafeteriaId") UUID cafeteriaId);
+    Page<Offer> findInventoryByCafeteria(@Param("cafeteriaId") UUID cafeteriaId,
+            @Param("administrativa") Boolean administrativa, Pageable pageable);
 
     // INT2-116: un seguimiento puntual exige que la cafetería ofrezca el producto, en cualquier estado.
     @Query("""
