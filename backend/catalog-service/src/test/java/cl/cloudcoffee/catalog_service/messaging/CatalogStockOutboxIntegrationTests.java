@@ -1,16 +1,28 @@
 package cl.cloudcoffee.catalog_service.messaging;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import cl.cloudcoffee.catalog_service.dto.ReserveStockRequest;
 import cl.cloudcoffee.catalog_service.service.StockReservationService;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.*;
 import org.slf4j.MDC;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -25,6 +37,7 @@ class CatalogStockOutboxIntegrationTests extends JwtTestSupport {
     static final Instant NOW = Instant.parse("2026-11-14T12:00:00Z");
     @Autowired JdbcTemplate jdbc;
     @Autowired StockReservationService reservations;
+    @Autowired CatalogEventJournal journal;
     @Autowired PlatformTransactionManager manager;
     @Autowired JsonMapper json;
     @MockitoBean Clock clock;
@@ -47,6 +60,7 @@ class CatalogStockOutboxIntegrationTests extends JwtTestSupport {
     void removeOwnData() {
         MDC.clear();
         jdbc.update("DELETE FROM catalog_outbox WHERE cuerpo LIKE ?", "%" + offer + "%");
+        jdbc.update("DELETE FROM product_follow WHERE product_id=?", product);
         jdbc.update("DELETE FROM stock_reservation WHERE offer_id=?", offer);
         jdbc.update("DELETE FROM offer WHERE id=?", offer);
         jdbc.update("DELETE FROM product WHERE id=?", product);
@@ -119,6 +133,37 @@ class CatalogStockOutboxIntegrationTests extends JwtTestSupport {
     }
 
     @Test
+    void brokerRejectionKeepsDirectedRestockPendingAndRetriesTheSameEvent() {
+        UUID eventId = UUID.randomUUID();
+        var event = new CloudCoffeeEvent(eventId, NOW, "trace-restock-retry",
+                StockEventPublisher.PRODUCT_AVAILABLE_EVENT,
+                Map.of("ofertaId", offer, "productoId", product, "destinatarios", java.util.List.of(UUID.randomUUID())));
+        new TransactionTemplate(manager).executeWithoutResult(status -> journal.append(event));
+
+        RabbitTemplate rabbit = org.mockito.Mockito.mock(RabbitTemplate.class);
+        AtomicInteger attempts = new AtomicInteger();
+        doAnswer(invocation -> {
+            CorrelationData correlation = invocation.getArgument(3);
+            boolean acknowledged = attempts.incrementAndGet() > 1;
+            correlation.getFuture().complete(new CorrelationData.Confirm(acknowledged, "test broker response"));
+            return null;
+        }).when(rabbit).send(any(String.class), any(String.class), any(Message.class), any(CorrelationData.class));
+
+        CatalogEventOutbox outbox = new CatalogEventOutbox(jdbc, rabbit, manager);
+        outbox.publicar();
+        assertThat(published(eventId)).isFalse();
+
+        outbox.publicar();
+
+        assertThat(published(eventId)).isTrue();
+        assertThat(attempts).hasValue(2);
+        ArgumentCaptor<Message> messages = ArgumentCaptor.forClass(Message.class);
+        verify(rabbit, times(2)).send(anyString(), anyString(), messages.capture(), any(CorrelationData.class));
+        assertThat(messages.getAllValues()).allSatisfy(message ->
+                assertThat(message.getMessageProperties().getMessageId()).isEqualTo(eventId.toString()));
+    }
+
+    @Test
     void expirationPersistsOnlyOneRestorationAndOneAdditionalEvent() {
         reservations.reserve(new ReserveStockRequest(order, offer, 2));
         when(clock.instant()).thenReturn(NOW.plusSeconds(600));
@@ -128,6 +173,45 @@ class CatalogStockOutboxIntegrationTests extends JwtTestSupport {
         assertThat(events()).isEqualTo(2);
     }
 
+    @Test
+    void expirationFromZeroPublishesAvailabilityToFollowers() {
+        addFollower();
+        reservations.reserve(new ReserveStockRequest(order, offer, 5));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(600));
+
+        reservations.expireForOffer(offer);
+
+        assertThat(stock()).isEqualTo(5);
+        assertThat(restockEvents()).isEqualTo(1);
+    }
+
+    @Test
+    void expirationAndFullRereservationInOneTransactionDoNotPublishTransientAvailability() {
+        addFollower();
+        reservations.reserve(new ReserveStockRequest(order, offer, 5));
+        when(clock.instant()).thenReturn(NOW.plusSeconds(600));
+
+        reservations.reserve(new ReserveStockRequest(UUID.randomUUID(), offer, 5));
+
+        assertThat(stock()).isZero();
+        assertThat(restockEvents()).isZero();
+    }
+
     int stock() { return jdbc.queryForObject("SELECT stock FROM offer WHERE id=?", Integer.class, offer); }
     int events() { return jdbc.queryForObject("SELECT COUNT(*) FROM catalog_outbox WHERE cuerpo LIKE ?", Integer.class, "%" + offer + "%"); }
+    int restockEvents() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM catalog_outbox WHERE event_type=? AND cuerpo LIKE ?",
+                Integer.class, StockEventPublisher.PRODUCT_AVAILABLE_EVENT, "%" + offer + "%");
+    }
+    void addFollower() {
+        jdbc.update("""
+                INSERT INTO product_follow
+                    (id, user_id, product_id, cafeteria_id, cafeteria_key, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), UUID.randomUUID(), product, cafeteria, cafeteria, Timestamp.from(NOW));
+    }
+    boolean published(UUID eventId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT publicado FROM catalog_outbox WHERE event_id=?", Boolean.class, eventId));
+    }
 }

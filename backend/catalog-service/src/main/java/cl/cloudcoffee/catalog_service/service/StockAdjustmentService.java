@@ -60,7 +60,7 @@ public class StockAdjustmentService {
             return new Result(StockAdjustmentResponse.from(adjustment), true);
         }
 
-        reservationService.expireForOffer(offerId);
+        int stockBeforeOperation = reservationService.expireForAdjustment(offerId);
         int previousStock = offer.getStock();
         long availableStock = (long) previousStock + request.cantidad();
         if (availableStock < 0) {
@@ -92,6 +92,7 @@ public class StockAdjustmentService {
         adjustmentRepository.saveAndFlush(adjustment);
 
         stockEventPublisher.publishStockUpdated(offer);
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
         return new Result(StockAdjustmentResponse.from(adjustment), false);
     }
 
