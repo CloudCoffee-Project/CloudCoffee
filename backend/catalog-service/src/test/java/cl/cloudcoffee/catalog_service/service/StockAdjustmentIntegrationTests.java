@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Clock;
 import java.time.Instant;
+import java.sql.Timestamp;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -228,6 +230,115 @@ class StockAdjustmentIntegrationTests extends JwtTestSupport {
     }
 
     @Test
+    void directedRestockTargetsOnlyActiveFollowersOfThisCafeteriaAndGeneralFollowers() {
+        UUID otherCafeteria = UUID.randomUUID();
+        UUID otherOffer = UUID.randomUUID();
+        UUID specificFollower = UUID.randomUUID();
+        UUID generalFollower = UUID.randomUUID();
+        UUID otherCafeFollower = UUID.randomUUID();
+        UUID deletedFollower = UUID.randomUUID();
+        UUID neverFollowed = UUID.randomUUID();
+        jdbc.update("INSERT INTO cafeteria (id, campus_id, name) VALUES (?, ?, 'Otra cafetería')",
+                otherCafeteria, campus);
+        jdbc.update("INSERT INTO offer (id, cafeteria_id, product_id, price, stock) VALUES (?, ?, ?, 1800, 0)",
+                otherOffer, otherCafeteria, product);
+        jdbc.update("UPDATE offer SET stock=0, status='OUT_OF_STOCK' WHERE id=?", offer);
+        addFollow(specificFollower, cafeteria, null);
+        addFollow(generalFollower, null, null);
+        addFollow(generalFollower, cafeteria, null);
+        addFollow(otherCafeFollower, otherCafeteria, null);
+        addFollow(deletedFollower, cafeteria, Timestamp.from(NOW));
+
+        adjust(12);
+
+        var event = directedEvent();
+        var payload = event.path("payload");
+        List<String> recipients = java.util.stream.StreamSupport
+                .stream(payload.path("destinatarios").spliterator(), false)
+                .map(node -> node.asString())
+                .toList();
+        assertThat(recipients).containsExactlyInAnyOrder(specificFollower.toString(), generalFollower.toString())
+                .doesNotContain(otherCafeFollower.toString(), deletedFollower.toString(), neverFollowed.toString());
+        assertThat(event.path("eventId").asString()).isNotBlank();
+        assertThat(event.path("traceId").asString()).isNotBlank();
+        assertThat(event.path("eventType").asString()).isEqualTo("catalog.producto.disponible.v1");
+        assertThat(payload.path("productoNombre").asString()).isEqualTo("Producto ajuste");
+        assertThat(payload.path("cafeteriaNombre").asString()).isEqualTo("Cafetería ajuste");
+        assertThat(payload.path("campusNombre").asString()).isEqualTo("Campus ajuste");
+        assertThat(availabilityEvents()).isEqualTo(1);
+    }
+
+    @Test
+    void doesNotPublishDirectedRestockWithoutFollowersOrWhenStockRemainsPositive() {
+        adjust(1);
+        assertThat(availabilityEvents()).isZero();
+
+        jdbc.update("UPDATE offer SET stock=0, status='OUT_OF_STOCK' WHERE id=?", offer);
+        adjust(1);
+        assertThat(availabilityEvents()).isZero();
+    }
+
+    @Test
+    void releasingReservationThatRestoresZeroStockPublishesOneDirectedRestock() {
+        UUID follower = UUID.randomUUID();
+        addFollow(follower, cafeteria, null);
+        var reservation = reservations.reserve(reserve(10)).reservation();
+        assertThat(stock()).isZero();
+
+        reservations.release(reservation.getId());
+
+        assertThat(stock()).isEqualTo(10);
+        assertThat(availabilityEvents()).isEqualTo(1);
+        assertThat(directedEvent().path("payload").path("destinatarios").toString())
+                .contains(follower.toString());
+    }
+
+    @Test
+    void expirationConsumedBySameAdjustmentDoesNotPublishTransientAvailability() {
+        addFollow(UUID.randomUUID(), cafeteria, null);
+        reservations.reserve(reserve(4));
+        adjust(-6);
+        assertThat(stock()).isZero();
+        when(clock.instant()).thenReturn(NOW.plusSeconds(3600));
+
+        adjust(-4);
+
+        assertThat(stock()).isZero();
+        assertThat(availabilityEvents()).isZero();
+    }
+
+    @Test
+    void concurrentAdjustmentsFromZeroPublishOnlyTheEffectiveTransition() throws Exception {
+        UUID follower = UUID.randomUUID();
+        addFollow(follower, cafeteria, null);
+        jdbc.update("UPDATE offer SET stock=0, status='OUT_OF_STOCK' WHERE id=?", offer);
+        try (var workers = Executors.newFixedThreadPool(2)) {
+            var first = workers.submit(() -> adjust(1));
+            var second = workers.submit(() -> adjust(1));
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(stock()).isEqualTo(2);
+        assertThat(availabilityEvents()).isEqualTo(1);
+    }
+
+    @Test
+    void replayedAdjustmentDoesNotDuplicateTheDirectedRestock() {
+        UUID follower = UUID.randomUUID();
+        addFollow(follower, cafeteria, null);
+        jdbc.update("UPDATE offer SET stock=0, status='OUT_OF_STOCK' WHERE id=?", offer);
+        UUID key = UUID.randomUUID();
+        var request = new AdjustStockRequest(1, StockAdjustmentReason.REPOSICION, null);
+
+        adjustments.adjust(cafeteria, offer, actor, key, request);
+        adjustments.adjust(cafeteria, offer, actor, key, request);
+
+        assertThat(stock()).isEqualTo(1);
+        assertThat(availabilityEvents()).isEqualTo(1);
+    }
+
+    @Test
     void rejectsRestockIfALaterReleaseWouldOverflowAvailableStock() {
         jdbc.update("UPDATE offer SET stock=? WHERE id=?", Integer.MAX_VALUE, offer);
         var reserved = reservations.reserve(reserve(4)).reservation();
@@ -343,6 +454,28 @@ class StockAdjustmentIntegrationTests extends JwtTestSupport {
     private int events() {
         return jdbc.queryForObject("SELECT COUNT(*) FROM catalog_outbox WHERE cuerpo LIKE ?", Integer.class,
                 "%" + offer + "%");
+    }
+
+    private int availabilityEvents() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM catalog_outbox WHERE event_type=? AND cuerpo LIKE ?",
+                Integer.class, "catalog.producto.disponible.v1", "%" + offer + "%");
+    }
+
+    private tools.jackson.databind.JsonNode directedEvent() {
+        String body = jdbc.queryForObject("""
+                SELECT cuerpo FROM catalog_outbox
+                WHERE event_type=? AND cuerpo LIKE ?
+                """, String.class, "catalog.producto.disponible.v1", "%" + offer + "%");
+        return json.readTree(body);
+    }
+
+    private void addFollow(UUID userId, UUID cafeteriaId, Timestamp deletedAt) {
+        jdbc.update("""
+                INSERT INTO product_follow
+                    (id, user_id, product_id, cafeteria_id, cafeteria_key, created_at, deleted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), userId, product, cafeteriaId,
+                cafeteriaId == null ? new UUID(0, 0) : cafeteriaId, Timestamp.from(NOW), deletedAt);
     }
 
     private void assertUnchanged() {
