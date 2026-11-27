@@ -3,6 +3,7 @@ package cl.cloudcoffee.catalog_service.model.entity;
 import cl.cloudcoffee.catalog_service.model.enums.OfferStatus;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter; import lombok.Setter;
 
@@ -37,4 +38,9 @@ public class Offer {
     @Column(nullable = false)
     private OfferStatus status;
 
+    @Column(name = "administrative_active", nullable = false)
+    private boolean administrativeActive = true;
+
+    @Column(name = "baja_at")
+    private Instant bajaAt;
 }

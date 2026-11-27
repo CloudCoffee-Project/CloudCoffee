@@ -63,6 +63,19 @@ class NotificationEventPushRoutingTests {
         verify(webSocketPublisher, never()).publish(event);
     }
 
+    @Test
+    void redeliveredSuccessfulRestockDoesNotEnqueuePushAgain() {
+        CloudCoffeeEvent event = event("catalog.producto.disponible.v1", Map.of(
+                "productoId", UUID.randomUUID().toString(),
+                "destinatarios", java.util.List.of(UUID.randomUUID().toString())));
+        when(historyService.wasSuccessful(event.eventId())).thenReturn(true);
+
+        consumer().consume(event);
+
+        verify(pushService, never()).enqueueRestockEvent(event);
+        verify(webSocketPublisher, never()).publish(event);
+    }
+
     private NotificationEventConsumer consumer() {
         return new NotificationEventConsumer(historyService, emailService, webSocketPublisher, pushService,
                 org.mockito.Mockito.mock(cl.cloudcoffee.notification_service.history.CuentaAnonimizadaService.class));

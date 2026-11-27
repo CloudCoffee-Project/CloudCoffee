@@ -3,7 +3,7 @@ import {
   AdminCafeteriaOperationalSection,
   SuperAdminCafeteriasSection,
 } from '../components/admin/CafeteriaManagementSections';
-import { ProductImageManager } from '../components/ProductImageManager';
+import { SuperAdminCatalogSection } from '../components/admin/CatalogManagementSection';
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { ErrorState } from '../components/common/ErrorState';
@@ -211,6 +211,8 @@ export function AdminPanelPage({ panelRole, section }: AdminPanelPageProps) {
       {activeItem ? (
         panelRole === 'SUPER_ADMIN' && section === 'cafeterias' ? (
           <SuperAdminCafeteriasSection />
+        ) : panelRole === 'SUPER_ADMIN' && section === 'catalogo' ? (
+          <SuperAdminCatalogSection userId={userId} />
         ) : panelRole === 'ADMIN_CAFETERIA' && section === 'cafeteria' && context.cafeteriaId ? (
           <AdminCafeteriaOperationalSection cafeteriaId={context.cafeteriaId} />
         ) : panelRole === 'ADMIN_CAFETERIA' && section === 'ventas' && context.cafeteriaId ? (
@@ -219,7 +221,6 @@ export function AdminPanelPage({ panelRole, section }: AdminPanelPageProps) {
           <section className="admin-panel-notice" aria-labelledby="admin-section-heading">
             <h2 id="admin-section-heading">{activeItem.label}</h2>
             <p>{activeItem.description}</p>
-            {panelRole === 'SUPER_ADMIN' && section === 'catalogo' && <ProductImageManager key={userId} />}
             <p>
               Módulo habilitado para <strong>{panelRole}</strong>
               {context.cafeteriaId ? ` en cafetería ${context.cafeteriaId}` : ' a nivel global'}.

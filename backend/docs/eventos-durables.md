@@ -47,12 +47,21 @@ respuesta `UNREGISTERED` se eliminan. La entrega push no forma parte del estado 
 | Resultado de pago y cambios asociados | `ResultadoPagoService` conserva `EventosRevision`; la transacción de pago y decisión escribe el outbox existente. |
 | Preparación, entrega y no retirados | Las transiciones aún pertenecen a INT2-54/79/126/127. Deben reutilizar `OrderEventJournal` y `EventosRevision.orden` dentro del commit de estado; no crear otro publicador. |
 | Reserva, liberación y vencimiento de stock | `StockEventPublisher` toma el snapshot y escribe mediante `CatalogEventJournal`, dentro de la transacción de `StockReservationService`. Un replay de reserva/liberación no crea otro efecto ni evento. |
-| Eventos dirigidos de Catalog | El journal admite el envelope con destinatarios ya resueltos y los conserva al reintentar. La selección de seguidores y generación de reposición se implementan en INT2-117. |
+| Eventos dirigidos de Catalog | `StockEventPublisher` resuelve los seguimientos activos al confirmar una transición de stock `0 → >0` y guarda el evento en `catalog_outbox` dentro de la transacción de stock. |
 
-`catalog.producto.disponible.v1` lleva `payload.productoId` y la lista
-`payload.destinatarios` de UUID ya seleccionados por Catalog. Notification usa
-solo esa lista para el push de reposición; no consulta seguidores. El evento
-genérico `catalog.stock.actualizado.v1` permanece limitado a WebSocket.
+`catalog.producto.disponible.v1` incluye `ofertaId`, `productoId` y nombre del
+producto, `cafeteriaId` y nombre de la cafetería, `campusId` y nombre del campus,
+`stockActual`, `version` y la lista `destinatarios` de UUID ya seleccionados por
+Catalog. La audiencia combina seguimientos activos generales del producto con
+los específicos de la cafetería de esa oferta, sin duplicar usuarios; si no hay
+seguidores no se crea un evento dirigido. Solo se emite cuando el stock final
+de la operación atómica pasa de cero a positivo; replays y cambios que conservan
+stock positivo no generan otro aviso.
+
+Notification usa únicamente esa lista para encolar el push FCM y dirige a la
+página de detalle del producto; no consulta seguidores. El evento dirigido no se
+publica por WebSocket. El evento genérico `catalog.stock.actualizado.v1`
+permanece limitado a WebSocket y nunca se convierte por sí solo en un push.
 
 Ambos journals exigen una transacción existente (`MANDATORY`): no abren una
 transacción independiente para guardar el evento. Antes de construir un snapshot

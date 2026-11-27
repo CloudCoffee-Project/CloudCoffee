@@ -145,10 +145,10 @@ public class JwtSecurityAutoConfiguration {
                                 "/auth/activacion").permitAll()
                         .requestMatchers(HttpMethod.GET, "/catalog/campus", "/catalog/categorias",
                                 "/catalog/productos", "/catalog/productos/*",
-                                "/catalog/productos/*/ofertas", "/catalog/imagenes/*").permitAll()
+                                "/catalog/productos/*/ofertas", "/catalog/imagenes/**").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/catalog/campus", "/catalog/categorias",
                                 "/catalog/productos", "/catalog/productos/*",
-                                "/catalog/productos/*/ofertas", "/catalog/imagenes/*").permitAll()
+                                "/catalog/productos/*/ofertas", "/catalog/imagenes/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/orders/productos-populares").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/orders/productos-populares").permitAll()
                         // Conservar los endpoints de monitoreo ya expuestos por Notification.

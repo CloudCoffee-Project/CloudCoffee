@@ -34,7 +34,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
           AND c.campus.active = true
           AND c.active = true
           AND c.status = cl.cloudcoffee.catalog_service.model.enums.CafeteriaStatus.OPEN
-          AND o.status = cl.cloudcoffee.catalog_service.model.enums.OfferStatus.AVAILABLE
+          AND o.administrativeActive = true
           AND p.status = cl.cloudcoffee.catalog_service.model.enums.ProductStatus.ACTIVE
           AND p.category.active = true
           AND (:categoryId IS NULL OR p.category.id = :categoryId)

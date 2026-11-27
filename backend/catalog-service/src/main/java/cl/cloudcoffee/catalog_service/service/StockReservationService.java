@@ -69,6 +69,7 @@ public class StockReservationService {
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Oferta no encontrada",
                         "No existe una oferta con el identificador indicado.", "OFERTA_NO_ENCONTRADA"));
 
+        int stockBeforeOperation = offer.getStock();
         expireReservationsForOffer(offer, clock.instant());
 
         var existing = reservationRepository.findByOrderIdAndOfferIdAndAttemptIdForUpdate(
@@ -80,12 +81,14 @@ public class StockReservationService {
                         "Una repetición de esta oferta debe usar la cantidad de la reserva original.",
                         "RESERVA_IDEMPOTENTE_CONFLICTIVA");
             }
+            stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
             return new ReservationResult(reservation, false);
         }
 
         // INT2-71: comprobar la cotización bajo el mismo bloqueo que descuenta stock.
         // Los replays se resuelven antes: un cambio posterior nunca altera una reserva anterior.
         if (request.expectedPrice() != null && (offer.getPrice().compareTo(request.expectedPrice()) != 0
+                || !offer.isAdministrativeActive()
                 || offer.getProduct().getStatus() != ProductStatus.ACTIVE
                 || offer.getCafeteria().getStatus() != CafeteriaStatus.OPEN)) {
             throw error(HttpStatus.CONFLICT, "Oferta no disponible",
@@ -105,7 +108,8 @@ public class StockReservationService {
                     "RESERVA_INTENTO_CONFLICTIVO");
         }
 
-        if (offer.getStatus() != OfferStatus.AVAILABLE
+        if (!offer.isAdministrativeActive()
+                || offer.getStatus() != OfferStatus.AVAILABLE
                 || offerRepository.reserveStock(request.offerId(), request.quantity()) != 1) {
             throw error(HttpStatus.CONFLICT, "Stock no disponible",
                     "La oferta no está activa o no tiene stock suficiente para la cantidad solicitada.",
@@ -125,6 +129,7 @@ public class StockReservationService {
                 .truncatedTo(ChronoUnit.MICROS));
         StockReservation savedReservation = reservationRepository.saveAndFlush(reservation);
         stockEventPublisher.publishStockUpdated(offer);
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
         return new ReservationResult(savedReservation, true);
     }
 
@@ -132,7 +137,10 @@ public class StockReservationService {
     public StockReservation confirm(UUID orderId, UUID offerId) {
         Offer offer = lockOffer(offerId);
         StockReservation reservation = lockReservation(orderId, offerId);
-        return confirmLocked(offer, reservation);
+        int stockBeforeOperation = offer.getStock();
+        StockReservation confirmed = confirmLocked(offer, reservation);
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
+        return confirmed;
     }
 
     private StockReservation confirmLocked(Offer offer, StockReservation reservation) {
@@ -153,14 +161,21 @@ public class StockReservationService {
     @Transactional
     public StockReservation confirm(UUID reservationId) {
         Offer offer = lockOfferForReservation(reservationId);
-        return confirmLocked(offer, lockReservation(reservationId));
+        StockReservation reservation = lockReservation(reservationId);
+        int stockBeforeOperation = offer.getStock();
+        StockReservation confirmed = confirmLocked(offer, reservation);
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
+        return confirmed;
     }
 
     @Transactional
     public StockReservation release(UUID orderId, UUID offerId) {
         Offer offer = lockOffer(offerId);
         StockReservation reservation = lockReservation(orderId, offerId);
-        return releaseLocked(offer, reservation);
+        int stockBeforeOperation = offer.getStock();
+        StockReservation released = releaseLocked(offer, reservation);
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
+        return released;
     }
 
     private StockReservation releaseLocked(Offer offer, StockReservation reservation) {
@@ -182,13 +197,27 @@ public class StockReservationService {
     @Transactional
     public StockReservation release(UUID reservationId) {
         Offer offer = lockOfferForReservation(reservationId);
-        return releaseLocked(offer, lockReservation(reservationId));
+        StockReservation reservation = lockReservation(reservationId);
+        int stockBeforeOperation = offer.getStock();
+        StockReservation released = releaseLocked(offer, reservation);
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
+        return released;
     }
 
     @Transactional
     public void expireForOffer(UUID offerId) {
         Offer offer = lockOffer(offerId);
+        int stockBeforeOperation = offer.getStock();
         expireReservationsForOffer(offer, clock.instant());
+        stockEventPublisher.publishProductAvailableIfRestocked(offer, stockBeforeOperation);
+    }
+
+    @Transactional
+    public int expireForAdjustment(UUID offerId) {
+        Offer offer = lockOffer(offerId);
+        int stockBeforeOperation = offer.getStock();
+        expireReservationsForOffer(offer, clock.instant());
+        return stockBeforeOperation;
     }
 
     private StockReservation lockReservation(UUID orderId, UUID offerId) {
@@ -235,7 +264,7 @@ public class StockReservationService {
 
     private void restoreStock(Offer offer, int quantity) {
         offer.setStock(offer.getStock() + quantity);
-        offer.setStatus(OfferStatus.AVAILABLE);
+        offer.setStatus(offer.getStock() == 0 ? OfferStatus.OUT_OF_STOCK : OfferStatus.AVAILABLE);
     }
 
     private static BusinessException invalidTransition(String detail) {

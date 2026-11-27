@@ -1,5 +1,6 @@
 package cl.cloudcoffee.catalog_service.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,6 +43,17 @@ public interface ProductFollowRepository extends JpaRepository<ProductFollow, UU
         SELECT COUNT(f) FROM ProductFollow f WHERE f.userId = :userId AND f.deletedAt IS NULL
     """)
     Page<ProductFollow> findActivosDe(@Param("userId") UUID userId, Pageable pageable);
+
+    @Query("""
+        SELECT DISTINCT f.userId FROM ProductFollow f
+        WHERE f.product.id = :productId
+          AND f.deletedAt IS NULL
+          AND (f.cafeteriaKey = :generalKey OR f.cafeteriaKey = :cafeteriaKey)
+    """)
+    List<UUID> findActiveRecipientIdsForRestockedOffer(
+            @Param("productId") UUID productId,
+            @Param("cafeteriaKey") UUID cafeteriaKey,
+            @Param("generalKey") UUID generalKey);
 
     Optional<ProductFollow> findByIdAndUserId(UUID id, UUID userId);
 

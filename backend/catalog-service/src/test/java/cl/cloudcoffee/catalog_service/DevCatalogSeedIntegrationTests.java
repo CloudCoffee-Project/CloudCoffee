@@ -169,11 +169,11 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
 
     @Test
     void productosSoloIncluyeOfertasPublicadasDelCampus() throws Exception {
-        // Fuera: Brownie (cafetería cerrada), Agua mineral (OUT_OF_STOCK) y los de otro campus.
+        // Fuera: Brownie (cafetería cerrada) y los de otro campus.
         productos(CAMPUS_SAN_FRANCISCO, null, null)
-                .andExpect(jsonPath("$.totalElements").value(8))
+                .andExpect(jsonPath("$.totalElements").value(9))
                 .andExpect(jsonPath("$.content[*].nombre", contains(
-                        "Café americano", "Cappuccino", "Frappé moca", "Jugo natural de naranja",
+                        "Agua mineral", "Café americano", "Cappuccino", "Frappé moca", "Jugo natural de naranja",
                         "Latte de vainilla", "Medialuna", "Muffin de arándanos", "Sándwich ave palta")));
 
         // Fuera: Brownie y Agua mineral del kiosko en mantención.
@@ -227,8 +227,8 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
                         .param("page", "1").param("size", "3").param("sort", "name,asc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].nombre",
-                        contains("Jugo natural de naranja", "Latte de vainilla", "Medialuna")))
-                .andExpect(jsonPath("$.totalElements").value(8))
+                        contains("Frappé moca", "Jugo natural de naranja", "Latte de vainilla")))
+                .andExpect(jsonPath("$.totalElements").value(9))
                 .andExpect(jsonPath("$.totalPages").value(3));
     }
 
@@ -255,10 +255,12 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
     }
 
     @Test
-    void ofertasDeCafeteriaNoAbiertaOAgotadaNoSePublican() throws Exception {
+    void ofertasDeCafeteriaNoAbiertaNoSePublicanYAgotadaQuedaVisible() throws Exception {
         ofertas(BROWNIE, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$").isEmpty());
         ofertas(BROWNIE, CAMPUS_SAN_JUAN_PABLO).andExpect(jsonPath("$").isEmpty());
-        ofertas(AGUA_MINERAL, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$").isEmpty());
+        ofertas(AGUA_MINERAL, CAMPUS_SAN_FRANCISCO)
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].disponible").value(false));
     }
 
     @Test
@@ -267,7 +269,7 @@ class DevCatalogSeedIntegrationTests extends JwtTestSupport {
         new ResourceDatabasePopulator(new ClassPathResource(SEED)).execute(dataSource);
 
         mvc.perform(get("/catalog/campus")).andExpect(jsonPath("$", hasSize(2)));
-        productos(CAMPUS_SAN_FRANCISCO, null, null).andExpect(jsonPath("$.totalElements").value(8));
+        productos(CAMPUS_SAN_FRANCISCO, null, null).andExpect(jsonPath("$.totalElements").value(9));
         ofertas(CAFE_AMERICANO, CAMPUS_SAN_FRANCISCO).andExpect(jsonPath("$", hasSize(2)));
     }
 

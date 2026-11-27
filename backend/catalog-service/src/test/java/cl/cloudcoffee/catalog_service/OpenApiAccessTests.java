@@ -26,7 +26,7 @@ class OpenApiAccessTests extends JwtTestSupport {
     void contractDescribesCatalogFiltersPaginationAndActualJwtRules() throws Exception {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(api.path("paths").size()).isEqualTo(32);
+        assertThat(api.path("paths").size()).isEqualTo(35);
         var adjustment = api.path("paths").path("/catalog/cafeterias/{cafeteriaId}/ofertas/{ofertaId}/ajustes-stock")
                 .path("post");
         assertThat(adjustment.at("/security/0/bearerAuth").isArray()).isTrue();
