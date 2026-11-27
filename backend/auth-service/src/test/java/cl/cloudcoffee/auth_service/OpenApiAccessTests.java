@@ -39,7 +39,10 @@ class OpenApiAccessTests extends JwtTestSupport {
         var api = mapper.readTree(mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         // /users/me contiene GET y PATCH; INT2-121 agrega /auth/activacion y ocho rutas /auth/admin.
-        assertThat(api.path("paths").size()).isEqualTo(19);
+        // INT2-129 agrega /auth/users/me/baja.
+        assertThat(api.path("paths").size()).isEqualTo(20);
+        assertThat(api.at("/paths/~1auth~1users~1me~1baja/post/security/0/bearerAuth").isArray()).isTrue();
+        assertThat(api.at("/components/schemas/BajaPropia/properties").has("usuarioId")).isFalse();
         assertThat(api.at("/paths/~1auth~1activacion/post/security").isMissingNode()).isTrue();
         for (String path : new String[]{"/auth/admin/usuarios", "/auth/admin/usuarios/{usuarioId}",
                 "/auth/admin/personal", "/auth/admin/usuarios/{usuarioId}/baja"}) {
