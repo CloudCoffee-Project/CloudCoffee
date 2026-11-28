@@ -159,10 +159,30 @@ Notification envía el correo de invitación. Detalles de la implementación:
 * **Anonimización:** nombre `Usuario`, apellido `eliminado`, teléfono `000000` y el email descrito
   abajo; se conserva el `usuarioId`.
 
-Pendiente en otras issues:
+### Administración de cajeros por ADMIN_CAFETERIA (INT2-122)
 
-* **INT2-122:** el alcance de `ADMIN_CAFETERIA` sobre los `CAJERO` de su cafetería. Hasta entonces
-  esas rutas responden `403 ROL_NO_PERMITIDO` a cualquier rol distinto de `SUPER_ADMIN`.
+`ADMIN_CAFETERIA` usa las mismas rutas `/v1/auth/admin/**`, limitado a los `CAJERO` de su
+cafetería asignada:
+
+* **Cafetería persistida:** se lee de la asignación en Auth en cada solicitud, nunca del claim
+  `cafeteriaId` del JWT. Sin asignación: `403 ASIGNACION_NO_AUTORIZADA`; cuenta desactivada:
+  `403 ROL_NO_PERMITIDO`. Una reasignación cambia su alcance en la solicitud siguiente.
+* **Listado:** solo `CAJERO` de su cafetería. Un filtro `rol` distinto de `CAJERO` devuelve una
+  página vacía; otra cafetería en `cafeteriaId`, `403 ASIGNACION_NO_AUTORIZADA`.
+* **Cuentas fuera de alcance** (otra cafetería, otro rol o la propia): `404 USUARIO_NO_ENCONTRADO`
+  al consultar, editar o cambiar su estado, sin revelar si existen. Sobre su propia cuenta,
+  desactivar o dar de baja responde `409 OPERACION_SOBRE_SI_MISMO`.
+* **Alta:** solo `CAJERO` (otro rol: `403 ROL_NO_PERMITIDO`) y solo en su cafetería; omitirla o
+  enviar la propia es la misma solicitud para la idempotencia. Otra: `403 ASIGNACION_NO_AUTORIZADA`.
+  Reutiliza el ciclo de invitación, activación, validación con Catalog y unicidad por correo.
+* **Sin reasignar:** `PUT .../asignacion` responde `403 ROL_NO_PERMITIDO`.
+* Repetir la baja de un cajero ya anonimizado responde `404`: ya no pertenece a su cafetería.
+
+**Auditoría** (tabla `auditoria_cuentas` de Auth): cada cambio administrativo efectivo, de
+`SUPER_ADMIN` o `ADMIN_CAFETERIA`, registra actor, rol del actor, acción (`INVITAR`,
+`REENVIAR_INVITACION`, `EDITAR`, `REASIGNAR`, `DESACTIVAR`, `REACTIVAR`, `DAR_DE_BAJA`), cuenta
+afectada, cafetería cuando aplica y fecha, en la misma transacción del cambio. Las repeticiones sin
+cambios y los rechazos no se registran.
 
 ### Estado de la baja de cuentas (INT2-129)
 
@@ -345,7 +365,7 @@ Flyway nueva, sin editar las existentes:
 
 | Servicio | Cambio |
 | --- | --- |
-| Auth | Tipo de token `ACTIVACION_CUENTA`; columna `version` en `usuarios` |
+| Auth | Tipo de token `ACTIVACION_CUENTA`; columna `version` en `usuarios`; tabla `auditoria_cuentas` (INT2-122) |
 | Catalog | `campus.activo`; `cafeteria.activa` y `baja_at`; `category.activa`; `offer.activa` y `baja_at`; `version` en campus, cafetería, categoría y producto (la oferta ya la tiene); tabla `ajustes_stock` |
 | Order | Snapshot `campus_id` y `pagado_at` en `ordenes`, para filtrar ventas sin consultar a Catalog |
 
