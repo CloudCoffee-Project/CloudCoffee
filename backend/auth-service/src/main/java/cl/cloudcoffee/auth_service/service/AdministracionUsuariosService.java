@@ -50,11 +50,10 @@ import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 import cl.cloudcoffee.errors.BusinessException;
 
 /**
- * Administración global de cuentas por SUPER_ADMIN (INT2-121, contrato INT2-109).
- *
- * <p>El alcance de ADMIN_CAFETERIA sobre los cajeros de su cafetería corresponde a INT2-122; hasta entonces
- * solo SUPER_ADMIN opera estas rutas. La baja de una cuenta CLIENTE consulta antes sus compras en curso a
- * Order (INT2-129).
+ * Administración de cuentas (contrato INT2-109): global para SUPER_ADMIN (INT2-121) y, para ADMIN_CAFETERIA,
+ * limitada a los CAJERO de su cafetería asignada (INT2-122). Cada cambio queda atribuido a quien lo hizo en
+ * {@code auditoria_cuentas}. La baja de una cuenta CLIENTE consulta antes sus compras en curso a Order
+ * (INT2-129).
  *
  * <p>Las llamadas a Catalog se hacen fuera de la transacción; las decisiones se toman con la cuenta
  * bloqueada y su versión comprobada. Los eventos se publican solo después del commit.
@@ -102,9 +101,13 @@ public class AdministracionUsuariosService {
 
     // ------------------------------------------------------------------ consultas
 
+    /**
+     * SUPER_ADMIN ve todas las cuentas; ADMIN_CAFETERIA solo los CAJERO de su cafetería (INT2-122). Un filtro
+     * de otro rol devuelve una página vacía; otra cafetería en {@code cafeteriaId}, 403 ASIGNACION_NO_AUTORIZADA.
+     */
     public PaginaUsuariosResponse listar(Jwt jwt, String rol, String estado, String cafeteriaId, String q,
             String page, String size) {
-        tx.execute(status -> actorSuperAdmin(jwt));
+        Alcance alcance = tx.execute(status -> alcance(jwt));
         int pagina = entero(page, 0, "page", 0, Integer.MAX_VALUE);
         int tamano = entero(size, 20, "size", 1, 100);
         Rol filtroRol = rol == null ? null : enumerado(rol);
@@ -121,12 +124,19 @@ public class AdministracionUsuariosService {
             filtroTexto = "%" + texto.toLowerCase(Locale.ROOT)
                     .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
         }
+        if (!alcance.global()) {
+            if (filtroCafeteria != null && !filtroCafeteria.equals(alcance.cafeteria())) throw asignacionNoAutorizada();
+            filtroCafeteria = alcance.cafeteria();
+            if (filtroRol != null && filtroRol != Rol.CAJERO) return paginaVacia(pagina, tamano);
+            filtroRol = Rol.CAJERO;
+        }
         Rol rolFinal = filtroRol;
         String estadoFinal = filtroEstado;
+        UUID cafeteriaFinal = filtroCafeteria;
         String textoFinal = filtroTexto;
         return tx.execute(status -> {
-            actorSuperAdmin(jwt);
-            Page<Usuario> resultado = usuarios.buscar(rolFinal, estadoFinal, filtroCafeteria, textoFinal,
+            alcance(jwt);
+            Page<Usuario> resultado = usuarios.buscar(rolFinal, estadoFinal, cafeteriaFinal, textoFinal,
                     PageRequest.of(pagina, tamano));
             Map<UUID, UUID> cafeterias = asignaciones.findByUsuarioIdIn(
                             resultado.getContent().stream().map(Usuario::getId).toList()).stream()
@@ -142,26 +152,43 @@ public class AdministracionUsuariosService {
 
     public UsuarioAdminResponse ver(Jwt jwt, UUID usuarioId) {
         return tx.execute(status -> {
-            actorSuperAdmin(jwt);
-            return respuesta(visible(usuarios.findById(usuarioId)));
+            Alcance alcance = alcance(jwt);
+            return respuesta(enAlcance(alcance, visible(usuarios.findById(usuarioId))));
         });
     }
 
     // ------------------------------------------------------------------ alta por invitación
 
+    /**
+     * SUPER_ADMIN invita CAJERO o ADMIN_CAFETERIA a la cafetería que indique. ADMIN_CAFETERIA solo invita
+     * CAJERO (otro rol: 403 ROL_NO_PERMITIDO) a su propia cafetería: la omite o envía la suya; otra es
+     * 403 ASIGNACION_NO_AUTORIZADA.
+     */
     public Alta crearPersonal(Jwt jwt, UUID clave, CrearPersonalRequest solicitud) {
-        UUID actor = tx.execute(status -> actorSuperAdmin(jwt).getId());
-        if (solicitud.getCafeteriaId() == null) {
-            throw invalida("cafeteriaId es obligatorio para SUPER_ADMIN.");
+        Alcance alcance = tx.execute(status -> alcance(jwt));
+        UUID actor = alcance.actor().getId();
+        UUID cafeteria = solicitud.getCafeteriaId();
+        if (alcance.global()) {
+            if (cafeteria == null) throw invalida("cafeteriaId es obligatorio para SUPER_ADMIN.");
+        } else {
+            if (Rol.valueOf(solicitud.getRol()) != Rol.CAJERO) {
+                throw new BusinessException(HttpStatus.FORBIDDEN, URI.create("/problems/rol-no-permitido"),
+                        "Rol no permitido", "Un administrador de cafetería solo puede invitar cajeros.",
+                        "ROL_NO_PERMITIDO");
+            }
+            if (cafeteria != null && !cafeteria.equals(alcance.cafeteria())) throw asignacionNoAutorizada();
+            cafeteria = alcance.cafeteria();
         }
+        UUID cafeteriaFinal = cafeteria;
         String email = solicitud.getEmail().toLowerCase(Locale.ROOT);
-        String hash = hashCuerpo(solicitud, email);
+        // La cafetería efectiva forma parte de la carga: omitirla o enviar la propia es la misma solicitud.
+        String hash = hashCuerpo(solicitud, email, cafeteriaFinal);
 
         // Un replay no vuelve a consultar Catalog ni crea nada.
         Optional<Alta> previa = tx.execute(status -> replay(actor, clave, hash));
         if (previa.isPresent()) return previa.get();
 
-        validarCafeteria(solicitud.getCafeteriaId());
+        validarCafeteria(cafeteriaFinal);
         String traceId = traceId();
         try {
             return tx.execute(status -> {
@@ -172,14 +199,15 @@ public class AdministracionUsuariosService {
                 Usuario usuario = new Usuario(email, passwordInutilizable(), Rol.valueOf(solicitud.getRol()),
                         solicitud.getNombre(), solicitud.getApellido(), solicitud.getTelefono());
                 usuario = usuarios.saveAndFlush(usuario);
-                asignaciones.save(new AsignacionCafeteria(usuario.getId(), solicitud.getCafeteriaId()));
+                asignaciones.save(new AsignacionCafeteria(usuario.getId(), cafeteriaFinal));
                 jdbc.update("""
                         INSERT INTO idempotencias_admin (actor_id, clave, operacion, hash_cuerpo, usuario_id, created_at)
                         VALUES (?, ?, ?, ?, ?, ?)
                         """, actor, clave, OPERACION_CREAR_PERSONAL, hash, usuario.getId(),
                         Timestamp.from(Instant.now()));
-                emitirInvitacion(usuario, solicitud.getCafeteriaId(), traceId);
-                return new Alta(UsuarioAdminResponse.from(usuario, solicitud.getCafeteriaId()), false);
+                emitirInvitacion(usuario, cafeteriaFinal, traceId);
+                auditar(alcance, "INVITAR", usuario.getId(), cafeteriaFinal);
+                return new Alta(UsuarioAdminResponse.from(usuario, cafeteriaFinal), false);
             });
         } catch (DataIntegrityViolationException carrera) {
             // Otra solicitud con la misma clave o el mismo correo confirmó primero.
@@ -196,14 +224,15 @@ public class AdministracionUsuariosService {
     public void reenviarInvitacion(Jwt jwt, UUID usuarioId) {
         String traceId = traceId();
         tx.executeWithoutResult(status -> {
-            actorSuperAdmin(jwt);
-            Usuario usuario = visible(usuarios.findForUpdate(usuarioId));
+            Alcance alcance = alcance(jwt);
+            Usuario usuario = enAlcance(alcance, visible(usuarios.findForUpdate(usuarioId)));
             UUID cafeteria = asignaciones.findById(usuario.getId()).map(AsignacionCafeteria::getCafeteriaId)
                     .orElse(null);
             if (!usuario.isPendienteActivacion() || !ROLES_PERSONAL.contains(usuario.getRol()) || cafeteria == null) {
                 throw estadoInvalido("Solo se reenvía la invitación de personal pendiente de activación.");
             }
             emitirInvitacion(usuario, cafeteria, traceId);
+            auditar(alcance, "REENVIAR_INVITACION", usuario.getId(), cafeteria);
         });
     }
 
@@ -211,20 +240,26 @@ public class AdministracionUsuariosService {
 
     public UsuarioAdminResponse editar(Jwt jwt, UUID usuarioId, EditarUsuarioRequest cambios) {
         return tx.execute(status -> {
-            actorSuperAdmin(jwt);
-            Usuario usuario = visible(usuarios.findForUpdate(usuarioId));
+            Alcance alcance = alcance(jwt);
+            Usuario usuario = enAlcance(alcance, visible(usuarios.findForUpdate(usuarioId)));
             exigirVersion(usuario, cambios.getVersion());
+            long antes = usuario.getVersion();
             if (cambios.getNombre() != null) usuario.setNombre(cambios.getNombre());
             if (cambios.getApellido() != null) usuario.setApellido(cambios.getApellido());
             if (cambios.getTelefono() != null) usuario.setTelefono(cambios.getTelefono());
-            return respuesta(usuarios.saveAndFlush(usuario));
+            Usuario guardado = usuarios.saveAndFlush(usuario);
+            if (guardado.getVersion() != antes) auditar(alcance, "EDITAR", guardado.getId(), null);
+            return respuesta(guardado);
         });
     }
 
-    /** Reasigna la cafetería del personal y revoca sus refresh tokens; rige en la siguiente solicitud. */
+    /**
+     * Reasigna la cafetería del personal y revoca sus refresh tokens; rige en la siguiente solicitud. Solo
+     * SUPER_ADMIN: un administrador de cafetería no mueve personal entre cafeterías.
+     */
     public UsuarioAdminResponse cambiarAsignacion(Jwt jwt, UUID usuarioId, CambiarAsignacionRequest cambio) {
         UsuarioAdminResponse actual = tx.execute(status -> {
-            actorSuperAdmin(jwt);
+            soloGlobal(alcance(jwt));
             Usuario usuario = visible(usuarios.findById(usuarioId));
             exigirPersonal(usuario);
             exigirVersion(usuario, cambio.getVersion());
@@ -234,7 +269,7 @@ public class AdministracionUsuariosService {
 
         validarCafeteria(cambio.getCafeteriaId());
         return tx.execute(status -> {
-            actorSuperAdmin(jwt);
+            Alcance alcance = soloGlobal(alcance(jwt));
             Usuario usuario = visible(usuarios.findForUpdate(usuarioId));
             exigirPersonal(usuario);
             exigirVersion(usuario, cambio.getVersion());
@@ -243,7 +278,9 @@ public class AdministracionUsuariosService {
                     () -> asignaciones.save(new AsignacionCafeteria(usuario.getId(), cambio.getCafeteriaId())));
             revocar(usuario, TipoToken.REFRESH);
             usuario.registrarCambio();
-            return respuesta(usuarios.saveAndFlush(usuario));
+            Usuario guardado = usuarios.saveAndFlush(usuario);
+            auditar(alcance, "REASIGNAR", guardado.getId(), cambio.getCafeteriaId());
+            return respuesta(guardado);
         });
     }
 
@@ -252,72 +289,144 @@ public class AdministracionUsuariosService {
     /** Reversible: la cuenta pierde login, refresh y asignación en la siguiente solicitud. */
     public UsuarioAdminResponse desactivar(Jwt jwt, UUID usuarioId) {
         return tx.execute(status -> {
-            Usuario actor = actorSuperAdmin(jwt);
-            exigirOtro(actor, usuarioId);
-            Usuario usuario = visible(bloquear(usuarioId));
+            Alcance alcance = alcance(jwt);
+            exigirOtro(alcance.actor(), usuarioId);
+            Usuario usuario = enAlcance(alcance, visible(bloquear(usuarioId)));
             if (!usuario.isActivo()) return respuesta(usuario);
             protegerUltimoSuperAdmin(usuario);
             usuario.desactivar();
             revocar(usuario, TipoToken.REFRESH);
-            return respuesta(usuarios.saveAndFlush(usuario));
+            Usuario guardado = usuarios.saveAndFlush(usuario);
+            auditar(alcance, "DESACTIVAR", guardado.getId(), null);
+            return respuesta(guardado);
         });
     }
 
     public UsuarioAdminResponse reactivar(Jwt jwt, UUID usuarioId) {
         return tx.execute(status -> {
-            Usuario actor = actorSuperAdmin(jwt);
-            exigirOtro(actor, usuarioId);
-            Usuario usuario = visible(bloquear(usuarioId));
+            Alcance alcance = alcance(jwt);
+            exigirOtro(alcance.actor(), usuarioId);
+            Usuario usuario = enAlcance(alcance, visible(bloquear(usuarioId)));
             if (usuario.isActivo()) return respuesta(usuario);
             usuario.reactivar();
-            return respuesta(usuarios.saveAndFlush(usuario));
+            Usuario guardado = usuarios.saveAndFlush(usuario);
+            auditar(alcance, "REACTIVAR", guardado.getId(), null);
+            return respuesta(guardado);
         });
     }
 
     /**
      * Irreversible: anonimiza la cuenta y conserva su id, que Order y Payment usan como referencia.
-     * Repetir sobre una cuenta ya dada de baja devuelve el recurso sin cambios ni eventos.
+     * Repetir sobre una cuenta ya dada de baja devuelve el recurso sin cambios ni eventos (para
+     * ADMIN_CAFETERIA, la cuenta ya no pertenece a su cafetería y responde 404).
      */
     public UsuarioAdminResponse darDeBaja(Jwt jwt, UUID usuarioId) {
         // Un CLIENTE solo se da de baja sin compras en curso (mismas reglas que la baja propia, INT2-129).
         // Se consulta a Order fuera de la transacción para no mantener la cuenta bloqueada mientras responde.
         Usuario previo = tx.execute(status -> {
-            Usuario actor = actorSuperAdmin(jwt);
-            exigirOtro(actor, usuarioId);
-            return usuarios.findById(usuarioId).orElseThrow(AdministracionUsuariosService::noEncontrado);
+            Alcance alcance = alcance(jwt);
+            exigirOtro(alcance.actor(), usuarioId);
+            Usuario usuario = usuarios.findById(usuarioId).orElseThrow(AdministracionUsuariosService::noEncontrado);
+            if (!alcance.global()) enAlcance(alcance, visible(usuario));
+            return usuario;
         });
         if (previo.getRol() == Rol.CLIENTE && !previo.isEliminado()) {
             long abiertas = comprasEnCurso.contar(usuarioId);
             if (abiertas > 0) throw AnonimizacionCuentas.comprasEnCurso(abiertas);
         }
         return tx.execute(status -> {
-            Usuario actor = actorSuperAdmin(jwt);
-            exigirOtro(actor, usuarioId);
+            Alcance alcance = alcance(jwt);
+            exigirOtro(alcance.actor(), usuarioId);
             Usuario usuario = bloquear(usuarioId);
-            if (usuario.isEliminado()) return UsuarioAdminResponse.from(usuario, null);
+            if (usuario.isEliminado()) {
+                if (!alcance.global()) throw noEncontrado();
+                return UsuarioAdminResponse.from(usuario, null);
+            }
+            enAlcance(alcance, usuario);
             protegerUltimoSuperAdmin(usuario);
-            return UsuarioAdminResponse.from(
-                    anonimizacion.anonimizar(usuario, AnonimizacionCuentas.ORIGEN_ADMINISTRATIVA), null);
+            UUID cafeteria = asignaciones.findById(usuario.getId()).map(AsignacionCafeteria::getCafeteriaId)
+                    .orElse(null);
+            Usuario anonima = anonimizacion.anonimizar(usuario, AnonimizacionCuentas.ORIGEN_ADMINISTRATIVA);
+            auditar(alcance, "DAR_DE_BAJA", anonima.getId(), cafeteria);
+            return UsuarioAdminResponse.from(anonima, null);
         });
     }
 
     // ------------------------------------------------------------------ reglas comunes
 
     /**
-     * Solo SUPER_ADMIN (INT2-121). Además del claim, la cuenta debe seguir activa en Auth: una cuenta
-     * desactivada pierde la administración en la siguiente solicitud, sin esperar a que venza su JWT.
+     * Quién administra y sobre qué. {@code cafeteria} es null para SUPER_ADMIN (alcance global) y, para
+     * ADMIN_CAFETERIA, la cafetería persistida en Auth: nunca el claim {@code cafeteriaId} del JWT.
      */
-    private Usuario actorSuperAdmin(Jwt jwt) {
-        if (!Rol.SUPER_ADMIN.name().equals(jwt.getClaimAsString("role"))) throw rolNoPermitido();
+    record Alcance(Usuario actor, UUID cafeteria) {
+        boolean global() {
+            return cafeteria == null;
+        }
+    }
+
+    /**
+     * SUPER_ADMIN (INT2-121) o ADMIN_CAFETERIA con asignación vigente (INT2-122). Además del claim, la cuenta
+     * debe seguir activa en Auth con ese rol: una cuenta desactivada o desasignada pierde la administración en
+     * la siguiente solicitud, sin esperar a que venza su JWT.
+     */
+    private Alcance alcance(Jwt jwt) {
+        String claim = jwt.getClaimAsString("role");
+        Rol rol;
+        if (Rol.SUPER_ADMIN.name().equals(claim)) rol = Rol.SUPER_ADMIN;
+        else if (Rol.ADMIN_CAFETERIA.name().equals(claim)) rol = Rol.ADMIN_CAFETERIA;
+        else throw rolNoPermitido();
         UUID id;
         try {
             id = UUID.fromString(jwt.getSubject());
         } catch (IllegalArgumentException | NullPointerException error) {
             throw rolNoPermitido();
         }
-        return usuarios.findById(id)
-                .filter(u -> u.getRol() == Rol.SUPER_ADMIN && u.isActivo() && !u.isEliminado())
+        Usuario actor = usuarios.findById(id)
+                .filter(u -> u.getRol() == rol && u.isActivo() && !u.isEliminado())
                 .orElseThrow(AdministracionUsuariosService::rolNoPermitido);
+        if (rol == Rol.SUPER_ADMIN) return new Alcance(actor, null);
+        UUID cafeteria = asignaciones.findById(actor.getId()).map(AsignacionCafeteria::getCafeteriaId)
+                .orElseThrow(AdministracionUsuariosService::asignacionNoAutorizada);
+        return new Alcance(actor, cafeteria);
+    }
+
+    /**
+     * Para ADMIN_CAFETERIA, la cuenta debe ser un CAJERO de su cafetería. Si no, 404: no revela si existe una
+     * cuenta en otra cafetería ni de otro rol.
+     */
+    private Usuario enAlcance(Alcance alcance, Usuario usuario) {
+        if (alcance.global()) return usuario;
+        boolean propio = usuario.getRol() == Rol.CAJERO && asignaciones.findById(usuario.getId())
+                .map(AsignacionCafeteria::getCafeteriaId).filter(alcance.cafeteria()::equals).isPresent();
+        if (!propio) throw noEncontrado();
+        return usuario;
+    }
+
+    private static Alcance soloGlobal(Alcance alcance) {
+        if (!alcance.global()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, URI.create("/problems/rol-no-permitido"),
+                    "Rol no permitido", "Solo un SUPER_ADMIN reasigna personal entre cafeterías.", "ROL_NO_PERMITIDO");
+        }
+        return alcance;
+    }
+
+    /** Registro de solo inserción, en la misma transacción del cambio (INT2-122). */
+    private void auditar(Alcance alcance, String accion, UUID usuarioId, UUID cafeteriaId) {
+        jdbc.update("""
+                INSERT INTO auditoria_cuentas (id, actor_id, actor_rol, accion, usuario_id, cafeteria_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), alcance.actor().getId(), alcance.actor().getRol().name(), accion, usuarioId,
+                cafeteriaId, Timestamp.from(Instant.now()));
+    }
+
+    private static PaginaUsuariosResponse paginaVacia(int pagina, int tamano) {
+        return new PaginaUsuariosResponse(List.of(), pagina, tamano, 0, 0, pagina == 0, true, true);
+    }
+
+    private static BusinessException asignacionNoAutorizada() {
+        return new BusinessException(HttpStatus.FORBIDDEN, URI.create("/problems/asignacion-no-autorizada"),
+                "Asignación no autorizada", "La operación no corresponde a la cafetería que tienes asignada.",
+                "ASIGNACION_NO_AUTORIZADA");
     }
 
     /**
@@ -436,7 +545,7 @@ public class AdministracionUsuariosService {
     private static void exigirOtro(Usuario actor, UUID usuarioId) {
         if (actor.getId().equals(usuarioId)) {
             throw new BusinessException(HttpStatus.CONFLICT, URI.create("/problems/operacion-sobre-si-mismo"),
-                    "Operación sobre sí mismo", "Un SUPER_ADMIN no puede desactivar, reactivar ni dar de baja su propia cuenta.",
+                    "Operación sobre sí mismo", "Un administrador no puede desactivar, reactivar ni dar de baja su propia cuenta.",
                     "OPERACION_SOBRE_SI_MISMO");
         }
     }
@@ -462,9 +571,9 @@ public class AdministracionUsuariosService {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    private static String hashCuerpo(CrearPersonalRequest solicitud, String email) {
+    private static String hashCuerpo(CrearPersonalRequest solicitud, String email, UUID cafeteria) {
         String canonico = String.join("\u0000", solicitud.getRol(), email, solicitud.getNombre(),
-                solicitud.getApellido(), solicitud.getTelefono(), String.valueOf(solicitud.getCafeteriaId()));
+                solicitud.getApellido(), solicitud.getTelefono(), String.valueOf(cafeteria));
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(canonico.getBytes(StandardCharsets.UTF_8)));
@@ -507,7 +616,8 @@ public class AdministracionUsuariosService {
 
     private static BusinessException rolNoPermitido() {
         return new BusinessException(HttpStatus.FORBIDDEN, URI.create("/problems/rol-no-permitido"),
-                "Rol no permitido", "Solo un SUPER_ADMIN activo puede administrar cuentas.", "ROL_NO_PERMITIDO");
+                "Rol no permitido", "Solo un SUPER_ADMIN o un ADMIN_CAFETERIA activo puede administrar cuentas.",
+                "ROL_NO_PERMITIDO");
     }
 
     private static BusinessException estadoInvalido(String detalle) {
