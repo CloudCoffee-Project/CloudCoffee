@@ -114,8 +114,9 @@ class AdminUsuariosIntegrationTest extends JwtTestSupport {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Rol.class, names = {"CLIENTE", "CAJERO", "ADMIN_CAFETERIA"})
-    void onlySuperAdminAdministersAccounts(Rol rol) throws Exception {
+    @EnumSource(value = Rol.class, names = {"CLIENTE", "CAJERO"})
+    void clientsAndCashiersNeverAdministerAccounts(Rol rol) throws Exception {
+        // ADMIN_CAFETERIA administra los cajeros de su cafetería (INT2-122, AdminCafeteriaIntegrationTest).
         Usuario actor = cuenta(rol, rol == Rol.CLIENTE ? null : CAFETERIA);
         Usuario objetivo = cuenta(Rol.CAJERO, CAFETERIA);
         mvc.perform(get("/auth/admin/usuarios").header("Authorization", jwt(actor)))

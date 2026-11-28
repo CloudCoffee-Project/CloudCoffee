@@ -34,10 +34,11 @@ import jakarta.validation.Valid;
 
 /**
  * Administración de cuentas (INT2-121, contrato INT2-109). Gateway publica estas rutas bajo
- * {@code /v1/auth/admin}. Solo SUPER_ADMIN; el alcance de ADMIN_CAFETERIA sobre sus cajeros es INT2-122.
+ * {@code /v1/auth/admin}. SUPER_ADMIN administra todas las cuentas (INT2-121); ADMIN_CAFETERIA, solo los CAJERO
+ * de la cafetería que Auth le tiene asignada (INT2-122). Una cuenta fuera de su alcance responde 404.
  * Todas las respuestas llevan {@code Cache-Control: no-store}.
  */
-@Tag(name = "Administración de cuentas", description = "Solo SUPER_ADMIN: personal por invitación, asignaciones y estado de las cuentas")
+@Tag(name = "Administración de cuentas", description = "SUPER_ADMIN (global) y ADMIN_CAFETERIA (solo CAJERO de su cafetería asignada): personal por invitación, asignaciones y estado de las cuentas")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/auth/admin")
@@ -53,7 +54,8 @@ public class AdminUsuariosController {
     }
 
     @Operation(operationId = "listarUsuarios", summary = "Listar cuentas",
-            description = "Excluye las cuentas dadas de baja. Orden: email ASC, id ASC. q busca en email, nombre o apellido.")
+            description = "Excluye las cuentas dadas de baja. Orden: email ASC, id ASC. q busca en email, nombre o apellido. "
+                    + "ADMIN_CAFETERIA ve solo los CAJERO de su cafetería; otra cafetería en cafeteriaId: 403 ASIGNACION_NO_AUTORIZADA.")
     @GetMapping("/usuarios")
     public ResponseEntity<PaginaUsuariosResponse> listar(
             @RequestParam(required = false) String rol, @RequestParam(required = false) String estado,
@@ -72,6 +74,8 @@ public class AdminUsuariosController {
 
     @Operation(operationId = "crearPersonal", summary = "Invitar personal",
             description = "Crea la cuenta pendiente de activación, sin contraseña utilizable, y envía la invitación por correo. "
+                    + "ADMIN_CAFETERIA solo invita CAJERO (otro rol: 403 ROL_NO_PERMITIDO) a su cafetería: la omite o envía "
+                    + "la suya (otra: 403 ASIGNACION_NO_AUTORIZADA). "
                     + "Valida la cafetería con Catalog: inexistente 404, dada de baja 409 CAFETERIA_DADA_DE_BAJA, "
                     + "Catalog caído 503 OPERACION_PENDIENTE. Email existente: 409 EMAIL_YA_REGISTRADO.")
     @PostMapping("/personal")
@@ -104,7 +108,7 @@ public class AdminUsuariosController {
     }
 
     @Operation(operationId = "cambiarAsignacion", summary = "Reasignar cafetería",
-            description = "Solo personal. Revoca los refresh tokens; rige en la siguiente solicitud.")
+            description = "Solo SUPER_ADMIN y solo personal. Revoca los refresh tokens; rige en la siguiente solicitud.")
     @PutMapping("/usuarios/{usuarioId}/asignacion")
     public ResponseEntity<UsuarioAdminResponse> cambiarAsignacion(@PathVariable UUID usuarioId,
             @Valid @RequestBody CambiarAsignacionRequest cambio,
@@ -131,8 +135,8 @@ public class AdminUsuariosController {
 
     @Operation(operationId = "bajaUsuario", summary = "Dar de baja (anonimizar)",
             description = "Irreversible: anonimiza la cuenta, revoca sus tokens y elimina su asignación. Conserva el id "
-                    + "que referencian compras y auditoría. No aplica a uno mismo, al último SUPER_ADMIN ni, por ahora, "
-                    + "a cuentas CLIENTE (requieren verificar compras en curso).")
+                    + "que referencian compras y auditoría. No aplica a uno mismo ni al último SUPER_ADMIN. Una cuenta CLIENTE "
+                    + "con compras en curso responde 409 COMPRAS_EN_CURSO.")
     @PostMapping("/usuarios/{usuarioId}/baja")
     public ResponseEntity<UsuarioAdminResponse> baja(@PathVariable UUID usuarioId,
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
