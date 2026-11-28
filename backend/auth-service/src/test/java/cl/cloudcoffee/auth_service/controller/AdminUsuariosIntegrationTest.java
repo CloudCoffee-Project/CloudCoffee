@@ -56,6 +56,7 @@ import cl.cloudcoffee.auth_service.repository.AsignacionCafeteriaRepository;
 import cl.cloudcoffee.auth_service.repository.TokenAuthRepository;
 import cl.cloudcoffee.auth_service.repository.UsuarioRepository;
 import cl.cloudcoffee.auth_service.service.CatalogoCafeterias;
+import cl.cloudcoffee.auth_service.service.ComprasEnCurso;
 import cl.cloudcoffee.auth_service.service.JwtTokenService;
 import cl.cloudcoffee.auth_service.service.LoginService;
 import cl.cloudcoffee.auth_service.service.OperacionPendienteException;
@@ -87,6 +88,7 @@ class AdminUsuariosIntegrationTest extends JwtTestSupport {
     @Autowired PasswordEncoder passwordEncoder;
     @MockitoBean RabbitTemplate rabbitTemplate;
     @MockitoBean CatalogoCafeterias catalogo;
+    @MockitoBean ComprasEnCurso comprasEnCurso;
 
     final JsonMapper json = JsonMapper.builder().build();
     Usuario superAdmin;
@@ -94,7 +96,7 @@ class AdminUsuariosIntegrationTest extends JwtTestSupport {
 
     @BeforeEach
     void setUp() {
-        reset(rabbitTemplate, catalogo);
+        reset(rabbitTemplate, catalogo, comprasEnCurso);
         when(catalogo.consultar(CAFETERIA)).thenReturn(Optional.of(new CatalogoCafeterias.Cafeteria(CAFETERIA, true)));
         when(catalogo.consultar(OTRA_CAFETERIA))
                 .thenReturn(Optional.of(new CatalogoCafeterias.Cafeteria(OTRA_CAFETERIA, true)));
@@ -485,11 +487,22 @@ class AdminUsuariosIntegrationTest extends JwtTestSupport {
     }
 
     @Test
-    void clientAccountsAreNotRemovedWithoutCheckingTheirPurchases() throws Exception {
+    void clientAccountsAreRemovedOnlyWithoutPurchasesInProgress() throws Exception {
+        // INT2-129: misma regla que la baja propia; Order decide si hay compras sin cerrar.
         Usuario cliente = cuenta(Rol.CLIENTE, null);
-        transicion(cliente, "baja").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ESTADO_INVALIDO"));
+        when(comprasEnCurso.contar(cliente.getId())).thenReturn(2L);
+        transicion(cliente, "baja").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("COMPRAS_EN_CURSO"));
+        when(comprasEnCurso.contar(cliente.getId())).thenThrow(new OperacionPendienteException("Order no responde."));
+        transicion(cliente, "baja").andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("OPERACION_PENDIENTE"));
         assertThat(recargar(cliente).isEliminado()).isFalse();
         verify(rabbitTemplate, never()).convertAndSend(anyString(), eq(AuthEventPublisher.USUARIO_ANONIMIZADO_EVENT), any(Object.class));
+
+        reset(comprasEnCurso);
+        transicion(cliente, "baja").andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("eliminado+" + cliente.getId() + "@anonimo.invalid"));
+        assertThat(eventoPublicado(AuthEventPublisher.USUARIO_ANONIMIZADO_EVENT).payload())
+                .containsEntry("rolAnterior", "CLIENTE").containsEntry("origen", "baja_administrativa");
     }
 
     // ------------------------------------------------------------------ apoyo

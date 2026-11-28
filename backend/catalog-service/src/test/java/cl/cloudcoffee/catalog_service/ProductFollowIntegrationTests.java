@@ -34,6 +34,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import com.nimbusds.jose.JWSAlgorithm;
 
+import cl.cloudcoffee.catalog_service.service.ProductFollowService;
 import cl.cloudcoffee.security.testing.JwtTestSupport;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -61,6 +62,7 @@ class ProductFollowIntegrationTests extends JwtTestSupport {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired JsonMapper json;
+    @Autowired ProductFollowService seguimientos;
 
     @Test
     void seguimientoGeneralYPuntualSeListanSoloParaSuDuenoDelMasRecienteAlMasAntiguo() throws Exception {
@@ -229,6 +231,25 @@ class ProductFollowIntegrationTests extends JwtTestSupport {
         jdbc.update("INSERT INTO product (id, category_id, name, status) VALUES (?, ?, ?, 'INACTIVE')",
                 id, CATEGORIA_CAFES, "Producto retirado " + id);
         return id;
+    }
+
+    @Test
+    void aRemovedAccountStopsFollowingEverythingWithoutTouchingOthers() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID otroCliente = UUID.randomUUID();
+        seguir(cliente, CAFE_AMERICANO, null).andExpect(status().isCreated());
+        seguir(cliente, CAFE_AMERICANO, CENTRAL).andExpect(status().isCreated());
+        seguir(otroCliente, CAFE_AMERICANO, null).andExpect(status().isCreated());
+
+        // INT2-129: auth.usuario.anonimizado.v1 retira todos sus seguimientos; repetirlo no cambia nada.
+        assertThat(seguimientos.retirarSeguimientosDe(cliente)).isEqualTo(2);
+        assertThat(seguimientos.retirarSeguimientosDe(cliente)).isZero();
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_follow WHERE user_id = ? AND deleted_at IS NULL",
+                Integer.class, cliente)).isZero();
+        assertThat(filas(cliente)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_follow WHERE user_id = ? AND deleted_at IS NULL",
+                Integer.class, otroCliente)).isEqualTo(1);
     }
 
     private int filas(UUID usuario) {

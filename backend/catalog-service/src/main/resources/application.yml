@@ -12,6 +12,16 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+    # INT2-129: consumo de auth.usuario.anonimizado.v1. Un fallo transitorio se reintenta y luego va a la DLQ.
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 5
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
   application:
     name: catalog-service
   jpa:

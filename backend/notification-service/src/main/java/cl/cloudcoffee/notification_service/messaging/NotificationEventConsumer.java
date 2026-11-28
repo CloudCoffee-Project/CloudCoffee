@@ -1,6 +1,7 @@
 package cl.cloudcoffee.notification_service.messaging;
 
 import cl.cloudcoffee.notification_service.email.EmailService;
+import cl.cloudcoffee.notification_service.history.CuentaAnonimizadaService;
 import cl.cloudcoffee.notification_service.history.NotificationHistoryService;
 import cl.cloudcoffee.notification_service.push.NotificationPushService;
 import cl.cloudcoffee.notification_service.websocket.NotificationWebSocketPublisher;
@@ -22,6 +23,7 @@ public class NotificationEventConsumer {
     private final EmailService emailService;
     private final NotificationWebSocketPublisher webSocketPublisher;
     private final NotificationPushService pushService;
+    private final CuentaAnonimizadaService cuentasAnonimizadas;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -33,12 +35,14 @@ public class NotificationEventConsumer {
             NotificationHistoryService historyService,
             EmailService emailService,
             NotificationWebSocketPublisher webSocketPublisher,
-            NotificationPushService pushService
+            NotificationPushService pushService,
+            CuentaAnonimizadaService cuentasAnonimizadas
     ) {
         this.historyService = historyService;
         this.emailService = emailService;
         this.webSocketPublisher = webSocketPublisher;
         this.pushService = pushService;
+        this.cuentasAnonimizadas = cuentasAnonimizadas;
     }
 
     @Transactional
@@ -63,6 +67,10 @@ public class NotificationEventConsumer {
                     break;
                 case "auth.recuperacion.solicitud-password.v1":
                     procesarRecuperacionPassword(event);
+                    historyService.registerSuccess(event);
+                    break;
+                case "auth.usuario.anonimizado.v1":
+                    procesarCuentaAnonimizada(event);
                     historyService.registerSuccess(event);
                     break;
                 case "auth.personal.invitacion.v1":
@@ -135,6 +143,19 @@ public class NotificationEventConsumer {
         context.setVariable("token", token);
 
         emailService.enviarCorreo(email, "Recuperación de contraseña - CloudCoffee", "recuperacion", context);
+    }
+
+    /** INT2-129: retira los dispositivos de la cuenta y borra sus datos personales del historial. */
+    private void procesarCuentaAnonimizada(CloudCoffeeEvent event) {
+        java.util.UUID usuarioId;
+        try {
+            usuarioId = java.util.UUID.fromString(String.valueOf(event.payload().get("usuarioId")));
+        } catch (IllegalArgumentException error) {
+            throw new IllegalArgumentException("La baja no contiene un usuarioId válido");
+        }
+        var resultado = cuentasAnonimizadas.aplicar(usuarioId);
+        LOGGER.info("Cuenta anonimizada: eventId={}, dispositivos={}, eventos={}", event.eventId(),
+                resultado.dispositivos(), resultado.eventos());
     }
 
     /** INT2-121: enlace de activación del personal invitado; la persona define su propia contraseña. */

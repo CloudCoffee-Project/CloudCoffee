@@ -2,7 +2,12 @@ package cl.cloudcoffee.auth_service.controller;
 
 import cl.cloudcoffee.auth_service.dto.PerfilResponse;
 import cl.cloudcoffee.auth_service.dto.UpdatePerfilRequest;
+import cl.cloudcoffee.auth_service.dto.BajaPropiaRequest;
+import cl.cloudcoffee.auth_service.service.BajaPropiaService;
 import cl.cloudcoffee.auth_service.service.PerfilService;
+import org.springframework.http.CacheControl;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,9 +29,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class UserController {
 
     private final PerfilService perfilService;
+    private final BajaPropiaService bajaPropiaService;
 
-    public UserController(PerfilService perfilService) {
+    public UserController(PerfilService perfilService, BajaPropiaService bajaPropiaService) {
         this.perfilService = perfilService;
+        this.bajaPropiaService = bajaPropiaService;
     }
 
     @Operation(operationId = "consultarPerfil", summary = "Consultar perfil propio")
@@ -65,4 +72,14 @@ public class UserController {
             perfilService.cambiarPassword(email, request);
             return ResponseEntity.ok().build();
         }
+
+    @Operation(operationId = "bajaPropia", summary = "Dar de baja la cuenta propia",
+            description = "INT2-129: solo CLIENTE; la cuenta sale del JWT, nunca de un id enviado. Confirma la identidad con la contraseña actual (incorrecta: 401 CONTRASENA_INCORRECTA). Con compras sin cerrar responde 409 COMPRAS_EN_CURSO y si Order no responde 503 OPERACION_PENDIENTE, ambos sin cambios. Al darse de baja la cuenta se anonimiza, se revocan todas sus sesiones y se conservan compras y auditoría. Repetir la baja responde 204. El access token actual sigue vigente hasta expirar (15 minutos por defecto).")
+    @ApiResponse(responseCode = "204", description = "Cuenta dada de baja, sin cuerpo", content = @Content)
+    @PostMapping("/me/baja")
+    public ResponseEntity<Void> bajaPropia(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody BajaPropiaRequest request) {
+        bajaPropiaService.darDeBaja(jwt, request.getPasswordActual());
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
 }

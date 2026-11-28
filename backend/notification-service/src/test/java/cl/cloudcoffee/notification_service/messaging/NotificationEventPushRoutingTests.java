@@ -77,7 +77,8 @@ class NotificationEventPushRoutingTests {
     }
 
     private NotificationEventConsumer consumer() {
-        return new NotificationEventConsumer(historyService, emailService, webSocketPublisher, pushService);
+        return new NotificationEventConsumer(historyService, emailService, webSocketPublisher, pushService,
+                org.mockito.Mockito.mock(cl.cloudcoffee.notification_service.history.CuentaAnonimizadaService.class));
     }
 
     private static CloudCoffeeEvent event(String eventType, Map<String, Object> payload) {
