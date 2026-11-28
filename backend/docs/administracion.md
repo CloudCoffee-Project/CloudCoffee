@@ -163,11 +163,27 @@ Pendiente en otras issues:
 
 * **INT2-122:** el alcance de `ADMIN_CAFETERIA` sobre los `CAJERO` de su cafetería. Hasta entonces
   esas rutas responden `403 ROL_NO_PERMITIDO` a cualquier rol distinto de `SUPER_ADMIN`.
-* **INT2-129:** la baja de cuentas `CLIENTE` (propia y administrativa), que exige la consulta de
-  compras en curso a Order. Hasta entonces la baja administrativa de un `CLIENTE` responde
-  `409 ESTADO_INVALIDO`, sin cambios.
-* El consumo de `auth.usuario.anonimizado.v1` en Notification (borrar datos personales del
-  historial). Auth ya publica el evento.
+
+### Estado de la baja de cuentas (INT2-129)
+
+INT2-129 implementa `POST /v1/auth/users/me/baja` y habilita la baja administrativa de cuentas
+`CLIENTE`, ambas con las reglas de la sección siguiente. Detalles de la implementación:
+
+* **Compras en curso (Order):** `GET /internal/servicios/compras/usuarios/{id}/en-curso` cuenta
+  las compras en `revision_requerida` o `pendiente_pago`, las que tienen órdenes `pagado`,
+  `listo_para_retiro` o `no_retirado_pendiente_revision`, y las que tienen un pago `pendiente` o
+  `requiere_conciliacion` (puede haber dinero del cliente por resolver). Entregadas, no retiradas
+  en firme y canceladas no impiden la baja.
+* **Política recuperable:** con compras en curso (`409 COMPRAS_EN_CURSO`) u Order sin responder
+  (`503 OPERACION_PENDIENTE`) no cambia nada: la sesión sigue y la persona reintenta más tarde.
+* **Idempotencia y fallo parcial:** repetir la baja de una cuenta ya anonimizada responde `204`
+  sin exigir la contraseña y vuelve a publicar `auth.usuario.anonimizado.v1`. Si el broker falló
+  la primera vez, el reintento recupera el evento; sus consumidores son idempotentes.
+* **Consumidores del evento:** Notification borra los dispositivos de la cuenta y reemplaza
+  email, nombre, apellido y teléfono por `[ELIMINADO]` en su historial. Catalog da de baja lógica
+  todos sus seguimientos de productos (cola `catalog.cuentas-anonimizadas`, con DLQ).
+* **Riesgo aceptado:** el access token ya emitido sigue vigente hasta expirar (15 minutos por
+  defecto), igual que al cambiar la contraseña. Login y refresh quedan bloqueados de inmediato.
 
 ## Baja propia, anonimización y conservación
 

@@ -53,8 +53,8 @@ import cl.cloudcoffee.errors.BusinessException;
  * Administración global de cuentas por SUPER_ADMIN (INT2-121, contrato INT2-109).
  *
  * <p>El alcance de ADMIN_CAFETERIA sobre los cajeros de su cafetería corresponde a INT2-122; hasta entonces
- * solo SUPER_ADMIN opera estas rutas. La baja de cuentas CLIENTE exige consultar compras en curso a Order
- * y corresponde a INT2-129.
+ * solo SUPER_ADMIN opera estas rutas. La baja de una cuenta CLIENTE consulta antes sus compras en curso a
+ * Order (INT2-129).
  *
  * <p>Las llamadas a Catalog se hacen fuera de la transacción; las decisiones se toman con la cuenta
  * bloqueada y su versión comprobada. Los eventos se publican solo después del commit.
@@ -77,10 +77,13 @@ public class AdministracionUsuariosService {
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
+    private final ComprasEnCurso comprasEnCurso;
+    private final AnonimizacionCuentas anonimizacion;
 
     public AdministracionUsuariosService(UsuarioRepository usuarios, AsignacionCafeteriaRepository asignaciones,
             TokenAuthRepository tokens, CatalogoCafeterias catalogo, AuthEventPublisher eventos,
-            PasswordEncoder passwordEncoder, JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
+            PasswordEncoder passwordEncoder, JdbcTemplate jdbc, PlatformTransactionManager transactionManager,
+            ComprasEnCurso comprasEnCurso, AnonimizacionCuentas anonimizacion) {
         this.usuarios = usuarios;
         this.asignaciones = asignaciones;
         this.tokens = tokens;
@@ -89,6 +92,8 @@ public class AdministracionUsuariosService {
         this.passwordEncoder = passwordEncoder;
         this.jdbc = jdbc;
         this.tx = new TransactionTemplate(transactionManager);
+        this.comprasEnCurso = comprasEnCurso;
+        this.anonimizacion = anonimizacion;
     }
 
     /** Resultado de un alta: {@code replay} si la misma clave ya la había creado. */
@@ -274,26 +279,25 @@ public class AdministracionUsuariosService {
      * Repetir sobre una cuenta ya dada de baja devuelve el recurso sin cambios ni eventos.
      */
     public UsuarioAdminResponse darDeBaja(Jwt jwt, UUID usuarioId) {
-        String traceId = traceId();
+        // Un CLIENTE solo se da de baja sin compras en curso (mismas reglas que la baja propia, INT2-129).
+        // Se consulta a Order fuera de la transacción para no mantener la cuenta bloqueada mientras responde.
+        Usuario previo = tx.execute(status -> {
+            Usuario actor = actorSuperAdmin(jwt);
+            exigirOtro(actor, usuarioId);
+            return usuarios.findById(usuarioId).orElseThrow(AdministracionUsuariosService::noEncontrado);
+        });
+        if (previo.getRol() == Rol.CLIENTE && !previo.isEliminado()) {
+            long abiertas = comprasEnCurso.contar(usuarioId);
+            if (abiertas > 0) throw AnonimizacionCuentas.comprasEnCurso(abiertas);
+        }
         return tx.execute(status -> {
             Usuario actor = actorSuperAdmin(jwt);
             exigirOtro(actor, usuarioId);
             Usuario usuario = bloquear(usuarioId);
             if (usuario.isEliminado()) return UsuarioAdminResponse.from(usuario, null);
-            if (usuario.getRol() == Rol.CLIENTE) {
-                // Exige consultar compras en curso a Order (INT2-129); no se da de baja a ciegas.
-                throw estadoInvalido("La baja de cuentas CLIENTE requiere verificar sus compras en curso y aún no está disponible.");
-            }
             protegerUltimoSuperAdmin(usuario);
-            Rol rolAnterior = usuario.getRol();
-            usuario.anonimizar(passwordInutilizable());
-            tokens.findByUsuarioIdAndRevokedAtIsNull(usuario.getId()).forEach(TokenAuth::revocar);
-            asignaciones.findById(usuario.getId()).ifPresent(asignaciones::delete);
-            Usuario guardado = usuarios.saveAndFlush(usuario);
-            Instant anonimizadoAt = guardado.getUpdatedAt();
-            despuesDelCommit(() -> eventos.publishUsuarioAnonimizado(guardado.getId().toString(),
-                    rolAnterior.name(), anonimizadoAt, "baja_administrativa", traceId));
-            return UsuarioAdminResponse.from(guardado, null);
+            return UsuarioAdminResponse.from(
+                    anonimizacion.anonimizar(usuario, AnonimizacionCuentas.ORIGEN_ADMINISTRATIVA), null);
         });
     }
 
